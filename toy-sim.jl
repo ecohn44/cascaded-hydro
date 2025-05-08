@@ -32,15 +32,16 @@ println("--- SIMULATION BEGIN ---")
 y = "22"
 m = 1
 T = 24 
-N = 1
+N = 7
+del = 10 # constant time delay between units
 
-# Load in 2022 - 2023 data00
 daily, _, _ = fullsim_dataload();
 daily_s = filter(row -> row[:year] == y && parse(Int, row[:month]) == m, daily)
 
-V0 = daily_s.storage[1]/1e3 # initial storage conditions for month 
+V0 = 1e-3 * daily_s.storage[1] # initial storage conditions for month 
 U = sum(daily_s.release[1:N]) # monthly water contract
-q = dailyflow_to_hourly(daily_s.inflow[1:N], T) # inflow
+q1 = 1e4 * dailyflow_to_hourly(daily_s.inflow[1:N], T) # inflow
+dq = zeros(T*N) # intermediary flow
 
 ## ----------- RUN BASELINE ----------- ##
 
@@ -61,6 +62,7 @@ set_lower_bound.(u1, min_ut)
 @variable(model, V2[1:T*N] >= 0)
 @variable(model, p2[1:T*N] >= 0)
 @variable(model, u2[1:T*N])
+@variable(model, q2[1:T*N])
 set_upper_bound.(u2, max_ut)
 set_lower_bound.(u2, min_ut)
 
@@ -77,7 +79,7 @@ set_lower_bound.(u2, min_ut)
 
 ## Constraints
 # Unit 1
-@constraint(model, MassBal[t in 2:T*N], V1[t] == V1[t-1] + q[t] - u1[t])
+@constraint(model, MassBal[t in 2:T*N], V1[t] == V1[t-1] + q1[t] - u1[t])
 @constraint(model, ReleaseEnergy[t in 1:T*N], p1[t] <= (eta * g * rho_w * u1[t] * a * (V1[t]^b))/(3.6e9))
 @constraint(model, Release[t in 2:T*N], min_ut <= u1[t] <= max_ut)
 @constraint(model, RampRate[t in 2:T*N], RR_dn <= u1[t] - u1[t-1] <= RR_up)
@@ -85,7 +87,9 @@ set_lower_bound.(u2, min_ut)
 @constraint(model, WaterContract, sum(u1) == U)
 
 # Unit 2
-@constraint(model, MassBal2[t in 2:T*N], V2[t] == V2[t-1] + u1[t] - u2[t])
+@constraint(model, Inflow2A[t in 1:del], q2[t] == dq[t])
+@constraint(model, Inflow2B[t in (del+1):T*N],q2[t] == u1[t-del] + dq[t])
+@constraint(model, MassBal2[t in 2:T*N], V2[t] == V2[t-1] + q2[t] - u2[t])
 @constraint(model, ReleaseEnergy2[t in 1:T*N], p2[t] <= (eta * g * rho_w * u2[t] * a * (V2[t]^b))/(3.6e9))
 @constraint(model, Release2[t in 2:T*N], min_ut <= u2[t] <= max_ut)
 @constraint(model, RampRate2[t in 2:T*N], RR_dn <= u2[t] - u2[t-1] <= RR_up)
@@ -104,13 +108,14 @@ println(obj)
 # Create directory for this run 
 stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS") ;
 dir = "./plots/" ;
-path = dir * stamp;
-mkdir(path)
+# path = dir * stamp;
+path = "./plots/04-16-2025 baseline tuning"
+# mkdir(path)
 
 hh1 =  (eta * g * rho_w * value.(u1) * a .* (value.(V1).^b))/(3.6e9)
-sim_plots(path, "Unit1", T, value.(u1), value.(p1), value.(V1), q, F, hh1)
+sim_plots(path, "Unit1", T, N, value.(u1), value.(p1), value.(V1), q1, F, hh1)
 
 hh2 =  (eta * g * rho_w * value.(u2) * a .* (value.(V2).^b))/(3.6e9)
-sim_plots(path, "Unit2", T, value.(u2), value.(p2), value.(V2), value.(u1), F, hh2)
+sim_plots(path, "Unit2", T, N, value.(u2), value.(p2), value.(V2), value.(q2), F, hh2)
 
 println("--- SIMULATION COMPLETE ---")
