@@ -1,12 +1,13 @@
 using LaTeXStrings
 using Plots
+using Plots.PlotMeasures
 
 function sim_plots(path, label, N, u, p, V, q, PF, hh, min_ut, max_ut)
     font = 10
     xfont = 8
 
     ## Plot 1: Water release
-    plot1 = plot(1:N, u, label="Outflow", lw=2, legend = :topright)
+    plot1 = plot(1:N, u, label="Outflow", lw=2, legend = :bottomright)
     # Add maximum th 
     hline!(plot1, [max_ut], color=:red, linestyle=:dash, label="Max")
     # Add min th
@@ -16,11 +17,11 @@ function sim_plots(path, label, N, u, p, V, q, PF, hh, min_ut, max_ut)
     title!(plot1, "Hourly Water Release", titlefontsize=font)
 
     ## Plot 2: Hydropower generation 
-    plot2 = plot(1:N, p, label="Generation", lw=2,legend = :topright, ylim=(0, PF))
+    plot2 = plot(1:N, p, label="Generation", lw=2,legend = :bottomright, ylim=(0, PF))
     # Add feeder capacity
     hline!(plot2, [PF], color=:red, linestyle=:dash, label="Capacity")
     # Add hydraulic head
-    plot!(1:N, hh, label="H. Head", lw=2,legend = :topright, color=:red, linestyle=:dash,)
+    plot!(1:N, hh, label="H. Head", lw=2,legend = :bottomright, color=:red, linestyle=:dash)
     xlabel!(plot2, "Hour",xguidefontsize=xfont)
     ylabel!(plot2, "MWh")
     title!(plot2, "Hydropower Generation", titlefontsize=font)
