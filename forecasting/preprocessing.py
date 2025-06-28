@@ -18,6 +18,9 @@ def deduplicate_data(df, int_freq):
         df = df[df.index.minute.isin([0, 15, 30, 45]) & (df.index.second == 0) & (df.index.microsecond == 0)]
     if int_freq == 30:
         df = df[df.index.minute.isin([0, 30]) & (df.index.second == 0) & (df.index.microsecond == 0)]
+    if int_freq == 60:
+        df = df[df.index.minute.isin([0]) & (df.index.second == 0) & (df.index.microsecond == 0)]
+           
 
     old_len = len(df)
     
