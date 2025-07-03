@@ -192,6 +192,28 @@ def dataset_merge(df1, df2, train_start_year, season):
 
     return df_range
 
+def dataset_merge_forebay(df, train_start_year):
+    
+    df_range = df[(df.index >= train_start_year)]
+
+    df_range = df_range.rename(columns={'down_inflow': 'y'}) ## df: inflow downstream
+    df_range = df_range.rename(columns={'up_outflow': 'x'})
+    df_range = df_range[['y', 'x']]
+
+    # Encode Day of Year
+    df_range['DoY'] = pd.to_datetime(df_range.index).strftime('%j').astype(int)
+    df_range['day_sin'] = np.sin(2 * np.pi * df_range['DoY'] / 365)
+    df_range['day_cos'] = np.cos(2 * np.pi * df_range['DoY'] / 365)
+
+    # Normalize features
+    scaler = StandardScaler() # unit variance & zero mean
+    df_range_norm = scaler.fit_transform(df_range)
+    df_range['y_norm'] = df_range_norm[:,0]
+    df_range['x_norm'] = df_range_norm[:,1]
+
+    return df_range
+
+
 def create_lag_features(df_reg, p, up_feat, down_feat):
     # Adding upstream lag features to the DataFrame
     if up_feat: 
