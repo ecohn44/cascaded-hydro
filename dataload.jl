@@ -44,38 +44,40 @@ end
 function fullsim_dataload()
 
     # LMP_path = string("");
-    flow_path = string("/Users/elizacohn/Desktop/cascaded-hydro/simulation-data/hourly-flowdata.csv");
-    inflow_path = string("/Users/elizacohn/Desktop/cascaded-hydro/simulation-data/daily-inflow.csv");
+    gage_path = string("/Users/elizacohn/Desktop/cascaded-hydro/simulation-data/USGS-gage-data.csv");
+    tda_inflow_path = string("/Users/elizacohn/Desktop/cascaded-hydro/simulation-data/tda-inflow-USACE.csv");
+    bon_inflow_path = string("/Users/elizacohn/Desktop/cascaded-hydro/simulation-data/bon-inflow-USACE.csv");
     bon_storage_path = string("/Users/elizacohn/Desktop/cascaded-hydro/streamflow-data/bonneville/BON6S_daily.csv");
     tda_storage_path = string("/Users/elizacohn/Desktop/cascaded-hydro/streamflow-data/dalles/TDA6S_daily.csv");
 
     ## Data Set 1: Local Marginal Price
     # RTP = DataFrame(CSV.File(LMP_path)); 
 
-    ## Data Set 2A: Flow Data
-    flow = DataFrame(CSV.File(flow_path));
-    select!(flow, Not(:Column1))
-    # (To Do): convert ft to cfs & convert to m3/hr from cfs via Rating Curve
-    flow.down_inflow_m = ft_to_m(flow.down_inflow);
-    flow.up_outflow_m = ft_to_m(flow.up_outflow);
-    flow.datetime = DateTime.(flow.datetime, dateformat"yyyy-mm-dd HH:MM:SS")
-    flow = filter(row -> minute(row.datetime) == 0, flow)
+    ## Data Set 2: USGS Gauge Data
+    gage = DataFrame(CSV.File(gage_path));
+    select!(gage, Not(:Column1))
+    gage.down_inflow_m = ft_to_m(gage.down_inflow);
+    gage.up_outflow_m = ft_to_m(gage.up_outflow);
+    gage.datetime = DateTime.(gage.datetime, dateformat"yyyy-mm-dd HH:MM:SS")
+    gage = filter(row -> minute(row.datetime) == 0, gage)
 
-    ## Data Set 2B: Inflow Data
-    inflow = DataFrame(CSV.File(inflow_path));
+    ## Data Set C: USACE Inflow Data
+    inflow = DataFrame(CSV.File(tda_inflow_path));
     inflow.datetime = DateTime.(inflow.datetime, dateformat"yyyy-mm-dd HH:MM:SS")
-    inflow.inflow_m3s = 1000*cfs_to_m3s(inflow.inflow_kcfs) # convert kcfs --> cfs --> m3/s 
+    inflow.tda_inflow_m3s = 1000*cfs_to_m3s(inflow.inflow_kcfs) # convert kcfs --> cfs --> m3/s 
+    bon_inflow = DataFrame(CSV.File(bon_inflow_path));
+    inflow.bon_inflow_m3s = bon_inflow.inflow_m3s
 
-    ## Dataset 3: Storage Levels
-    bon = DataFrame(CSV.File(bon_storage_path));
-    rename!(bon, Symbol("S (unit:cfs)") => :S_cfs);
-    bon.S_cumcfs = cumsum(bon.S_cfs)
-    bon.S_m3 = af_to_m3(cfs_to_af(bon.S_cumcfs))
+    ## Dataset 4: BPA Storage Levels
+    storage = DataFrame(CSV.File(bon_storage_path));
+    rename!(storage, Symbol("S (unit:cfs)") => :bon_S_cfs);
+    storage.bon_S_cumcfs = cumsum(storage.bon_S_cfs)
+    storage.bon_S_m3 = af_to_m3(cfs_to_af(storage.bon_S_cumcfs))
 
-    tda = DataFrame(CSV.File(tda_storage_path));
-    rename!(tda, Symbol("S (unit:cfs)") => :S_cfs);
-    tda.S_cumcfs = cumsum(tda.S_cfs)
-    tda.S_m3 = af_to_m3(cfs_to_af(tda.S_cumcfs))
+    tda_S = DataFrame(CSV.File(tda_storage_path));
+    rename!(tda_S, Symbol("S (unit:cfs)") => :S_cfs);
+    tda_S.S_cumcfs = cumsum(tda_S.S_cfs)
+    storage.tda_S_m3 = af_to_m3(cfs_to_af(tda_S.S_cumcfs))
 
-    return flow, inflow, bon, tda
+    return flow, inflow, storage
 end
