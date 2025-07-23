@@ -69,20 +69,25 @@ q2 = s2hr*inflow_s.tda_inflow_m3s         # historic upstream inflow to 02 Dalle
 
 println("--- DATA LOAD COMPLETE ---")
 
-## ----------- DATA SAMPLING ----------- ##
+## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
-M = 100 
+M = 10 
 N = 15
 
 # Independent Sample Vectors
-V_sample = range(min_V1, max_V1, length = M)
-u_sample = range(min_ut1, max_ut1, length = N)
+V1_sample = range(min_V1, max_V1, length = M)
+u1_sample = range(min_ut1, max_ut1, length = N)
+
+V2_sample = range(min_V2, max_V2, length = M)
+u2_sample = range(min_ut2, max_ut2, length = N)
 
 # Define Hydraulic Head Function
 f1(V) = a1 * (V^b1)
+f2(V) = a2 * (V^b2)
 
 # Precomputed Matrix of Power Outputs
-P = [eta * g * rho_w * f1(V) * u for u in u_sample, V in V_sample] / (3.6e9)
+P1 = [eta * g * rho_w * f1(V) * u for u in u1_sample, V in V1_sample] / (3.6e9)
+P2 = [eta * g * rho_w * f2(V) * u for u in u2_sample, V in V2_sample] / (3.6e9)
 
 ## ----------- RUN BASELINE ----------- ##
 
@@ -97,13 +102,13 @@ model = Model(Gurobi.Optimizer)
 @variable(model, lam1[1:N, 1:M, 1:T] >= 0)  # lambda matrix
 
 ## Initial conditions
-@constraint(model, MassBalInit1, sum(lam1[i,j,1] * V_sample[j] for i=1:N, j=1:M) == V0_01)
-@constraint(model, RampRateInit1, sum(lam1[i,j,1] * u_sample[i] for i=1:N, j=1:M) == min_ut1)
+@constraint(model, MassBalInit1, sum(lam1[i,j,1] * V1_sample[j] for i=1:N, j=1:M) == V0_01)
+@constraint(model, RampRateInit1, sum(lam1[i,j,1] * u1_sample[i] for i=1:N, j=1:M) == min_ut1)
 
 ## Expressions
-@expression(model, V1[t=1:T], sum(lam1[i,j,t] * V_sample[j] for i=1:N, j=1:M))
-@expression(model, u1[t=1:T], sum(lam1[i,j,t] * u_sample[i] for i=1:N, j=1:M))
-@expression(model, p1[t=1:T], sum(lam1[i,j,t] * P[i,j]      for i=1:N, j=1:M))
+@expression(model, V1[t=1:T], sum(lam1[i,j,t] * V1_sample[j] for i=1:N, j=1:M))
+@expression(model, u1[t=1:T], sum(lam1[i,j,t] * u1_sample[i] for i=1:N, j=1:M))
+@expression(model, p1[t=1:T], sum(lam1[i,j,t] * P1[i,j]      for i=1:N, j=1:M))
 
 ## Constraints
 @constraint(model, MassBal1[t in 2:T], V1[t] == V1[t-1] + q1[t] - u1[t] - s1[t])
@@ -114,17 +119,57 @@ model = Model(Gurobi.Optimizer)
 @constraint(model, lambda1[t in 1:T], sum(lam1[:,:,t]) == 1)
 
 ### Unit 02: Dalles Dam (Downstream)
-# Left out for now until approximation logic is finalized
+## Define variables
+@variable(model, s2[1:T] >= 0) # Spill Outflow [m3/hr]
+@variable(model, lam2[1:N, 1:M, 1:T] >= 0)  # lambda matrix
+
+## Initial conditions
+@constraint(model, MassBalInit2, sum(lam2[i,j,1] * V2_sample[j] for i=1:N, j=1:M) == V0_02)
+@constraint(model, RampRateInit2, sum(lam2[i,j,1] * u2_sample[i] for i=1:N, j=1:M) == min_ut2)
+
+## Expressions
+@expression(model, V2[t=1:T], sum(lam2[i,j,t] * V2_sample[j] for i=1:N, j=1:M))
+@expression(model, u2[t=1:T], sum(lam2[i,j,t] * u2_sample[i] for i=1:N, j=1:M))
+@expression(model, p2[t=1:T], sum(lam2[i,j,t] * P2[i,j]      for i=1:N, j=1:M))
+
+## Constraints
+@constraint(model, MassBal2[t in 2:T], V2[t] == V2[t-1] + q2[t] - u2[t] - s2[t])
+@constraint(model, Release2[t in 2:T], min_ut2 <= u2[t] <= max_ut2)
+@constraint(model, RampRate2[t in 2:T], RR_dn2 <= u2[t] - u2[t-1] <= RR_up2)
+@constraint(model, FeederCap2[t in 1:T], 0 <= p2[t] <= F2)
+@constraint(model, Volume2[t in 1:T], min_V2 <= V2[t] <= max_V2)
+@constraint(model, lambda2[t in 1:T], sum(lam2[:,:,t]) == 1)
 
 # Objective function
-@objective(model, Max, sum(p1 )) ####+ p2)) 
+@objective(model, Max, sum(p1 + p2)) 
 
 # Solve the optimization problem
 optimize!(model)
 
-# Revenue
+# Total Generation
 obj = objective_value(model);
 println(obj)
+
+# -----------------  MODEL REPORT  ----------------- #
+
+# Check the solution method used
+method_used = MOI.get(model, Gurobi.ModelAttribute("ConcurrentWinMethod"))
+status = MOI.get(model, MOI.TerminationStatus())
+
+# Check iteration counts
+iter_count = MOI.get(model, Gurobi.ModelAttribute("IterCount"))
+bar_iter_count = MOI.get(model, Gurobi.ModelAttribute("BarIterCount"))
+
+# Check if there are any general constraints (which could make it behave like MIP)
+num_gen_constrs = MOI.get(model, Gurobi.ModelAttribute("NumGenConstrs"))
+num_sos = MOI.get(model, Gurobi.ModelAttribute("NumSOS"))
+
+println("Method used: ", method_used)  # 0=primal simplex, 1=dual simplex, 2=barrier
+println("Status: ", status)
+println("Simplex iterations: ", iter_count)
+println("Barrier iterations: ", bar_iter_count)
+println("General constraints: ", num_gen_constrs)
+println("SOS constraints: ", num_sos)
 
 # -----------------  PLOTS  ----------------- #
 
@@ -134,8 +179,13 @@ dir = "./plots/" ;
 path = dir * stamp;
 mkdir(path)
 
-hh1 =  (eta * g * rho_w * value.(u1) * a1 .* (value.(V1).^b1))/(3.6e9)
-h1 = a1 .* (value.(V1).^b1)
-sim_plots(path, "Unit1", T, value.(u1), value.(s1), value.(p1), value.(V1), q1, h1, F1, hh1, min_ut1, max_ut1, min_h1, max_h1)
+p1_max =  (eta * g * rho_w * value.(u1) * a1 .* (value.(V1).^b1))/(3.6e9)
+head1 = a1 .* (value.(V1).^b1)
+sim_plots(path, "Unit1", T, value.(u1), value.(s1), value.(p1), value.(V1), q1, head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
+
+p2_max =  (eta * g * rho_w * value.(u2) * a2 .* (value.(V2).^b2))/(3.6e9)
+head2 = a2 .* (value.(V2).^b2)
+sim_plots(path, "Unit2", T, value.(u2), value.(s2), value.(p2), value.(V2), q2, head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
+
 
 println("--- SIMULATION COMPLETE ---")

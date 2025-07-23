@@ -119,11 +119,11 @@ set_lower_bound.(u2, min_ut2)
 @constraint(model, FeederCap2[t in 1:N], 0 <= p2[t] <= F2)
 @constraint(model, Volume2[t in 1:N], min_Vt2 <=  a2 * (V2[t]^b2) <= max_Vt2)
 
-# Set parameters for piecewise-linear approximation (FASTER)
+#= Set parameters for piecewise-linear approximation (FASTER)
 set_attribute(model, "FuncNonlinear", 0)    # Use piecewise-linear (default)
 set_attribute(model, "FuncPieces", 4)       
 set_attribute(model, "FuncPieceError", 5e-2)  # Allow larger errors
-    
+ =#   
 
 # Solve the optimization problem
 optimize!(model)
@@ -138,7 +138,6 @@ println(obj)
 stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS") ;
 dir = "./plots/" ;
 path = dir * stamp;
-# path = "./plots/06-23-2025 14.25.56"
 mkdir(path)
 
 hh1 =  (eta * g * rho_w * value.(u1) * a1 .* (value.(V1).^b1))/(3.6e9)
