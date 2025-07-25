@@ -1,7 +1,7 @@
 using JuMP
 using Gurobi
 
-function convex_hull_approx(M, N)
+function convex_hull_approx()
 
     ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
@@ -159,10 +159,33 @@ function model_report(model)
     num_gen_constrs = MOI.get(model, Gurobi.ModelAttribute("NumGenConstrs"))
     num_sos = MOI.get(model, Gurobi.ModelAttribute("NumSOS"))
 
+    println()
+    println("--- MODEL REPORT ---")
     println("Method used: ", method_used)  # 0=primal simplex, 1=dual simplex, 2=barrier
     println("Status: ", status)
     println("Simplex iterations: ", iter_count)
     println("Barrier iterations: ", bar_iter_count)
     println("General constraints: ", num_gen_constrs)
     println("SOS constraints: ", num_sos)
+end
+
+function variable_report(method, obj, p1, u1, s1, p2, u2, s2)
+
+    println()
+    println("--- VARIABLE REPORT ---")
+    println("Method used: " * method)  
+    if method == "CHA"
+        println("M = ", M)
+        println("N = ", N)
+    end 
+    println("Total Generation (obj): ", round(obj, sigdigits=3))
+    println("---Cumulative Values---")
+    println("Generation 01 [MWh]: ", round(sum(p1), sigdigits=3))
+    println("Generation 02 [MWh]: ", round(sum(p2), sigdigits=3))
+    println("Generation Release 01 [m3]: ", round(sum(u1), sigdigits=3))
+    println("Generation Release 02 [m3]: ", round(sum(u2), sigdigits=3))
+    println("Spill Release 01 [m3]: ", round(sum(s1), sigdigits=3))
+    println("Spill Release 02 [m3]: ", round(sum(s2), sigdigits=3))
+    println()
+
 end
