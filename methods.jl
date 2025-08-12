@@ -1,5 +1,6 @@
 using JuMP
 using Gurobi
+using Ipopt
 
 function convex_hull_approx()
 
@@ -86,7 +87,8 @@ end
 function MINLP()
     
     # Create the optimization model
-    model = Model(Gurobi.Optimizer)
+    # model = Model(Gurobi.Optimizer)
+    model = Model(Ipopt.Optimizer)
 
     ## Define variables
     # Unit 01: Bonneville Dam (Downstream)
@@ -192,7 +194,8 @@ function variable_report(method, obj, p1, u1, s1, p2, u2, s2)
 
 end
 
-function convex_hull_approx_redo()
+
+function convex_hull_approx_intermed()
 
     ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
