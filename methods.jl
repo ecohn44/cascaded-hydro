@@ -279,3 +279,67 @@ function convex_hull_approx_intermed()
     return model, obj, value.(s1), value.(lam1), value.(V1), value.(u1), value.(p1), value.(s2), value.(lam2), value.(V2), value.(u2), value.(p2)
 
 end
+
+
+function approximation_error(u, V, y, b)
+    for t in 1:T
+        # True nonlinear value
+        true_y = value(u[t]) * (value(V[t]))^b
+        
+        # Approximated value
+        approx_y = value(y[t])
+        
+        # Error
+        error = abs(true_y - approx_y)
+        
+        println("t=$t: True y1=$true_y, Approx y1=$approx_y, Error=$error")
+        
+        if error > 1e-3  # Flag significant errors
+            println("  *** SIGNIFICANT APPROXIMATION ERROR ***")
+        end
+        println()
+    end
+end
+
+
+function check_bounds(V, u, V_sample, u_sample)
+    
+    # Check if optimal points are within the sample bounds
+    for t in 1:T
+        V_val = V[t]
+        u_val = u[t]
+        # Check bounds
+        V_in_bounds = (minimum(V_sample) <= V_val <= maximum(V_sample))
+        u_in_bounds = (minimum(u_sample) <= u_val <= maximum(u_sample))
+        
+        # Distance to nearest grid point
+        V_distances = [abs(V_val - v) for v in V_sample]
+        u_distances = [abs(u_val - u) for u in u_sample]
+        
+        min_V_dist = minimum(V_distances)
+        min_u_dist = minimum(u_distances)
+        
+        println("t=$t:")
+        println("  V1=$V_val (bounds: $(minimum(V_sample)) to $(maximum(V_sample))) - In bounds: $V_in_bounds")
+        println("  u1=$u_val (bounds: $(minimum(u_sample)) to $(maximum(u_sample))) - In bounds: $u_in_bounds") 
+        println("  Distance to nearest V1 sample: $min_V_dist")
+        println("  Distance to nearest u1 sample: $min_u_dist")
+        println()
+    end
+
+end
+
+
+function lambda_distribution(lam_matrix, V_sample, u_sample)
+    # See which grid points are being used
+    for t in 1:T  
+        println("t=$t lambda distribution:")
+        for m in 1:M, n in 1:N
+            lam_val = value(lam_matrix[m,n,t])
+            if lam_val > 1e-6  # Only show significant weights
+                println("  λ[$m,$n] = $lam_val (V=$(V_sample[m]), u=$(u_sample[n]))")
+            end
+        end
+        println()
+    end
+end

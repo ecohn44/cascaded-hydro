@@ -51,8 +51,8 @@ global F2 = 1780                            # nameplate capacity [MW]
 
 ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
-global M = 20 
-global N = 20
+global M = 7 
+global N = 7
 
 # -----------------  DATA LOAD  ----------------- #
 println("--- DATA LOAD BEGIN ---")

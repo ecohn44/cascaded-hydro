@@ -51,8 +51,8 @@ global F2 = 1780                            # nameplate capacity [MW]
 
 ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
-global M = 20 
-global N = 10
+global M = 30 
+global N = 30
 
 # -----------------  DATA LOAD  ----------------- #
 println("--- DATA LOAD BEGIN ---")
@@ -79,7 +79,7 @@ q2 = s2hr*inflow_s.tda_inflow_m3s         # historic upstream inflow to 02 Dalle
 
 println("--- DATA LOAD COMPLETE ---")
 
-## ----------- SIMULATIONS ----------- ##
+### ----------- SIMULATIONS ----------- ###
  
 ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
@@ -106,31 +106,37 @@ set_optimizer_attribute(model, "NumericFocus", 3)
 @variable(model, p1[1:T] >= 0) # Power Generation
 @variable(model, lam1[1:M, 1:N, 1:T] >= 0)  # lambda matrix
 
-# Add binary variables to enforce SOS2
-@variable(model, z_V[1:M-1, 1:N, 1:T], Bin)  # Binary for V transitions
-@variable(model, z_u[1:M, 1:N-1, 1:T], Bin)  # Binary for u transitions
 
-# SOS2 constraints for V dimension
-for t in 1:T, n in 1:N
-    @constraint(model, sum(z_V[m, n, t] for m in 1:M-1) <= 1)
+# Enhanced binary variables for 2D SOS2 constraints
+@variable(model, z_block[1:M-1, 1:N-1, 1:T], Bin)  # Binary for each 2x2 block selection
+
+# 2D SOS2 constraints - only one 2x2 block can be active at a time
+for t in 1:T
+    # Only one block can be selected
+    @constraint(model, sum(z_block[m, n, t] for m in 1:M-1, n in 1:N-1) <= 1)
     
-    for m in 2:M-1
-        @constraint(model, lam1[m, n, t] <= z_V[m-1, n, t] + z_V[m, n, t])
+    # Lambda values can only be nonzero within the selected block
+    for m in 1:M, n in 1:N
+        # Determine which blocks contain this (m,n) point
+        blocks_containing_mn = []
+        
+        # Check all possible blocks that could contain point (m,n)
+        for bm in max(1, m-1):min(M-1, m), bn in max(1, n-1):min(N-1, n)
+            if bm <= M-1 && bn <= N-1 && m <= bm+1 && n <= bn+1
+                push!(blocks_containing_mn, (bm, bn))
+            end
+        end
+        
+        # Lambda can only be active if at least one containing block is active
+        if !isempty(blocks_containing_mn)
+            @constraint(model, lam1[m, n, t] <= sum(z_block[bm, bn, t] for (bm, bn) in blocks_containing_mn))
+        else
+            # This shouldn't happen with proper indexing, but as safety
+            @constraint(model, lam1[m, n, t] == 0)
+        end
     end
-    @constraint(model, lam1[1, n, t] <= z_V[1, n, t])
-    @constraint(model, lam1[M, n, t] <= z_V[M-1, n, t])
 end
 
-# SOS2 constraints for u dimension  
-for t in 1:T, m in 1:M
-    @constraint(model, sum(z_u[m, n, t] for n in 1:N-1) <= 1)
-    
-    for n in 2:N-1
-        @constraint(model, lam1[m, n, t] <= z_u[m, n-1, t] + z_u[m, n, t])
-    end
-    @constraint(model, lam1[m, 1, t] <= z_u[m, 1, t])
-    @constraint(model, lam1[m, N, t] <= z_u[m, N-1, t])
-end
 
 ## Expressions
 @expression(model, V1[t=1:T], sum(lam1[m,n,t] * V1_sample[m] for m=1:M, n=1:N))
@@ -198,7 +204,7 @@ p2 = value.(p2)
 println("Objective: " * string(obj))
 
 # model_report(model)
-variable_report(method, obj, p1, u1, s1, p2, u2, s2)
+variable_report("CHA", obj, p1, u1, s1, p2, u2, s2)
 
 println("--- SIMULATION COMPLETE ---")
 
@@ -225,57 +231,11 @@ end
 
 # -----------------  CLAUDE DIAGNOSTICS  ----------------- #
 
-# After solving, check the approximation error
-for t in 1:T
-    # True nonlinear value
-    true_y1 = value(u1[t]) * (value(V1[t]))^b1
-    
-    # Approximated value
-    approx_y1 = value(y1[t])
-    
-    # Error
-    error = abs(true_y1 - approx_y1)
-    
-    println("t=$t: True y1=$true_y1, Approx y1=$approx_y1, Error=$error")
-    
-    if error > 1e-3  # Flag significant errors
-        println("  *** SIGNIFICANT APPROXIMATION ERROR ***")
-    end
-end
+# Check the approximation error for Unit 01
+approximation_error(u1, V1, y1, b1)
 
-# Check if optimal points are within the sample bounds
-for t in 1:T
-    V1_val = value(V1[t])
-    u1_val = value(u1[t])
-    
-    # Check bounds
-    V1_in_bounds = (minimum(V1_sample) <= V1_val <= maximum(V1_sample))
-    u1_in_bounds = (minimum(u1_sample) <= u1_val <= maximum(u1_sample))
-    
-    # Distance to nearest grid point
-    V1_distances = [abs(V1_val - v) for v in V1_sample]
-    u1_distances = [abs(u1_val - u) for u in u1_sample]
-    
-    min_V1_dist = minimum(V1_distances)
-    min_u1_dist = minimum(u1_distances)
-    
-    println("t=$t:")
-    println("  V1=$V1_val (bounds: $(minimum(V1_sample)) to $(maximum(V1_sample))) - In bounds: $V1_in_bounds")
-    println("  u1=$u1_val (bounds: $(minimum(u1_sample)) to $(maximum(u1_sample))) - In bounds: $u1_in_bounds") 
-    println("  Distance to nearest V1 sample: $min_V1_dist")
-    println("  Distance to nearest u1 sample: $min_u1_dist")
-    println()
-end
+# Check if decision variables are in bounds and how close they are to sample grid points
+# check_bounds(V1, u1, V1_sample, u1_sample)
 
-
-# See which grid points are being used
-for t in 1:5  # Focus on problematic time steps
-    println("t=$t lambda distribution:")
-    for m in 1:M, n in 1:N
-        lam_val = value(lam1[m,n,t])
-        if lam_val > 1e-6  # Only show significant weights
-            println("  λ[$m,$n] = $lam_val (V=$(V1_sample[m]), u=$(u1_sample[n]))")
-        end
-    end
-    println()
-end
+# Print out lambda distribution 
+lambda_distribution(lam1, V1_sample, u1_sample)
