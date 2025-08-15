@@ -2,6 +2,7 @@ using JuMP
 using Gurobi
 using Ipopt
 
+
 function convex_hull_approx()
 
     ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
@@ -195,92 +196,6 @@ function variable_report(method, obj, p1, u1, s1, p2, u2, s2)
 end
 
 
-function convex_hull_approx_intermed()
-
-    ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
-
-    # Independent Sample Vectors
-    V1_sample = range(min_V1, max_V1, length = M)
-    u1_sample = range(min_ut1, max_ut1, length = N)
-
-    V2_sample = range(min_V2, max_V2, length = M)
-    u2_sample = range(min_ut2, max_ut2, length = N)
-
-    # Define Hydraulic Head Function
-    # f1(V) = a1 * (V^b1)
-    # f2(V) = a2 * (V^b2)
-
-    # Precomputed Matrix of Power Outputs
-    Y1 = [u * (V^b1) for u in u1_sample, V in V1_sample] 
-    Y2 = [u * (V^b2) for u in u2_sample, V in V2_sample]
-    
-    # Create the optimization model
-    model = Model(Gurobi.Optimizer)
-
-    ## ----------- SIMULATIONS ----------- ##
-
-    ### Unit 01: Bonneville Dam (Downstream)
-    ## Define variables
-    @variable(model, s1[1:T] >= 0) # Spill Outflow [m3/hr]
-    @variable(model, p1[1:T] >= 0) 
-    @variable(model, lam1[1:N, 1:M, 1:T] >= 0)  # lambda matrix
-
-    ## Initial conditions
-    @constraint(model, MassBalInit1, sum(lam1[i,j,1] * V1_sample[j] for i=1:N, j=1:M) == V0_01)
-    @constraint(model, RampRateInit1, sum(lam1[i,j,1] * u1_sample[i] for i=1:N, j=1:M) == min_ut1)
-
-    ## Expressions
-    @expression(model, V1[t=1:T], sum(lam1[i,j,t] * V1_sample[j] for i=1:N, j=1:M))
-    @expression(model, u1[t=1:T], sum(lam1[i,j,t] * u1_sample[i] for i=1:N, j=1:M))
-    @expression(model, y1[t=1:T], sum(lam1[i,j,t] * Y1[i,j]      for i=1:N, j=1:M))
-
-    ## Constraints
-    @constraint(model, MassBal1[t in 2:T], V1[t] == V1[t-1] + q1[t] - u1[t] - s1[t])
-    @constraint(model, Release1[t in 2:T], min_ut1 <= u1[t] <= max_ut1)
-    @constraint(model, ReleaseEnergy1[t in 1:T], p1[t] == (eta * g * rho_w * a1 * y1[t])/(3.6e9))
-    @constraint(model, RampRate1[t in 2:T], RR_dn1 <= u1[t] - u1[t-1] <= RR_up1)
-    @constraint(model, FeederCap1[t in 1:T], 0 <= p1[t] <= F1)
-    @constraint(model, Volume1[t in 1:T], min_V1 <= V1[t] <= max_V1)
-    @constraint(model, lambda1[t in 1:T], sum(lam1[:,:,t]) == 1)
-
-    ### Unit 02: Dalles Dam (Downstream)
-    ## Define variables
-    @variable(model, s2[1:T] >= 0) # Spill Outflow [m3/hr]
-    @variable(model, p2[1:T] >= 0)
-    @variable(model, lam2[1:N, 1:M, 1:T] >= 0)  # lambda matrix
-
-    ## Initial conditions
-    @constraint(model, MassBalInit2, sum(lam2[i,j,1] * V2_sample[j] for i=1:N, j=1:M) == V0_02)
-    @constraint(model, RampRateInit2, sum(lam2[i,j,1] * u2_sample[i] for i=1:N, j=1:M) == min_ut2)
-
-    ## Expressions
-    @expression(model, V2[t=1:T], sum(lam2[i,j,t] * V2_sample[j] for i=1:N, j=1:M))
-    @expression(model, u2[t=1:T], sum(lam2[i,j,t] * u2_sample[i] for i=1:N, j=1:M))
-    @expression(model, y2[t=1:T], sum(lam2[i,j,t] * Y2[i,j]      for i=1:N, j=1:M))
-
-    ## Constraints
-    @constraint(model, MassBal2[t in 2:T], V2[t] == V2[t-1] + q2[t] - u2[t] - s2[t])
-    @constraint(model, Release2[t in 2:T], min_ut2 <= u2[t] <= max_ut2)
-    @constraint(model, ReleaseEnergy2[t in 1:T], p2[t] == (eta * g * rho_w * a2 * y2[t])/(3.6e9))
-    @constraint(model, RampRate2[t in 2:T], RR_dn2 <= u2[t] - u2[t-1] <= RR_up2)
-    @constraint(model, FeederCap2[t in 1:T], 0 <= p2[t] <= F2)
-    @constraint(model, Volume2[t in 1:T], min_V2 <= V2[t] <= max_V2)
-    @constraint(model, lambda2[t in 1:T], sum(lam2[:,:,t]) == 1)
-
-    # Objective function
-    @objective(model, Max, sum(p1 + p2)) 
-
-    # Solve the optimization problem
-    optimize!(model)
-
-    # Total Generation
-    obj = objective_value(model);
-
-    return model, obj, value.(s1), value.(lam1), value.(V1), value.(u1), value.(p1), value.(s2), value.(lam2), value.(V2), value.(u2), value.(p2)
-
-end
-
-
 function approximation_error(u, V, y, b)
     for t in 1:T
         # True nonlinear value
@@ -305,45 +220,3 @@ function approximation_error(u, V, y, b)
     end
 end
 
-
-function check_bounds(V, u, V_sample, u_sample)
-    
-    # Check if optimal points are within the sample bounds
-    for t in 1:T
-        V_val = V[t]
-        u_val = u[t]
-        # Check bounds
-        V_in_bounds = (minimum(V_sample) <= V_val <= maximum(V_sample))
-        u_in_bounds = (minimum(u_sample) <= u_val <= maximum(u_sample))
-        
-        # Distance to nearest grid point
-        V_distances = [abs(V_val - v) for v in V_sample]
-        u_distances = [abs(u_val - u) for u in u_sample]
-        
-        min_V_dist = minimum(V_distances)
-        min_u_dist = minimum(u_distances)
-        
-        println("t=$t:")
-        println("  V1=$V_val (bounds: $(minimum(V_sample)) to $(maximum(V_sample))) - In bounds: $V_in_bounds")
-        println("  u1=$u_val (bounds: $(minimum(u_sample)) to $(maximum(u_sample))) - In bounds: $u_in_bounds") 
-        println("  Distance to nearest V1 sample: $min_V_dist")
-        println("  Distance to nearest u1 sample: $min_u_dist")
-        println()
-    end
-
-end
-
-
-function lambda_distribution(lam_matrix, V_sample, u_sample)
-    # See which grid points are being used
-    for t in 1:T  
-        println("t=$t lambda distribution:")
-        for m in 1:M, n in 1:N
-            lam_val = value(lam_matrix[m,n,t])
-            if lam_val > 1e-6  # Only show significant weights
-                println("  λ[$m,$n] = $lam_val (V=$(V_sample[m]), u=$(u_sample[n]))")
-            end
-        end
-        println()
-    end
-end
