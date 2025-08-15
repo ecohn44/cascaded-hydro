@@ -291,10 +291,14 @@ function approximation_error(u, V, y, b)
         
         # Error
         error = abs(true_y - approx_y)
+
+        # Percent Error
+        percent_error = (error / abs(true_y)) * 100
         
         println("t=$t: True y1=$true_y, Approx y1=$approx_y, Error=$error")
+        println("t=$t: Percent Error=$percent_error")
         
-        if error > 1e-3  # Flag significant errors
+        if percent_error > 1e-3  # Flag significant errors
             println("  *** SIGNIFICANT APPROXIMATION ERROR ***")
         end
         println()

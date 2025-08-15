@@ -51,8 +51,8 @@ global F2 = 1780                            # nameplate capacity [MW]
 
 ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
-global M = 30 
-global N = 30
+global M = 5 
+global N = 5
 
 # -----------------  DATA LOAD  ----------------- #
 println("--- DATA LOAD BEGIN ---")
@@ -106,14 +106,14 @@ set_optimizer_attribute(model, "NumericFocus", 3)
 @variable(model, p1[1:T] >= 0) # Power Generation
 @variable(model, lam1[1:M, 1:N, 1:T] >= 0)  # lambda matrix
 
-
+# 2D SOS2 constraints - only one 2x2 block can be active at a time
 # Enhanced binary variables for 2D SOS2 constraints
-@variable(model, z_block[1:M-1, 1:N-1, 1:T], Bin)  # Binary for each 2x2 block selection
+@variable(model, z_block1[1:M-1, 1:N-1, 1:T], Bin)  # Binary for each 2x2 block selection
 
 # 2D SOS2 constraints - only one 2x2 block can be active at a time
 for t in 1:T
     # Only one block can be selected
-    @constraint(model, sum(z_block[m, n, t] for m in 1:M-1, n in 1:N-1) <= 1)
+    @constraint(model, sum(z_block1[m, n, t] for m in 1:M-1, n in 1:N-1) <= 1)
     
     # Lambda values can only be nonzero within the selected block
     for m in 1:M, n in 1:N
@@ -129,14 +129,13 @@ for t in 1:T
         
         # Lambda can only be active if at least one containing block is active
         if !isempty(blocks_containing_mn)
-            @constraint(model, lam1[m, n, t] <= sum(z_block[bm, bn, t] for (bm, bn) in blocks_containing_mn))
+            @constraint(model, lam1[m, n, t] <= sum(z_block1[bm, bn, t] for (bm, bn) in blocks_containing_mn))
         else
             # This shouldn't happen with proper indexing, but as safety
             @constraint(model, lam1[m, n, t] == 0)
         end
     end
 end
-
 
 ## Expressions
 @expression(model, V1[t=1:T], sum(lam1[m,n,t] * V1_sample[m] for m=1:M, n=1:N))
@@ -161,6 +160,37 @@ end
 @variable(model, s2[1:T] >= 0) # Spill Outflow [m3/hr]
 @variable(model, p2[1:T] >= 0)
 @variable(model, lam2[1:M, 1:N, 1:T] >= 0)  # lambda matrix
+
+# 2D SOS2 constraints - only one 2x2 block can be active at a time
+# Enhanced binary variables for 2D SOS2 constraints
+@variable(model, z_block2[1:M-1, 1:N-1, 1:T], Bin)  # Binary for each 2x2 block selection
+
+# 2D SOS2 constraints - only one 2x2 block can be active at a time
+for t in 1:T
+    # Only one block can be selected
+    @constraint(model, sum(z_block2[m, n, t] for m in 1:M-1, n in 1:N-1) <= 1)
+    
+    # Lambda values can only be nonzero within the selected block
+    for m in 1:M, n in 1:N
+        # Determine which blocks contain this (m,n) point
+        blocks_containing_mn = []
+        
+        # Check all possible blocks that could contain point (m,n)
+        for bm in max(1, m-1):min(M-1, m), bn in max(1, n-1):min(N-1, n)
+            if bm <= M-1 && bn <= N-1 && m <= bm+1 && n <= bn+1
+                push!(blocks_containing_mn, (bm, bn))
+            end
+        end
+        
+        # Lambda can only be active if at least one containing block is active
+        if !isempty(blocks_containing_mn)
+            @constraint(model, lam2[m, n, t] <= sum(z_block2[bm, bn, t] for (bm, bn) in blocks_containing_mn))
+        else
+            # This shouldn't happen with proper indexing, but as safety
+            @constraint(model, lam2[m, n, t] == 0)
+        end
+    end
+end
 
 ## Expressions
 @expression(model, V2[t=1:T], sum(lam2[m,n,t] * V2_sample[m] for m=1:M, n=1:N))
@@ -233,9 +263,10 @@ end
 
 # Check the approximation error for Unit 01
 approximation_error(u1, V1, y1, b1)
+approximation_error(u2, V2, y2, b2)
 
 # Check if decision variables are in bounds and how close they are to sample grid points
 # check_bounds(V1, u1, V1_sample, u1_sample)
 
 # Print out lambda distribution 
-lambda_distribution(lam1, V1_sample, u1_sample)
+# lambda_distribution(lam1, V1_sample, u1_sample)
