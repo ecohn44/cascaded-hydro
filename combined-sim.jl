@@ -70,8 +70,8 @@ SOC_01 = 0.5
 SOC_02 = 0.5 
 
 # Initial Conditions
-V0_01 = SOC_01*(max_V1 - min_V1) + min_V1  
-V0_02 = SOC_02*(max_V2 - min_V2) + min_V2 
+global V0_01 = SOC_01*(max_V1 - min_V1) + min_V1  
+global V0_02 = SOC_02*(max_V2 - min_V2) + min_V2 
 
 # Inflow [m3/hr] 
 q1 = s2hr*inflow_s.bon_inflow_m3s         # historic downstream inflow to 01 Bonneville [m3/s] --> [m3/hr]
@@ -79,17 +79,22 @@ q2 = s2hr*inflow_s.tda_inflow_m3s         # historic upstream inflow to 02 Dalle
 
 println("--- DATA LOAD COMPLETE ---")
 
+
 ## ----------- SIMULATIONS ----------- ##
  
-# method = "MINLP"
-method = "CHA"
+method = "MINLP"
+# method = "CHA"
+
+framework = "DET"
+# framework = "DUI"
 
 println("--- SIMULATION BEGIN ---")
 
 if method == "CHA"
-    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx_intermed()
+    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx()
 elseif method == "MINLP"
-    model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
+    # model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
+    model, obj, V1, p1, u1, s1, q1_pred, V2, p2, u2, s2 = MINLP_loop(q1, q2) #, framework)
 end
 
 println("Objective: " * string(obj))
@@ -106,8 +111,8 @@ printplot = false
 head1 = a1 .* (V1.^b1)
 p1_max =  (eta * g * rho_w * u1 .* head1)/(3.6e9)
 
-head2 = a2 .* (V2.^b2)
-p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
+#head2 = a2 .* (V2.^b2)
+#p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
 
 if printplot
     # Create directory for this run 
