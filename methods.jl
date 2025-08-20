@@ -1,6 +1,7 @@
 using JuMP
 using Gurobi
 using Ipopt
+using Distributions
 
 
 function convex_hull_approx()
@@ -85,11 +86,6 @@ function convex_hull_approx()
 end
 
 
-function pred_inflow_diu()
-
-end
-
-
 function MINLP()
     
     # Create the optimization model
@@ -148,7 +144,38 @@ function MINLP()
 end
 
 
-function MINLP_loop(q1_s, q2_s) #, framework)
+function normalize_flow(flow, mean, std)
+    return (flow - mean)/std
+end
+
+
+function rescale_flow(flow_norm, mean, std)
+    return flow_norm*std + mean
+end
+
+
+function forecast_inflow_diu(q_prev, outflow_prev, params)
+    
+    d = Normal(0, params.resid_var)
+
+    # Normalize predictors 
+    q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std)
+    outflow_prev_norm = normalize_flow(outflow_prev, params.outflow_mean, params.outflow_std)
+    
+    # Sample from error distribution
+    e = rand(d)
+
+    # Forecast inflow at time t
+    q_hat_norm = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm + e
+
+    # Rescale predicted inflow
+    q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std)
+    
+    return q_hat
+end
+
+
+function MINLP_loop(q1_s, q2_s, framework, params)
     
     # Initialize empty vectors to store DVs
     V1_s = zeros(Float64, T)
@@ -180,7 +207,7 @@ function MINLP_loop(q1_s, q2_s) #, framework)
     @variable(model, s2 >= 0) # Spill Outflow [m3/hr]
 
     # Objective function
-    @objective(model, Max, sum(p1 + p2))
+    @objective(model, Max, (p1 + p2) - (s1+s2))
 
     ## Constraints
     # Unit 1
@@ -203,15 +230,19 @@ function MINLP_loop(q1_s, q2_s) #, framework)
 
     for t = 1:T
 
-        #=
         ## Predict inflow at current time step 
         if framework == "DET"
-            q1_pred[t] = q1_s[t]
-        elseif framework == "DIU"
-            q1_pred[t] = q1_s[t]
+            q1_pred[t] = q1_s[t+lag] # perfect foresight
         end
-        =#
-        q1_pred[t] = q1_s[t]
+
+        if framework == "DIU"
+            if t <= lag
+                q1_pred[t] = q1_s[t] # use previous inflow as predictor
+            else
+                # Inputs: previous inflow, total upstream release, model params
+                q1_pred[t] = forecast_inflow_diu(q1_s[t], (u2_s[t-1] + s2_s[t-1]), params)
+            end
+        end
 
         if t == 1
             ## Set initial flow conditions 
@@ -224,7 +255,7 @@ function MINLP_loop(q1_s, q2_s) #, framework)
             
             ## Set intial volume conditions
             set_normalized_rhs(MassBal1, V0_01 + q1_pred[1])
-            set_normalized_rhs(MassBal2, V0_02 + q2_s[1])
+            set_normalized_rhs(MassBal2, V0_02 + q2_s[1+lag])
         else
             # Update ramp rate with previous flow
             # Unit 1
@@ -236,7 +267,7 @@ function MINLP_loop(q1_s, q2_s) #, framework)
 
             # Update mass balance with previous volume
             set_normalized_rhs(MassBal1, V1_s[t-1] + q1_pred[t])
-            set_normalized_rhs(MassBal2, V2_s[t-1] + q2_s[t])
+            set_normalized_rhs(MassBal2, V2_s[t-1] + q2_s[t+lag])
         end
  
         # Solve the optimization problem
@@ -254,9 +285,9 @@ function MINLP_loop(q1_s, q2_s) #, framework)
 
     end 
 
-    obj = sum(p1_s + p2_s)
+    total_gen = sum(p1_s + p2_s)
 
-    return model, obj, V1_s, p1_s, u1_s, s1_s, q1_pred, V2_s, p2_s, u2_s, s2_s
+    return model, total_gen, V1_s, p1_s, u1_s, s1_s, q1_pred, V2_s, p2_s, u2_s, s2_s
 
 end
 

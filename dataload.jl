@@ -61,7 +61,7 @@ function fullsim_dataload()
     gage.datetime = DateTime.(gage.datetime, dateformat"yyyy-mm-dd HH:MM:SS")
     gage = filter(row -> minute(row.datetime) == 0, gage)
 
-    ## Data Set C: USACE Inflow Data
+    ## Data Set 3: USACE Inflow Data
     inflow = DataFrame(CSV.File(tda_inflow_path));
     inflow.datetime = DateTime.(inflow.datetime, dateformat"yyyy-mm-dd HH:MM:SS")
     inflow.tda_inflow_m3s = 1000*cfs_to_m3s(inflow.inflow_kcfs) # convert kcfs --> cfs --> m3/s 
