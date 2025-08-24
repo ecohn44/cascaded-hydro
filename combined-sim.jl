@@ -49,7 +49,7 @@ global RR_dn2 = s2hr*cfs_to_m3s(-4900)      # down ramp rate limit [m3/hr]
 global RR_up2 = s2hr*cfs_to_m3s(4700)       # up ramp rate limit [m3/hr]
 global F2 = 1780                            # nameplate capacity [MW]
 
-## --------------- SEASONAL OLS PARAMETERS --------------- ##
+## --------------- DDU SEASONAL OLS PARAMETERS --------------- ##
 
 wet_params = (
     center_day = 157,    # DoY
@@ -57,10 +57,21 @@ wet_params = (
     inflow_std = 9.21e6,
     outflow_mean = 2.37e7,
     outflow_std = 9.12e6,
+    # -- DDU Params -- #
     constant = -0.0018,
     coef1 = 0.836,   # inflow_lag1 [m3/hr]
     coef2 = 0.165,   # outflow_lag1 [m3/hr]
-    resid_var = 0.0092
+    resid_var = 0.0959,
+    # -- DIU Params -- #
+    AR_const = -0.0004,
+    AR_coef = 0.995,    # inflow_lag1 [m3/hr]
+    AR_resid_var = 0.1042,
+    # -- ARCH-X Params -- #
+    omega = 0.172,   
+    alpha = 0.815,   
+    gamma = 0.00832,  
+    error_mean = 0.069,  
+    error_std = 0.0364
 )
 
 dry_params = (
@@ -69,10 +80,21 @@ dry_params = (
     inflow_std = 2.47e6,
     outflow_mean = 9.69e6,
     outflow_std = 2.79e6,
+    # -- DDU Params -- #
     constant = -0.0013,
     coef1 = 0.830,   # inflow_lag1 [m3/hr]
     coef2 = 0.169,   # outflow_lag1 [m3/hr]
-    resid_var = 0.087
+    resid_var = 0.295,
+    # -- DIU Params -- #
+    AR_const = 0.0020,
+    AR_coef = 0.950,    # inflow_lag1 [m3/hr]
+    AR_resid_var = 0.3188,
+    # -- ARCH-X Params -- #
+    omega = 0.179,   
+    alpha = 0.796,   
+    gamma = 0.0404,   
+    error_mean = 0.21,  
+    error_std = 0.11
 )
 
 ## ----------- SIMULATION SETTINGS ----------- ##
@@ -87,7 +109,8 @@ method = "MINLP"
 
 ## Uncertainty Framework
 # framework = "DET"
-framework = "DIU"
+# framework = "DIU"
+framework = "DDU"
 
 # -----------------  DATA LOAD  ----------------- #
 
@@ -141,7 +164,7 @@ println("--- SIMULATION BEGIN ---")
 
 if method == "MINLP"
     # model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
-    model, obj, V1, p1, u1, s1, q1_pred, V2, p2, u2, s2 = MINLP_loop(q1, q2, framework, params)
+    model, obj, V1, p1, u1, s1, q1_pred, std_hat, V2, p2, u2, s2 = MINLP_loop(q1, q2, framework, params)
 end
 
 if method == "CHA"
@@ -172,7 +195,7 @@ if printplot
     path = dir * stamp;
     mkdir(path)
 
-    sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1_pred, head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
-    sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2[2:end], head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
+    sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1_pred, q1[2:end], head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
+    sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2[2:end], q2[2:end], head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
 end 
 

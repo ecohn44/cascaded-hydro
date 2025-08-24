@@ -155,19 +155,74 @@ function rescale_flow(flow_norm, mean, std)
 end
 
 
-function forecast_inflow_diu(q_prev, outflow_prev, params)
-    
-    d = Normal(0, params.resid_var)
+function forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
+
+    println("Previous Recorded Inflow [m3/hr]: ", q_prev)
+    println("Previous Predicted Inflow [m3/hr]: ", q_pred_prev)
+    println("Previous Simulated Upstream Outflow [m3/hr]: ", outflow_prev)
 
     # Normalize predictors 
     q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std)
     outflow_prev_norm = normalize_flow(outflow_prev, params.outflow_mean, params.outflow_std)
+    q_pred_prev_norm = normalize_flow(q_pred_prev, params.inflow_mean, params.inflow_std)
+
+    println("Norm Previous Recorded Inflow: ", q_prev_norm)
+    println("Norm Previous Predicted Inflow: ", q_pred_prev_norm)
+    println("Norm Previous Simulated Upstream: ", outflow_prev_norm)
     
+    # Calculate previous error term 
+    error_prev = abs(q_prev_norm - q_pred_prev_norm)
+
+    # Z-Score normalize the previous error term 
+    norm_error_prev = (error_prev - params.error_mean)/params.error_std
+
+    println("Previous Error Term: ", error_prev)
+    println("Norm Previous Error Term: ", norm_error_prev)
+ 
+    # Forecast conditional variance
+    var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm
+
+    std_hat_norm = sqrt(var_hat_norm)
+    
+    # Rescale variance using error Z-scores
+    std_hat = std_hat_norm*params.error_std + params.error_mean
+
+    println("Estimated Normalized STD: ", std_hat_norm)
+    println("Estimated STD: ", std_hat)
+    println("Empirical STD: ", params.resid_var)
+    
+    # Estimate current error distribution 
+    d = Normal(0, std_hat)
+
     # Sample from error distribution
     e = rand(d)
 
     # Forecast inflow at time t
     q_hat_norm = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm + e
+
+    # Rescale predicted inflow
+    q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std)
+
+    println("Sampled Inflow Error: ", e)
+    println("Forecasted Norm Inflow: ", q_hat_norm)
+    println("Forecasted Inflow: ", q_hat)
+    
+    return q_hat, std_hat
+end
+
+
+function forecast_inflow_diu(q_prev, params)
+    
+    d = Normal(0, params.AR_resid_var)
+
+    # Normalize predictors 
+    q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std)
+
+    # Sample from error distribution
+    e = rand(d)
+
+    # Forecast inflow at time t
+    q_hat_norm = params.AR_const + params.AR_coef*q_prev_norm + e
 
     # Rescale predicted inflow
     q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std)
@@ -184,6 +239,7 @@ function MINLP_loop(q1_s, q2_s, framework, params)
     u1_s = zeros(Float64, T)
     s1_s = zeros(Float64, T)
     q1_pred = zeros(Float64, T)
+    std_hat = zeros(Float64, T)
 
     V2_s = zeros(Float64, T)
     p2_s = zeros(Float64, T)
@@ -193,6 +249,7 @@ function MINLP_loop(q1_s, q2_s, framework, params)
     # Create the optimization model
     model = Model(Gurobi.Optimizer)
     # model = Model(Ipopt.Optimizer)
+    set_silent(model)
 
     ## Define variables
     # Unit 01: Bonneville Dam (Downstream)
@@ -240,8 +297,22 @@ function MINLP_loop(q1_s, q2_s, framework, params)
             if t <= lag
                 q1_pred[t] = q1_s[t] # use previous inflow as predictor
             else
+                # Inputs: previous inflow and model params
+                q1_pred[t] = forecast_inflow_diu(q1_s[t], params)
+            end
+        end
+
+        if framework == "DDU"
+            if t <= lag
+                println("T = ", t)
+                println("Not enough info - using prev inflow as predictor")
+                q1_pred[t] = q1_s[t] # use previous inflow as predictor
+                std_hat[t] = 0
+            else
+                println("T = ", t)
+                println("Entering DDU Framework")
                 # Inputs: previous inflow, total upstream release, model params
-                q1_pred[t] = forecast_inflow_diu(q1_s[t], (u2_s[t-1] + s2_s[t-1]), params)
+                q1_pred[t], std_hat[t] = forecast_inflow_ddu(q1_s[t], q1_pred[t-1], (u2_s[t-1] + s2_s[t-1]), params)
             end
         end
 
@@ -288,7 +359,7 @@ function MINLP_loop(q1_s, q2_s, framework, params)
 
     total_gen = sum(p1_s + p2_s)
 
-    return model, total_gen, V1_s, p1_s, u1_s, s1_s, q1_pred, V2_s, p2_s, u2_s, s2_s
+    return model, total_gen, V1_s, p1_s, u1_s, s1_s, q1_pred, std_hat, V2_s, p2_s, u2_s, s2_s
 
 end
 
