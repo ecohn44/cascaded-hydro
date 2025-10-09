@@ -2,7 +2,7 @@ using LaTeXStrings
 using Plots
 using Plots.PlotMeasures
 
-function sim_plots(path, label, N, u, s, p, V, q, h, PF, hh, min_ut, max_ut, min_V, max_V)
+function sim_plots(path, label, N, u, s, p, V, q_pred, q, h, PF, hh, min_ut, max_ut, min_V, max_V)
     font = 10
     xfont = 8
 
@@ -35,7 +35,8 @@ function sim_plots(path, label, N, u, s, p, V, q, h, PF, hh, min_ut, max_ut, min
     title!(plot3, "Volume", titlefontsize=font)
 
     ## Plot 4: Inflow
-    plot4 = plot(1:N, q, lw=2, legend=false)
+    plot4 = plot(1:N, q_pred, lw=2, legend=false)
+    plot!(plot4, q, color=:green, linestyle=:dash, legend=false)
     xlabel!(plot4, "Hour",xguidefontsize=xfont)
     ylabel!(plot4, "Flow (m3/hr)")
     title!(plot4, "Inflow", titlefontsize=font)
