@@ -1,0 +1,160 @@
+function [obj, X, std_hat] = optimization(T, c, q, lag, framework, params, s)
+
+    % Initialize decision variable storage
+    % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1_pred, 6=V2, 7=p2, 8=u2, 9=s2
+    X = zeros(T,9);
+    std_hat = zeros(T,1); % DET version: zero
+
+    % Extract streamflow time series 
+    q1_s = q(:,1);
+    q2_s = q(:,2);
+
+    % Define decision variables (YALMIP)
+    yalmip('clear');
+
+    V1 = sdpvar(T,1);
+    p1 = sdpvar(T,1);
+    u1 = sdpvar(T,1);
+    s1 = sdpvar(T,1);
+
+    V2 = sdpvar(T,1);
+    p2 = sdpvar(T,1);
+    u2 = sdpvar(T,1);
+    s2 = sdpvar(T,1);
+
+    % Objective
+    cons = [];
+    Objective = sum((p1 + p2) - (s1 + s2));
+
+    %% Build constraints
+    for t = 1:T
+        
+        %% Forecast Inflow
+        % Deterministic forecast inflow
+        q1_pred(t) = q1_s(t+lag); % perfect foresight
+
+        %% Static Constraints
+        % Water Release Bounds
+        cons = [cons, s.min_ut{1} <= u1(t) <= s.max_ut{1}];
+        cons = [cons, s.min_ut{2} <= u2(t) <= s.max_ut{2}];
+
+        % Feeder Capacity
+        cons = [cons, 0 <= p1(t) <= s.F{1}];
+        cons = [cons, 0 <= p2(t) <= s.F{1}];
+        
+        % Volume Bounds
+        cons = [cons, s.min_V{1} <= V1(t) <= s.max_V{1}];
+        cons = [cons, s.min_V{2} <= V2(t) <= s.max_V{2}];
+
+
+        %% Time-Varying Constraints
+        if t == 1 % Initial conditions
+            % Mass Balance
+            cons = [cons, V1(t) + u1(t) + s1(t) == s.V0{1} + q1_pred(1)];
+            cons = [cons, V2(t) + u2(t) + s2(t) == s.V0{2} + q2_s(1+lag)];
+            
+            % Ramp Rates
+            cons = [cons, u1(t) == s.min_ut{1}];
+            cons = [cons, u2(t) == s.min_ut{2}];
+
+            % Power Production
+            cons = [cons, p1(t) <= c*u1(t)*s.a{1}*(s.V0{1}^s.b{1})];
+            cons = [cons, p2(t) <= c*u2(t)*s.a{2}*(s.V0{2}^s.b{2})];
+        
+        else
+            % Mass Balance
+            cons = [cons, V1(t) + u1(t) + s1(t) == V1_s(t-1) + q1_pred(t)];
+            cons = [cons, V2(t) + u2(t) + s2(t) == V2_s(t-1) + q2_s(t+lag)];
+            
+            % Ramp Rate Up
+            cons = [cons, u1(t) <= s.RR_up{1} + u1(t-1)];
+            cons = [cons, u2(t) <= s.RR_up{2} + u2(t-1)];
+
+            % Ramp Rate Down
+            cons = [cons, -u1(t) <= -(s.RR_dn{1} + u1(t-1))];
+            cons = [cons, -u2(t) <= -(s.RR_dn{2} + u2(t-1))];
+
+            % Power Production
+            h1_lookup = s.a{1} * X(t-1,1)^s.b{1}; % previous hydraulic head
+            h1_ref = map_V_to_h(h1_lookup, s.h_lbounds{1}, s.h_rbounds{1}, s.h_refvals{1});
+            cons = [cons, p1(t) == c*u1(t)*h1_ref];
+
+            h2_lookup = s.a{2} * X(t-1,6)^s.b{2};
+            h2_ref = map_V_to_h(h2_lookup, s.h_lbounds{2}, s.h_rbounds{2}, s.h_refvals{2});
+            cons = [cons, p2(t) == c*u2(t)*h2_ref];
+                          
+        end
+
+    % Solve optimization
+    options = sdpsettings('solver','gurobi','verbose',0);
+    model = optimize(cons, -Objective, options);
+
+    % Extract results
+    X(:,1) = value(V1);
+    X(:,2) = value(p1);
+    X(:,3) = value(u1);
+    X(:,4) = value(s1);
+    X(:,5) = q1_pred;
+    X(:,6) = value(V2);
+    X(:,7) = value(p2);
+    X(:,8) = value(u2);
+    X(:,9) = value(s2);
+
+    end
+
+    obj = sum(X(:,2) + X(:,7));
+end
+
+
+function h_ref = map_V_to_h(h, left_bounds, right_bounds, reference_values)
+    N = length(left_bounds);
+    if h <= left_bounds(1)
+        h_ref = reference_values(1);
+    elseif h >= right_bounds(end)
+        h_ref = reference_values(N);
+    else
+        idx = find(left_bounds <= h, 1, 'last');
+        idx = min(idx, N);
+        h_ref = reference_values(idx);
+    end
+end
+
+function q_norm = normalize_flow(flow, mean_val, std_val)
+    q_norm = (flow - mean_val)/std_val;
+end
+
+function q = rescale_flow(flow_norm, mean_val, std_val)
+    q = flow_norm*std_val + mean_val;
+end
+
+function q_hat = forecast_inflow_diu(q_prev, params)
+    q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std);
+    e = randn()*sqrt(params.AR_resid_var);
+    q_hat_norm = params.AR_const + params.AR_coef*q_prev_norm + e;
+    q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
+end
+
+
+function [q_hat, std_hat] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
+    % Normalize
+    q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std);
+    outflow_prev_norm = normalize_flow(outflow_prev, params.outflow_mean, params.outflow_std);
+    q_pred_prev_norm = normalize_flow(q_pred_prev, params.inflow_mean, params.inflow_std);
+
+    % Error term
+    error_prev = abs(q_prev_norm - q_pred_prev_norm);
+    norm_error_prev = (error_prev - params.error_mean)/params.error_std;
+
+    % Variance forecast
+    var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm;
+    std_hat_norm = sqrt(var_hat_norm);
+    std_hat = std_hat_norm*params.error_std + params.error_mean;
+
+    % Sample error
+    e = randn()*std_hat;
+
+    % Forecast inflow
+    q_hat_norm = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm + e;
+    q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
+end
+

@@ -10,47 +10,29 @@ clear; clc; close all;
 % ========================================================================
 
 % Load inflow data
-[inflow, params, sysparams] = dataload();
+[inflow, modelparams, sysparams] = dataload();
 
 % Static Parameters (PowerProd)
 eta = .9;          % efficiency of release-energy conversion
 rho_w = 1000;      % density of water [kg/m^3]
 g = 9.8;           % acceleration due to gravity [m/s^2]
-
+c = eta*rho_w*g/3.6e9; % power prod coefficient
 
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-function settings = initSimSettings(season, method, framework)
-    validSeasons = ["dry", "wet"];
-    validMethods = ["MINLP", "PWL"];
-    validFrameworks = ["DET", "DIU", "DDU"];
-
-    if ~ismember(season, validSeasons)
-        error('Invalid season. Choose "DRY" or "WET".');
-    end
-    if ~ismember(method, validMethods)
-        error('Invalid method. Choose "MINLP" or "PWL".');
-    end
-    if ~ismember(framework, validFrameworks)
-        error('Invalid framework. Choose "DET", "DIU", or "DDU".');
-    end
-
-    settings = struct('season', season, 'method', method, 'framework', framework);
-end
-
 % Initialize settings
-simSettings = initSimSettings("wet", "PWL", "DET");
+simSettings = initSimSettings("wet", "pwl", "det");
 
 % Extract forecasting coefficients 
-params = params(strcmp({params.season}, simSettings.season));
+modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings 
-D = 30;                        % Simulation duration in days
-T = 12 + 24*D;                 % Number of simulation hours
-lag = 1;                       % Number of lag terms in OLS model
-year = 2022;                   % Simulation year
+D = 0;                        % Simulation duration in days
+T = 12 + 24*D;                % Number of simulation hours
+lag = 1;                      % Number of lag terms in OLS model
+year = 2022;                  % Simulation year
 
 % Compute simulation daterange and inflow series
 sim_center_date = datetime(year, 1, 1) + days(params.center_day - 1);
@@ -59,8 +41,7 @@ end_date   = sim_center_date + hours(T/2 - 1);
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
 
 % Extract historic inflow timeseries [m3/hr]
-q1 = inflow_s.bon_inflow_m3hr;   % Bonneville downstream inflow
-q2 = inflow_s.tda_inflow_m3hr;   % Dalles upstream inflow
+q = [inflow_s.bon_inflow_m3hr, inflow_s.tda_inflow_m3hr]; 
 
 fprintf('Data loading complete.\n');
 
@@ -68,7 +49,7 @@ fprintf('Data loading complete.\n');
 % SECTION 3: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-% model, obj, V1, p1, u1, s1, q1_pred, std_hat, V2, p2, u2, s2 = simulation_loop(q1, q2, framework, method, params)
+[obj, X, std_hat] = optimization(T, c, q, lag, simSettings.framework, modelparams, sysparams);
 
   %  println("Objective: " * string(obj))
 

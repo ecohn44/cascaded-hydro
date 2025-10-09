@@ -231,7 +231,7 @@ else
     # model_report(model)
     variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2, N)
 
-    printplot = true
+    printplot = false
 
     if printplot
         head1 = a1 .* (V1.^b1)
