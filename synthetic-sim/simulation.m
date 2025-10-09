@@ -25,7 +25,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "diu", "jcc-bon");
+simSettings = initSimSettings("dry", "pwl", "diu", "jcc-ssh");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -33,10 +33,9 @@ modelparams.rho = 0.1135; % Calculated offline between (q1_hist, s1 + u1)
 
 % Date range settings 
 D = 5;                        % Simulation duration in days
-% T = 12 + 24*D;                % Number of simulation hours
-T = 60;
+T = 12 + 24*D;                % Number of simulation hours
 lag = 1;                      % Number of lag terms in OLS model
-year = 2022;                  % Simulation year
+year = 2022;                   % Simulation year
 
 % Compute simulation daterange and inflow series
 sim_center_date = datetime(year, 1, 1) + days(modelparams.center_day - 1);
@@ -53,7 +52,7 @@ fprintf('Data loading complete.\n');
 % SECTION 3: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-[model, obj, X, std_hat] = optimization(T, N, c, q, lag, ...
+[model, obj, X, std_hat, phi_vals, alpha_vals] = optimization(T, N, c, q, lag, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 % Extract q2 reference inflow
@@ -89,3 +88,14 @@ fprintf('Running Monte Carlo Sims.\n');
 [V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X);
 
 fprintf('Simulation complete.\n');
+
+% Show slack 
+figure;
+plot(alpha_vals(:,1)*100, 'b-', 'LineWidth',1.5); hold on;
+plot(alpha_vals(:,2)*100, 'r--', 'LineWidth',1.5);
+yline(100*(1/2), 'k:', 'Bonferroni 50/50');
+xlabel('Time step');
+ylabel('Slack allocation (%)');
+legend('Reservoir 1','Reservoir 2','Location','best');
+title('Adaptive Risk Allocation (SSH vs. Bonferroni)');
+grid on;

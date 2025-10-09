@@ -1,9 +1,7 @@
-function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, ...
+function [cons_out, x_sol, phi_val] = applySSH(cons, vars, t, ...
         X_prev, q_mean_vec, Sigma_q, x_slater, p_target, s, Objective, options)
 
     fprintf('SSH (t=%d)\n', t);
-
-    alpha_vals = [0;0];
     
     %% STEP 1: Solve current deterministic LP (no JCC)
     optimize(cons, -Objective, options);
@@ -58,16 +56,6 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, ...
         f2 = compute_phi_from_x(x_star - e, q_mean_vec, Sigma_q, X_prev, s);
         g(i) = (f1 - f2) / (2 * eps_i);
     end
-
-    % --- Slack allocation analysis ---
-    % Group gradient components by reservoir
-    w1 = abs(g(3)) + abs(g(4));   % u1 + s1 sensitivities
-    w2 = abs(g(7)) + abs(g(8));   % u2 + s2 sensitivities
-    alpha1 = w1 / (w1 + w2);
-    alpha2 = w2 / (w1 + w2);
-    alpha_vals = [alpha1, alpha2];
-    
-    fprintf('   Slack allocation: α1=%.2f, α2=%.2f (sum=1)\n', alpha1, alpha2);
     
     if norm(g) < 1e-9
         fprintf('   Gradient ≈ 0 (flat φ region) → skipping cut\n');
@@ -78,7 +66,7 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, ...
         rhs = g' * x_star;
     
         % Add supporting hyperplane cut
-        cons = [cons, lhs >= rhs];
+        cons = [cons, lhs = rhs];
     
         fprintf('   Added SSH cut: ||∇φ||=%.3e, φ*=%.4f, target=%.4f\n', norm(g), phi_star, p_target);
     end

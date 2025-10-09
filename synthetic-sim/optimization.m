@@ -1,11 +1,12 @@
-function [model, obj, X, std_hat, phi_val] = optimization(T, N, c, q, lag, framework, bounds, params, s)
+function [model, obj, X, std_hat, phi_vals, alpha_vals] = optimization(T, N, c, q, lag, framework, bounds, params, s)
 
     % Initialize decision variable storage
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1, 
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2
     X = zeros(T,10);
     std_hat = zeros(T,2); 
-    phi_val = zeros(T);
+    alpha_vals = zeros(T,2); 
+    phi_vals = zeros(T);
 
     % Extract streamflow time series 
     q1_s = q(:,1); % historical reference for upstream unit (already lagged)
@@ -192,9 +193,9 @@ function [model, obj, X, std_hat, phi_val] = optimization(T, N, c, q, lag, frame
                     x_slater = findSlater(X(t-1,:), q_mean, s, c);
             
                     % Apply SSH Alg to determine topimal solution 
-                    [cons, x_sol, phi_val(t)] = applySSH(cons, vars, t, ...
+                    [cons, x_sol, phi_vals(t), alpha_vals(t,:)] = applySSH(cons, vars, t, ...
                                              X(t-1,:), q_mean, Sigma_q, ...
-                                             x_slater, 0.99, s, Objective, options);
+                                             x_slater, eps_t, s, Objective, options);
         
                     % Store result
                     X(t,1:10) = [x_sol(1) x_sol(2) x_sol(3) x_sol(4) q1 ...s
