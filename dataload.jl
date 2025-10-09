@@ -79,5 +79,5 @@ function fullsim_dataload()
     tda_S.S_cumcfs = cumsum(tda_S.S_cfs)
     storage.tda_S_m3 = af_to_m3(cfs_to_af(tda_S.S_cumcfs))
 
-    return flow, inflow, storage
+    return gage, inflow, storage
 end
