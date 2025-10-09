@@ -1,6 +1,7 @@
-function simPlots(path, X, q, q_hist, sysparams, T, c, lag, printplot)
+function simPlots(path, X, q, sysparams, T, c, lag, printplot)
     % simPlots: Create one figure per unit and save as PNG
-    % X columns: 1=V1, 2=p1, 3=u1, ...
+    % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1,
+    %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2, ...
 
     font = 10;
     xfont = 8;
@@ -9,15 +10,15 @@ function simPlots(path, X, q, q_hist, sysparams, T, c, lag, printplot)
 
     for i = 1:n_units
         sp = sysparams(i);
-        base = (i-1)*3; % offset into X matrix
+        base = (i-1)*5; % offset into X matrix
 
         % Extract decision variables for this unit
         V = X(:, base+1);
         p = X(:, base+2);
         u = X(:, base+3);
-        % Extract streamflow time series for this unit 
-        q_pred = q(:, i);
-        q_hist = q_hist((1+lag):end); % temp: bonneville as ref
+        s = X(:, base+4);
+        q_pred = X(:, base+5);
+        q_hist = q((1+lag):end, i);
 
         % Compute head and max power
         head = sp.a .* (V.^sp.b);
@@ -45,6 +46,13 @@ function simPlots(path, X, q, q_hist, sysparams, T, c, lag, printplot)
         plot(1:T, p_max, '--k', 'DisplayName','P_{max}');
         xlabel('Hour','FontSize',xfont); ylabel('MWh');
         title('Hydropower Generation','FontSize',font); 
+        xlim([1, T]);
+
+        % Subplot 3: Spill
+        subplot(2,3,3);
+        plot(1:T, s, 'LineWidth', 2, 'DisplayName', 'Spill');
+        xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
+        title('Spill Outflow','FontSize',font);
         xlim([1, T]);
 
         % Subplot 4: Volume
@@ -78,6 +86,6 @@ function simPlots(path, X, q, q_hist, sysparams, T, c, lag, printplot)
             filename = fullfile(path, sprintf("Unit%d_results.png", sp.unit));
             saveas(fig, filename);
             % close(fig); % close to avoid clutter
-        end
+        end 
     end
 end

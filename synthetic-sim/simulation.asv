@@ -78,12 +78,4 @@ end
 simPlots(path, X, q, sysparams, T, c, lag, printplot);
 
 
-%% ========================================================================
-% SECTION 5: MONTE CARLO SIMS
-% ========================================================================
-
-fprintf('Running Monte Carlo Sims.\n');
-
-runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X)
-
 fprintf('Simulation complete.\n');
