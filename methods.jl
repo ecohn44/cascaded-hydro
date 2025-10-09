@@ -114,7 +114,7 @@ function MINLP()
     @constraint(model, RampRateInit2, u2[1] == min_ut2)
 
     # Objective function
-    @objective(model, Max, sum(p1 + p2)) 
+    @objective(model, Max, (p1 + p2) - (s1+s2))
 
     ## Constraints
     # Unit 1
@@ -138,8 +138,9 @@ function MINLP()
 
     # Revenue
     obj = objective_value(model)
+    total_gen = sum(value.(p1) + value.(p2))
 
-    return model, obj, value.(s1), value.(V1), value.(u1), value.(p1), value.(s2), value.(V2), value.(u2), value.(p2)
+    return model, total_gen, value.(s1), value.(V1), value.(u1), value.(p1), value.(s2), value.(V2), value.(u2), value.(p2)
 
 end
 
@@ -317,7 +318,7 @@ function model_report(model)
 end
 
 
-function variable_report(method, obj, p1, u1, s1, p2, u2, s2)
+function variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2)
 
     sd = 4
 
@@ -328,14 +329,17 @@ function variable_report(method, obj, p1, u1, s1, p2, u2, s2)
         println("M = ", M)
         println("N = ", N)
     end 
-    println("Total Generation (obj): ", round(obj, sigdigits=sd+1))
+    println("Uncertainty Framework: " * framework)
+    println("Season: " * season)
+    println()
+    println("Total Generation [MWh]: ", round(obj, sigdigits=sd+1))
     println("---Cumulative Values---")
     println("Generation 01 [MWh]: ", round(sum(p1), sigdigits=sd+1))
     println("Generation 02 [MWh]: ", round(sum(p2), sigdigits=sd+1))
     println("Generation Release 01 [m3]: ", round(sum(u1), sigdigits=sd))
     println("Generation Release 02 [m3]: ", round(sum(u2), sigdigits=sd))
-    println("Spill Release 01 [m3]: ", round(sum(s1), sigdigits=sd-1))
-    println("Spill Release 02 [m3]: ", round(sum(s2), sigdigits=sd-1))
+    println("Spill Release 01 [m3]: ", floor(round(sum(s1), sigdigits = sd-1)))
+    println("Spill Release 02 [m3]: ", floor(round(sum(s2), sigdigits = sd-1)))
     println()
 
 end

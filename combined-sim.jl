@@ -78,8 +78,8 @@ dry_params = (
 ## ----------- SIMULATION SETTINGS ----------- ##
 
 ## Seasonality
-season = "DRY"
-# season = "WET"
+# season = "DRY"
+season = "WET"
 
 ## Solution Method
 method = "MINLP"
@@ -113,7 +113,7 @@ year = 2023     # Simulation year
 dt = Date(year) + Day(params.center_day - 1)      
 sim_center_date = DateTime(string(dt, "T00:00:00"))
 start_date = sim_center_date - Day(D/2) - Hour(lag)
-end_date   = sim_center_date + Day(D/2) + Hour(T)
+end_date   = sim_center_date + Day(D/2) + Hour(T-1)
 inflow_s = inflow[(inflow.datetime .>= start_date) .&& (inflow.datetime .<= end_date), :]
 
 # Storage Levels [m3]
@@ -151,13 +151,13 @@ end
 println("Objective: " * string(obj))
 
 # model_report(model)
-variable_report(method, obj, p1, u1, s1, p2, u2, s2)
+variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2)
 
 println("--- SIMULATION COMPLETE ---")
 
 # -----------------  PLOTS  ----------------- #
 
-printplot = true 
+printplot = true
 
 head1 = a1 .* (V1.^b1)
 p1_max =  (eta * g * rho_w * u1 .* head1)/(3.6e9)
@@ -168,11 +168,11 @@ p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
 if printplot
     # Create directory for this run 
     dir = "./plots/" ;
-    stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS ") * method;
+    stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS ") * " " * method * " " * season * " " * framework;
     path = dir * stamp;
     mkdir(path)
 
-    sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1, head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
-    sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2, head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
+    sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1_pred, head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
+    sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2[2:end], head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
 end 
 
