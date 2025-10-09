@@ -1,5 +1,5 @@
 function [cons_out, x_sol, phi_val] = applySSH(cons, vars, t, ...
-        X_prev, q_mean_vec, std_vec, Sigma_q, x_slater, p_target, s, Objective, options)
+        X_prev, q_mean_vec, Sigma_q, x_slater, p_target, s, Objective, options)
 
 fprintf('SSH (t=%d)\n', t);
 
@@ -9,8 +9,8 @@ fprintf('SSH (t=%d)\n', t);
 optimize(cons, -Objective, options);
 
 % Retrieve solutions 
-xk = [value(vars.V1(t)); value(vars.p1(t)); value(vars.u1(t)); value(vars.s1(t));
-      value(vars.V2(t)); value(vars.p2(t)); value(vars.u2(t)); value(vars.s2(t))];
+xk = [value(vars.V1); value(vars.p1); value(vars.u1); value(vars.s1);
+      value(vars.V2); value(vars.p2); value(vars.u2); value(vars.s2)];
 
 % Evaluate joint probability 
 phi_k = compute_phi_from_x(xk, q_mean_vec, Sigma_q, X_prev, s);
@@ -37,21 +37,21 @@ for it = 1:20
     idx = [3 4 7 8]; g = zeros(8,1); eps = 1e-4;
     for i = idx  % (only u1,s1,u2,s2 affect phi)
         e = zeros(8,1); e(i)=eps;
-        f1 = compute_phi_from_x(x_star+e,q_mean_vec,std_vec,Sigma_q,X_prev,s);
-        f2 = compute_phi_from_x(x_star-e,q_mean_vec,std_vec,Sigma_q,X_prev,s);
+        f1 = compute_phi_from_x(x_star+e, q_mean_vec, Sigma_q, X_prev, s);
+        f2 = compute_phi_from_x(x_star-e, q_mean_vec, Sigma_q, X_prev, s);
         g(i) = (f1-f2)/(2*eps);
     end
 
     % Add hyperplane to the constraints grad'*(x - x_star) <= 0
-    lhs = g(1)*vars.V1(t) + g(2)*vars.p1(t) + g(3)*vars.u1(t) + g(4)*vars.s1(t)+ ...
-           g(5)*vars.V2(t) + g(6)*vars.p2(t) + g(7)*vars.u2(t) + g(8)*vars.s2(t);
+    lhs = g(1)*vars.V1 + g(2)*vars.p1 + g(3)*vars.u1 + g(4)*vars.s1+ ...
+           g(5)*vars.V2 + g(6)*vars.p2 + g(7)*vars.u2 + g(8)*vars.s2;
     cons = [cons, lhs <= g'*x_star];
 
     %% Step 4: Solve the New LP
     optimize(cons, -Objective, options);
-    xk = [value(vars.V1(t)); value(vars.p1(t)); value(vars.u1(t)); value(vars.s1(t));
-          value(vars.V2(t)); value(vars.p2(t)); value(vars.u2(t)); value(vars.s2(t))];
-    phi_k = compute_phi_from_x(xk, q_mean_vec, std_vec, Sigma_q, X_prev, s);
+    xk = [value(vars.V1); value(vars.p1); value(vars.u1); value(vars.s1);
+          value(vars.V2); value(vars.p2); value(vars.u2); value(vars.s2)];
+    phi_k = compute_phi_from_x(xk, q_mean_vec, Sigma_q, X_prev, s);
     if phi_k >= p_target, break; end
 end
 

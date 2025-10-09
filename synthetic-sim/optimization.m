@@ -1,10 +1,11 @@
-function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bounds, params, s)
+function [model, obj, X, std_hat, phi_val] = optimization(T, N, c, q, lag, framework, bounds, params, s)
 
     % Initialize decision variable storage
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1, 
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2
     X = zeros(T,10);
     std_hat = zeros(T,2); 
+    phi_val = zeros(T);
 
     % Extract streamflow time series 
     q1_s = q(:,1); % historical reference for upstream unit (already lagged)
@@ -57,9 +58,9 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bou
         % q_i = predicted mean inflow, stdhat_i = prdicted std dev of inflow 
         [q1, q2, std_hat(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params);
 
-        %% Volume Bounds
+        %% Determine Volume Bounds
         switch bounds
-            case "det"
+            case {"det", "jcc-ssh"}
                 % Deterministic 
                 q1_min = q1;
                 q1_max = q1; 
@@ -109,11 +110,6 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bou
             cons = [cons, p2(t) == c*u2(t)*s(2).a*(s(2).V0^s(2).b)];
         
         else
-            % Volume Bounds
-            cons = [cons, u1(t) + s1(t) <= q1_min + X(t-1,1) - s(1).min_V];  
-            cons = [cons, u1(t) + s1(t) >= q1_max + X(t-1,1) - s(1).max_V];
-            cons = [cons, u2(t) + s2(t) <= q2_min + X(t-1,6) - s(2).min_V];  
-            cons = [cons, u2(t) + s2(t) >= q2_max + X(t-1,6) - s(2).max_V];  
 
             % Mass Balance
             cons = [cons, V1(t) + u1(t) + s1(t) == X(t-1,1) + q1];
@@ -135,24 +131,76 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bou
             h2_lookup = s(2).a * X(t-1,6)^s(2).b; % previous hydraulic head
             h2_ref = map_V_to_h(h2_lookup, s(2).h_lbounds, s(2).h_rbounds, s(2).h_refvals);
             cons = [cons, p2(t) == c*u2(t)*h2_ref];
+
+            switch bounds
+                case {"det","icc","jcc-bon"}
+                    % Add deterministic / ICC / Bonferroni volume bounds
+                    cons = [cons, u1(t) + s1(t) <= q1_min + X(t-1,1) - s(1).min_V];  
+                    cons = [cons, u1(t) + s1(t) >= q1_max + X(t-1,1) - s(1).max_V];
+                    cons = [cons, u2(t) + s2(t) <= q2_min + X(t-1,6) - s(2).min_V];  
+                    cons = [cons, u2(t) + s2(t) >= q2_max + X(t-1,6) - s(2).max_V]; 
+            end
                           
         end
 
-    % Solve optimization
-    options = sdpsettings('solver','gurobi','verbose',0);
-    model = optimize(cons, -Objective, options);
+        %% Solve Optimization Problem 
+        options = sdpsettings('solver','gurobi','verbose',0);
+        switch bounds
+            case {"det","icc","jcc-bon"}
+                % Standard solve
+                model = optimize(cons, -Objective, options);
+    
+                X(t,1) = value(V1(t));
+                X(t,2) = value(p1(t));
+                X(t,3) = value(u1(t));
+                X(t,4) = value(s1(t));
+                X(t,5) = q1;
+                X(t,6) = value(V2(t));
+                X(t,7) = value(p2(t));
+                X(t,8) = value(u2(t));
+                X(t,9) = value(s2(t));
+                X(t,10)= q2;
+    
+            case "jcc-ssh"
+                % Calculate Covariance Matrix
+                rho = params.rho;
+                Sigma_q = [std_hat(t,1)^2, rho*prod(std_hat(t,:));
+                    rho*prod(std_hat(t,:)), std_hat(t,2)^2];
 
-    % Store results for time t
-    X(t,1) = value(V1(t));
-    X(t,2) = value(p1(t));
-    X(t,3) = value(u1(t));
-    X(t,4) = value(s1(t));
-    X(t,5) = q1;
-    X(t,6) = value(V2(t));
-    X(t,7) = value(p2(t));
-    X(t,8) = value(u2(t));
-    X(t,9) = value(s2(t));
-    X(t,10) = q2;
+                if t == 1
+                     % Standard solve
+                    model = optimize(cons, -Objective, options);
+        
+                    X(t,1) = value(V1(t));
+                    X(t,2) = value(p1(t));
+                    X(t,3) = value(u1(t));
+                    X(t,4) = value(s1(t));
+                    X(t,5) = q1;
+                    X(t,6) = value(V2(t));
+                    X(t,7) = value(p2(t));
+                    X(t,8) = value(u2(t));
+                    X(t,9) = value(s2(t));
+                    X(t,10)= q2;
+                    
+                else 
+                    % Apply SSH Alg
+                    vars = struct('V1',V1(t),'p1',p1(t),'u1',u1(t),'s1',s1(t), ...
+                    'V2',V2(t),'p2',p2(t),'u2',u2(t),'s2',s2(t));
+
+                    % Find Slater Point
+                    q_mean = [q1; q2];
+                    x_slater = findSlater(X(t-1,:), q_mean, s, c);
+            
+                    % Apply SSH Alg to determine topimal solution 
+                    [cons, x_sol, phi_val(t)] = applySSH(cons, vars, t, ...
+                                             X(t-1,:), q_mean, Sigma_q, ...
+                                             x_slater, 0.99, s, Objective, options);
+        
+                    % Store result
+                    X(t,1:10) = [x_sol(1) x_sol(2) x_sol(3) x_sol(4) q1 ...s
+                                 x_sol(5) x_sol(6) x_sol(7) x_sol(8) q2];
+                end 
+        end
 
     end
 
