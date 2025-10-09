@@ -10,9 +10,9 @@ using Base.Filesystem
 using Ipopt
 using LaTeXStrings
 using BenchmarkTools
-include("/Users/elizacohn/Desktop/cascaded-hydro/dataload.jl")
-include("/Users/elizacohn/Desktop/cascaded-hydro/plots.jl")
-include("/Users/elizacohn/Desktop/cascaded-hydro/methods.jl")
+include("/Users/elizacohn/Desktop/cascaded-hydro/julia/dataload.jl")
+include("/Users/elizacohn/Desktop/cascaded-hydro/julia/plots.jl")
+include("/Users/elizacohn/Desktop/cascaded-hydro/julia/methods.jl")
 
 # -----------------  STATIC PARAMETERS  ----------------- #
 
