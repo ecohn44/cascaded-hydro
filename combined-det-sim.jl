@@ -51,8 +51,8 @@ global F2 = 1780                            # nameplate capacity [MW]
 
 ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
-global M = 50 
-global N = 50
+global M = 100 
+global N = 100
 
 # -----------------  DATA LOAD  ----------------- #
 println("--- DATA LOAD BEGIN ---")
@@ -80,14 +80,14 @@ q2 = s2hr*inflow_s.tda_inflow_m3s         # historic upstream inflow to 02 Dalle
 println("--- DATA LOAD COMPLETE ---")
 
 ## ----------- SIMULATIONS ----------- ##
-
-# method = "CHA" 
-method = "MINLP"
+ 
+#method = "MINLP"
+method = "CHA"
 
 println("--- SIMULATION BEGIN ---")
 
 if method == "CHA"
-    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx()
+    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx_redo()
 elseif method == "MINLP"
     model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
 end
@@ -101,9 +101,9 @@ println("--- SIMULATION COMPLETE ---")
 
 # -----------------  PLOTS  ----------------- #
 
-print = false 
+printplot = false 
 
-if print
+if printplot
     # Create directory for this run 
     dir = "./plots/" ;
     stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS ") * method;
