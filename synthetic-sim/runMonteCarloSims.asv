@@ -12,9 +12,10 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
 
 
     % Monte Carlo samples
-    nSim = 100;  
+    nSim = 10;  
     % Extract T from simulations 
     T = size(X,1);
+    tvec = 1:T;
 
     % Extract Volume bounds
     Vmin1 = sysparams(1).min_V;
@@ -48,8 +49,8 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
                 V1(t,n) = sysparams(1).V0 + inflow1 - u1_opt(t);
                 V2(t,n) = sysparams(2).V0 + inflow2 - u2_opt(t);
             else
-                V1(t,n) = V1(t-1,n) + inflow1 - u1_opt(t);
-                V2(t,n) = V2(t-1,n) + inflow2 - u2_opt(t);
+                V1(t,n) = V1(t-1,:) + inflow1 - u1_opt(t);
+                V2(t,n) = V2(t-1,:) + inflow2 - u2_opt(t);
             end 
 
             % Violation count per time step (both bounds at once)
@@ -67,13 +68,13 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
     end
 
     % Calculate critical area (where v(t) ~ Vmin)
-    % critical_timesteps1 = V1_opt <= min(V1_opt);
-    % critical_timesteps2 = V2_opt <= min(V2_opt);
+    critical_timesteps1 = V1_opt <= min(V1_opt);
+    critical_timesteps2 = V2_opt <= min(V2_opt);
 
     % Average violations in the critical area
-    avg_per_timestep1 = mean(violation_count1, 2);
+    avg_per_timestep1 = mean(violation_count1(critical_timesteps1, :), 2);
     overall_avg1 = mean(avg_per_timestep1);
-    avg_per_timestep2 = mean(violation_count2, 2);
+    avg_per_timestep2 = mean(violation_count2(critical_timesteps2, :), 2);
     overall_avg2 = mean(avg_per_timestep2);
 
     % Display percent violations
@@ -84,14 +85,10 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
     % Calculate mean and std across simulations
     V1_mean = mean(V1, 2);  % Mean across simulations for each timestep
     V1_std = std(V1, 0, 2);  % Std deviation across simulations
-    V2_mean = mean(V2, 2);  
-    V2_std = std(V2, 0, 2);  
     
     % Upper and lower bounds (1 standard deviation)
     V1_upper = V1_mean + V1_std;
     V1_lower = V1_mean - V1_std;
-    V2_upper = V2_mean + V2_std;
-    V2_lower = V2_mean - V2_std;
 
     switch bounds
         case "det"
@@ -103,35 +100,28 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
     end
 
     % Plot Reservoir 1 Monte Carlo Sims
-
     figure;
     hold on; grid on;
-    fill([1:T, fliplr(1:T)], [V1_upper', fliplr(V1_lower')], ...
-         'b', 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-    hold on;
-    plot(V1_opt, 'r-', 'LineWidth', 2);
-    plot(V1_mean, 'b--', 'LineWidth', 1.5);
+    fill([tvec fliplr(tvec)], [meanV1-stdV1; flipud(meanV1+stdV1)]', [0.7 0.8 1], ...
+         'FaceAlpha', 0.4, 'EdgeColor', 'none');
+    plot(tvec, V1_opt, 'b-', 'LineWidth', 2);
     yline(Vmin1, '--r', 'Min bound');
     yline(Vmax1, '--r', 'Max bound');
-    xlabel('Time Step');
-    ylabel('Storage Volume');
-    legend('1 Std Dev', 'V1_{opt}', 'MC Mean', 'Location', 'best');
-    title('Optimal Trajectory vs Monte Carlo Simulations');
-    grid on;
+    xlabel('Time step');
+    ylabel('Reservoir 1 Volume');
+    title('Reservoir 1: Storage trajectories (mean ±s1σ)');
+    legend('MC range (±1σ)', bLabel, 'Bounds');
 
     % Plot Reservoir 2 Monte Carlo Sims
     figure;
     hold on; grid on;
-    fill([1:T, fliplr(1:T)], [V2_upper', fliplr(V2_lower')], ...
-         'b', 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-    hold on;
-    plot(V2_opt, 'r-', 'LineWidth', 2);
-    plot(V2_mean, 'b--', 'LineWidth', 1.5);
+    fill([tvec fliplr(tvec)], [meanV2-stdV2; flipud(meanV2+stdV2)]', [0.7 0.8 1], ...
+         'FaceAlpha', 0.4, 'EdgeColor', 'none');
+    plot(tvec, V2_opt, 'b-', 'LineWidth', 2);
     yline(Vmin2, '--r', 'Min bound');
     yline(Vmax2, '--r', 'Max bound');
-    xlabel('Time Step');
-    ylabel('Storage Volume');
-    legend('1 Std Dev', 'V2_{opt}', 'MC Mean', 'Location', 'best');
-    title('Optimal Trajectory vs Monte Carlo Simulations');
-    grid on;
+    xlabel('Time step');
+    ylabel('Reservoir 2 Volume');
+    title('Reservoir 2: Storage trajectories (mean ±1σ)');
+    legend('MC range (±1σ)', bLabel, 'Bounds');
 end
