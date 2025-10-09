@@ -47,7 +47,7 @@ flow, inflow, bon, tda = fullsim_dataload();
 
 # Filter Dataset
 start_date = DateTime("2023-06-01T00:00:00")
-end_date   = DateTime("2023-06-01T23:59:59") # 1 Day
+end_date   = DateTime("2023-06-07T23:59:59") # 1 Day
 flow_s = flow[(flow.datetime .>= start_date) .&& (flow.datetime .<= end_date), :]
 inflow_s = inflow[(inflow.datetime .>= start_date) .&& (inflow.datetime .<= end_date), :]
 N = nrow(flow_s);
@@ -103,16 +103,14 @@ set_lower_bound.(u2, min_ut2)
 ## Constraints
 # Unit 1
 @constraint(model, MassBal1[t in 2:N], V1[t] == V1[t-1] + q1[t] - u1[t])
-# @constraint(model, ReleaseEnergy1[t in 1:N], p1[t] <= (eta * g * rho_w * u1[t] * a1 * (V1[t]^b1))/(3.6e9))
-@constraint(model, ReleaseEnergy1[t in 1:N], p1[t] <= (eta * g * rho_w * u1[t] * a1 * (V0_01^b1))/(3.6e9))
+@constraint(model, ReleaseEnergy1[t in 1:N], p1[t] <= (eta * g * rho_w * u1[t] * a1 * (V1[t]^b1))/(3.6e9))
 @constraint(model, Release1[t in 2:N], min_ut1 <= u1[t] <= max_ut1)
 @constraint(model, RampRate1[t in 2:N], RR_dn1 <= u1[t] - u1[t-1] <= RR_up1)
 @constraint(model, FeederCap1[t in 1:N], 0 <= p1[t] <= F1)
 
 # Unit 2
 @constraint(model, MassBal2[t in 2:N], V2[t] == V2[t-1] + q2[t] - u2[t])
-# @constraint(model, ReleaseEnergy2[t in 1:N], p2[t] <= (eta * g * rho_w * u2[t] * a2 * (V2[t]^b2))/(3.6e9))
-@constraint(model, ReleaseEnergy2[t in 1:N], p2[t] <= (eta * g * rho_w * u2[t] * a2 * (V0_02^b2))/(3.6e9))
+@constraint(model, ReleaseEnergy2[t in 1:N], p2[t] <= (eta * g * rho_w * u2[t] * a2 * (V2[t]^b2))/(3.6e9))
 @constraint(model, Release2[t in 2:N], min_ut2 <= u2[t] <= max_ut2)
 @constraint(model, RampRate2[t in 2:N], RR_dn2 <= u2[t] - u2[t-1] <= RR_up2)
 @constraint(model, FeederCap2[t in 1:N], 0 <= p2[t] <= F2)
