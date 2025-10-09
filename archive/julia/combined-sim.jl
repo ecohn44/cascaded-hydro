@@ -135,9 +135,9 @@ season = "DRY"
 method = "PWL"
 
 ## Uncertainty Framework
-# framework = "DET"
+framework = "DET"
 # framework = "DIU"
-framework = "DDU"
+# framework = "DDU"
 
 # -----------------  DATA LOAD  ----------------- #
 
@@ -154,7 +154,7 @@ end
 _, inflow, _ = fullsim_dataload();
 
 # Filter Dataset
-D = 30    
+D = 0    
 global T = 12 + 24*D   # Number of simulation hours
 global lag = 1  # Number of lag terms in OLS model
 year = 2022     # Simulation year 
@@ -231,7 +231,7 @@ else
     # model_report(model)
     variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2, N)
 
-    printplot = false
+    printplot = true
 
     if printplot
         head1 = a1 .* (V1.^b1)

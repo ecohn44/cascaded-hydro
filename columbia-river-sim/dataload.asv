@@ -1,0 +1,127 @@
+%% ========================================================================
+% DATALOAD FUNCTIONS
+% ========================================================================
+
+function [inflow, params, sysparams] = dataload()
+    % Load and process hydro simulation data from multiple CSV files
+    %
+    % Outputs:
+    %   inflow  - USACE inflow data table
+    %   params  - Fitted OLS model parameters for forecasting inflow
+    %   sysparams - Reservoir operation parameters
+    
+    % Define file pa
+    tda_inflow_path = '/Users/elizacohn/Desktop/cascaded-hydro/simulation-data/tda-inflow-USACE.csv';
+    bon_inflow_path = '/Users/elizacohn/Desktop/cascaded-hydro/simulation-data/bon-inflow-USACE.csv';
+
+
+    %% USACE Inflow Data
+    inflow = readtable(tda_inflow_path);
+    inflow.datetime = datetime(inflow.datetime, 'InputFormat', 'yyyy-MM-dd HH:mm:ss');
+    
+    % Load Dalles inflow data
+    % Convert kcfs to m3/s (kcfs -> cfs -> m3/s -> m3/hr)
+    inflow.tda_inflow_m3hr = 1000 * cfs_to_m3s(inflow.inflow_kcfs) * 3600;
+    
+    % Load Bonneville inflow data
+    bon_inflow = readtable(bon_inflow_path);
+    inflow.bon_inflow_m3hr = bon_inflow.inflow_m3s * 3600;
+
+    %% Seasonal Forecasting Parameters
+    params(1) = struct( ...
+        'season', 'wet', ... % Hydology season
+        'center_day', 157, ...
+        'inflow_mean', 2.58e7, ...
+        'inflow_std', 9.21e6, ...
+        'outflow_mean', 2.37e7, ...
+        'outflow_std', 9.12e6, ...
+        'constant', -0.0018, ... % DDU Params
+        'coef1', 0.836, ... % inflow_lag1 [m3/hr]
+        'coef2', 0.165, ... % outflow_lag [m3/hr]
+        'resid_var', 0.0959, ...
+        'AR_const', -0.0004, ... % DIU params
+        'AR_coef', 0.995, ... % inflow_lag1
+        'AR_resid_var', 0.1042, ...
+        'omega', 0.172, ... % GARCH-X params
+        'alpha', 0.815, ...
+        'gamma', 0.00832, ...
+        'error_mean', 0.069, ...
+        'error_std', 0.0364);
+
+    params(2) = struct( ...
+        'season', 'dry', ... % Hydology season
+        'center_day', 275, ...
+        'inflow_mean', 1.06e7, ...
+        'inflow_std', 2.47e6, ...
+        'outflow_mean', 9.69e6, ...
+        'outflow_std', 2.79e6, ...
+        'constant', -0.0013, ... % DDU Params
+        'coef1', 0.830, ... % inflow_lag1 [m3/hr]
+        'coef2', 0.169, ... % outflow_lag [m3/hr]
+        'resid_var', 0.295, ...
+        'AR_const', 0.0020, ... % DIU params
+        'AR_coef', 0.950, ... % inflow_lag1
+        'AR_resid_var', 0.3188, ...
+        'omega', 0.179, ... 
+        'alpha', 0.796, ...
+        'gamma', 0.0404, ...
+        'error_mean', 0.21, ...
+        'error_std', 0.11);
+
+    % Unit 1: Bonneville
+    sysparams(1) = struct( ...
+        'unit', 1, 'a', 0.0026, 'b', 0.4404, ...
+        'min_ut', 3.12e6, 'max_ut', 1.37e7, ...
+        'min_h', 21.33, 'max_h', 23.49, ...
+        'min_V', 7.72e8, 'max_V', 9.56e8, ...
+        'RR_dn', -642225, 'RR_up', 611643, ...
+        'F', 1154, 'SOC', 0.5);
+
+    % Unit 2: Dalles
+    sysparams(2) = struct( ...
+        'unit', 2, 'a', 4.1, 'b', 0.134, ...
+        'min_ut', 5.27e6, 'max_ut', 1.65e7, ...
+        'min_h', 47.24, 'max_h', 50.29, ...
+        'min_V', 8.36e7, 'max_V', 1.33e8, ...
+        'RR_dn', -499508, 'RR_up', 479120, ...
+        'F', 1780, 'SOC', 0.5);
+
+    %% Compute Piecewise Linear Approximation
+    N = 20;  % number of sub-intervals
+
+    for i = 1:numel(sysparams)
+        % Compute derived parameters for this unit
+        d = sysparams(i);
+        
+        % Create sub-intervals and midpoints
+        [lb, rb, ref] = create_intervals_and_references(d.min_h, d.max_h, N);
+        
+        % Store in the struct
+        sysparams(i).h_lbounds = lb;
+        sysparams(i).h_rbounds = rb;
+        sysparams(i).h_refvals = ref;
+
+        % Calculate initial volume 
+        sysparams(i).V0 = d.SOC*(d.max_V - d.min_V) + d.min_V;
+    end
+end
+
+function m3s = cfs_to_m3s(cfs)
+    % Conversion factor: 1 cfs is approximately 0.0283168 m³/s
+    conversion_factor = 0.0283168;
+    m3s = cfs * conversion_factor;
+end
+
+
+% Function to create N sub-intervals and midpoint references for PWL
+function [left_bounds, right_bounds, reference_values] = create_intervals_and_references(min_h, max_h, N)
+    % Create N+1 breakpoints to define N intervals
+    breakpoints = linspace(min_h, max_h, N+1);  % vector of breakpoints
+
+    % Create interval bounds
+    left_bounds  = breakpoints(1:end-1);  % first N points
+    right_bounds = breakpoints(2:end);    % last N points
+
+    % Create reference vector with midpoints
+    reference_values = (left_bounds + right_bounds) / 2;
+end
