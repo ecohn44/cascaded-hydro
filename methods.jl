@@ -157,27 +157,18 @@ end
 
 function forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
 
-    println("Previous Recorded Inflow [m3/hr]: ", q_prev)
-    println("Previous Predicted Inflow [m3/hr]: ", q_pred_prev)
-    println("Previous Simulated Upstream Outflow [m3/hr]: ", outflow_prev)
+    print = true
 
     # Normalize predictors 
     q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std)
     outflow_prev_norm = normalize_flow(outflow_prev, params.outflow_mean, params.outflow_std)
     q_pred_prev_norm = normalize_flow(q_pred_prev, params.inflow_mean, params.inflow_std)
-
-    println("Norm Previous Recorded Inflow: ", q_prev_norm)
-    println("Norm Previous Predicted Inflow: ", q_pred_prev_norm)
-    println("Norm Previous Simulated Upstream: ", outflow_prev_norm)
     
     # Calculate previous error term 
     error_prev = abs(q_prev_norm - q_pred_prev_norm)
 
     # Z-Score normalize the previous error term 
     norm_error_prev = (error_prev - params.error_mean)/params.error_std
-
-    println("Previous Error Term: ", error_prev)
-    println("Norm Previous Error Term: ", norm_error_prev)
  
     # Forecast conditional variance
     var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm
@@ -186,10 +177,6 @@ function forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
     
     # Rescale variance using error Z-scores
     std_hat = std_hat_norm*params.error_std + params.error_mean
-
-    println("Estimated Normalized STD: ", std_hat_norm)
-    println("Estimated STD: ", std_hat)
-    println("Empirical STD: ", params.resid_var)
     
     # Estimate current error distribution 
     d = Normal(0, std_hat)
@@ -203,9 +190,22 @@ function forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
     # Rescale predicted inflow
     q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std)
 
-    println("Sampled Inflow Error: ", e)
-    println("Forecasted Norm Inflow: ", q_hat_norm)
-    println("Forecasted Inflow: ", q_hat)
+    if print
+        println("Previous Recorded Inflow [m3/hr]: ", q_prev)
+        println("Previous Predicted Inflow [m3/hr]: ", q_pred_prev)
+        println("Previous Simulated Upstream Outflow [m3/hr]: ", outflow_prev)
+        println("Norm Previous Recorded Inflow: ", q_prev_norm)
+        println("Norm Previous Predicted Inflow: ", q_pred_prev_norm)
+        println("Norm Previous Simulated Upstream: ", outflow_prev_norm)
+        println("Previous Error Term: ", error_prev)
+        println("Norm Previous Error Term: ", norm_error_prev)
+        println("Estimated Normalized STD: ", std_hat_norm)
+        println("Estimated STD: ", std_hat)
+        println("Empirical STD: ", params.resid_var)
+        println("Sampled Inflow Error: ", e)
+        println("Forecasted Norm Inflow: ", q_hat_norm)
+        println("Forecasted Inflow: ", q_hat)
+    end
     
     return q_hat, std_hat
 end

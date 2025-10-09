@@ -100,8 +100,8 @@ dry_params = (
 ## ----------- SIMULATION SETTINGS ----------- ##
 
 ## Seasonality
-# season = "DRY"
-season = "WET"
+season = "DRY"
+# season = "WET"
 
 ## Solution Method
 method = "MINLP"
