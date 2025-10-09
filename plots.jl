@@ -1,18 +1,18 @@
 using LaTeXStrings
 using Plots
 
-function sim_plots(path, label, N, u, p, V, q, PF, hh)
+function sim_plots(path, label, N, u, p, V, q, PF, hh, min_ut, max_ut)
     font = 10
     xfont = 8
 
     ## Plot 1: Water release
     plot1 = plot(1:N, u, label="Outflow", lw=2, legend = :topright)
     # Add maximum th 
-    hline!(plot1, [max_ut1], color=:red, linestyle=:dash, label="Max")
+    hline!(plot1, [max_ut], color=:red, linestyle=:dash, label="Max")
     # Add min th
-    hline!(plot1, [min_ut1], color=:red, linestyle=:dash, label="Min")
+    hline!(plot1, [min_ut], color=:red, linestyle=:dash, label="Min")
     xlabel!(plot1, "Hour",xguidefontsize=xfont)
-    ylabel!(plot1, "Water Release (m3)")
+    ylabel!(plot1, "Water Release (m3/hr)")
     title!(plot1, "Hourly Water Release", titlefontsize=font)
 
     ## Plot 2: Hydropower generation 
@@ -28,7 +28,7 @@ function sim_plots(path, label, N, u, p, V, q, PF, hh)
     ## Plot 3: Volume 
     plot3 = plot(1:N, V, lw=2, legend=false)
     xlabel!(plot3, "Hour",xguidefontsize=xfont)
-    ylabel!(plot3, "Reservoir Volume (m3/hr)")
+    ylabel!(plot3, "Reservoir Volume (m3)")
     title!(plot3, "Volume", titlefontsize=font)
 
     ## Plot 4: Inflow

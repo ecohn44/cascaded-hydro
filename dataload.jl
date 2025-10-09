@@ -55,7 +55,7 @@ function fullsim_dataload()
     ## Data Set 2A: Flow Data
     flow = DataFrame(CSV.File(flow_path));
     select!(flow, Not(:Column1))
-    # (To Do): convert ft to cfs & convert to m3/s from cfs via Rating Curve
+    # (To Do): convert ft to cfs & convert to m3/hr from cfs via Rating Curve
     flow.down_inflow_m = ft_to_m(flow.down_inflow);
     flow.up_outflow_m = ft_to_m(flow.up_outflow);
     flow.datetime = DateTime.(flow.datetime, dateformat"yyyy-mm-dd HH:MM:SS")
@@ -64,7 +64,7 @@ function fullsim_dataload()
     ## Data Set 2B: Inflow Data
     inflow = DataFrame(CSV.File(inflow_path));
     inflow.datetime = DateTime.(inflow.datetime, dateformat"yyyy-mm-dd HH:MM:SS")
-    inflow.inflow_m3s = 1000*cfs_to_m3s(inflow.inflow_kcfs)
+    inflow.inflow_m3s = 1000*cfs_to_m3s(inflow.inflow_kcfs) # convert kcfs --> cfs --> m3/s 
 
     ## Dataset 3: Storage Levels
     bon = DataFrame(CSV.File(bon_storage_path));
