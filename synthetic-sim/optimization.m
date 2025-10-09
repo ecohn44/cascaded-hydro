@@ -9,11 +9,9 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bou
     % Extract streamflow time series 
     q1_s = q(:,1); % historical reference for upstream unit (already lagged)
 
-    % Define per-time risk level 
+    % Define risk level 
     eps_t = 0.01;
-    % Calculate z-score 
-    z_high = norminv(1 - eps_t/2); 
-    z_low = norminv(eps_t);
+    n = 2; % number of units 
 
     % Define decision variables (YALMIP)
     yalmip('clear');
@@ -62,13 +60,27 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bou
 
         %% Volume Bounds
         switch bounds
-            % Deterministic 
             case "det"
+                % Deterministic 
                 q1_low = q1;
                 q1_high = q1; 
                 q2_low = q2;
                 q2_high= q2;
-            case "icc"
+            case "icc"   
+                % Calculate z-score 
+                z_high = norminv(1 - eps_t/2); 
+                z_low = norminv(eps_t/2);
+
+                % Individual Chance Constraints
+                q1_low  = q1 + z_low  * std_hat(t,1);
+                q1_high = q1 + z_high * std_hat(t,1);
+                q2_low  = q2 + z_low  * std_hat(t,2);
+                q2_high = q2 + z_high * std_hat(t,2);
+            case "jcc-bon"
+                % Calculate z-score 
+                z_high = norminv(1 - eps_t/(2*n)); 
+                z_low = norminv(eps_t/(2*n));
+
                 % Individual Chance Constraints
                 q1_low  = q1 + z_low  * std_hat(t,1);
                 q1_high = q1 + z_high * std_hat(t,1);
@@ -76,9 +88,10 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bou
                 q2_high = q2 + z_high * std_hat(t,2);
         end
 
+
         %% Time-Varying Constraints
         if t == 1 % Initial conditions
-            % Individual Chance-Constrained Volume Bounds
+            % Volume Bounds
             cons = [cons, s(1).V0 + q1_high - u1(t) - s1(t) <= s(1).max_V];  % upper bound 
             cons = [cons, s(1).V0 + q1_low  - u1(t) - s1(t) >= s(1).min_V];  % lower bound
             cons = [cons, s(2).V0 + q2_high - u2(t) - s2(t) <= s(2).max_V];  % upper bound 
@@ -97,7 +110,7 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, bou
             cons = [cons, p2(t) == c*u2(t)*s(2).a*(s(2).V0^s(2).b)];
         
         else
-            % Individual Chance-Constrained Volume Bounds
+            % Volume Bounds
             cons = [cons, X(t-1,1) + q1_high - u1(t) - s1(t) <= s(1).max_V];  % upper bound 
             cons = [cons, X(t-1,1) + q1_low  - u1(t) - s1(t) >= s(1).min_V];  % lower bound
             cons = [cons, X(t-1,6) + q2_high - u2(t) - s2(t) <= s(2).max_V];  % upper bound 
@@ -252,6 +265,9 @@ function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params)
 end
 
 function [q_hat, std_hat_m3] = forecast_inflow_diu(q_prev, params)
+
+    % Temp scale to return forecasted std dev to original (dry)
+    scale = 3.14;
     
     % Normalize previous observed inflow
     q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std);
@@ -263,7 +279,7 @@ function [q_hat, std_hat_m3] = forecast_inflow_diu(q_prev, params)
     q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
 
     % Rescale standard deviation back to inflow units
-    std_hat_m3 = params.AR_resid_std*params.inflow_std;
+    std_hat_m3 = scale*params.AR_resid_std*params.inflow_std;
 end
 
 

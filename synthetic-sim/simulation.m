@@ -24,8 +24,8 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings
-simSettings = initSimSettings("dry", "pwl", "diu", "det");
+% Initialize settings (season, linear approximation, uncertainty, bounds)
+simSettings = initSimSettings("dry", "pwl", "diu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -84,6 +84,6 @@ simPlots(path, X, q, sysparams, T, c, lag, printplot);
 
 fprintf('Running Monte Carlo Sims.\n');
 
-runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X)
+[V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X);
 
 fprintf('Simulation complete.\n');

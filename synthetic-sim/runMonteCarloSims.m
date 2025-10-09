@@ -1,4 +1,4 @@
-function runMonteCarloSims(sysparams, bounds, std_hat, X)
+function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
 % runMonteCarloCheck - Monte Carlo bound violation checker for reservoir simulation
 %
 %   Inputs:
@@ -19,7 +19,7 @@ function runMonteCarloSims(sysparams, bounds, std_hat, X)
     Vmin2 = sysparams(2).min_V;
     Vmax2 = sysparams(2).max_V;
 
-    % Deterministic trajectories
+    % Optimial Trajectories
     V1_opt = X(:,1);  u1_opt = X(:,3);  q1_mean = X(:,5);
     V2_opt = X(:,6);  u2_opt = X(:,8);  q2_mean = X(:,10);
 
@@ -58,6 +58,15 @@ function runMonteCarloSims(sysparams, bounds, std_hat, X)
     meanV2 = mean(V2, 2);
     stdV2  = std(V2, 0, 2);
 
+    switch bounds
+        case "det"
+            bLabel = "Deterministic";
+        case "icc"
+            bLabel = "Individual CC";
+        case "jcc-bon"
+            bLabel = "Bonferroni JCC";
+    end
+
     % === Plot Reservoir 1 ===
     figure;
     hold on; grid on;
@@ -69,7 +78,7 @@ function runMonteCarloSims(sysparams, bounds, std_hat, X)
     xlabel('Time step');
     ylabel('Reservoir 1 Volume');
     title('Reservoir 1: Storage trajectories (mean ±1σ)');
-    legend('MC range (±1σ)', 'Deterministic', 'Bounds');
+    legend('MC range (±1σ)', bLabel, 'Bounds');
 
     % === Plot Reservoir 2 ===
     figure;
@@ -82,5 +91,5 @@ function runMonteCarloSims(sysparams, bounds, std_hat, X)
     xlabel('Time step');
     ylabel('Reservoir 2 Volume');
     title('Reservoir 2: Storage trajectories (mean ±1σ)');
-    legend('MC range (±1σ)', 'Deterministic', 'Bounds');
+    legend('MC range (±1σ)', bLabel, 'Bounds');
 end
