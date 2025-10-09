@@ -239,6 +239,30 @@ def create_lag_features(df_reg, p, up_feat, down_feat):
     
     return df_reg, feature_cols
 
+
+def create_lag_features_colname(df_reg, p, x_col_name, y_col_name, up_feat, down_feat):
+    
+    # Adding upstream lag features to the DataFrame (x = outflow)
+    if up_feat: 
+        for i in range(1, p):  # Creating lag features up to p time units
+            df_reg[f'{x_col_name}_Lag_{i}'] = df_reg[x_col_name].shift(i)
+
+    if down_feat: 
+        # Adding downstream lag features to the DataFrame (y = inflow)
+        for i in range(1, p):  # Creating lag features up to p time units
+            df_reg[f'{y_col_name}_Lag_{i}'] = df_reg[y_col_name].shift(i)
+
+    # Define features and target
+    if up_feat and down_feat: 
+        feature_cols = ['day_sin', 'day_cos', 'DoY'] + [f'{x_col_name}_Lag_{lag}' for lag in range(1, p)] + [f'{y_col_name}_Lag_{lag}' for lag in range(1, p)]
+    if up_feat and not down_feat: 
+        feature_cols = ['day_sin', 'day_cos', 'DoY'] + [f'{x_col_name}_Lag_{lag}' for lag in range(1, p)] 
+    if down_feat and not up_feat: 
+        feature_cols = ['day_sin', 'day_cos', 'DoY'] + [f'{y_col_name}_Lag_{lag}' for lag in range(1, p)]
+    
+    return df_reg, feature_cols
+
+
 def print_test_stats(y_test, y_pred):
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     mae = mean_absolute_error(y_test, y_pred)
@@ -256,6 +280,17 @@ def plot_forecasts(model, y_test, y_pred):
     plt.legend()
     plt.xlabel('Time Index')
     plt.ylabel('Gage Height [normalized]')
+    plt.tight_layout()
+    plt.show()
+
+def plot_inflow_forecasts(y_test, y_pred):
+    plt.figure(figsize=(10, 4))
+    plt.plot(y_test.index, y_test.values, label='Actual')
+    plt.plot(y_test.index, y_pred.values, label='Predicted', linestyle='--')
+    plt.title('Model Predictions')
+    plt.legend()
+    plt.xlabel('Time Index')
+    plt.ylabel('Inflow [normalized]')
     plt.tight_layout()
     plt.show()
 

@@ -52,7 +52,7 @@ global F2 = 1780                            # nameplate capacity [MW]
 ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
 global M = 20 
-global N = 20
+global N = 10
 
 # -----------------  DATA LOAD  ----------------- #
 println("--- DATA LOAD BEGIN ---")
@@ -81,16 +81,93 @@ println("--- DATA LOAD COMPLETE ---")
 
 ## ----------- SIMULATIONS ----------- ##
  
-# method = "MINLP"
-method = "CHA"
+## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
-println("--- SIMULATION BEGIN ---")
+# Independent Sample Vectors
+V1_sample = range(min_V1, max_V1, length = M)
+u1_sample = range(min_ut1, max_ut1, length = N)
 
-if method == "CHA"
-    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx_intermed()
-elseif method == "MINLP"
-    model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
-end
+V2_sample = range(min_V2, max_V2, length = M)
+u2_sample = range(min_ut2, max_ut2, length = N)
+
+# Precomputed Matrix of Volume x Water Release Products
+Y1 = [u * (V^b1) for V in V1_sample, u in u1_sample] 
+Y2 = [u * (V^b2) for V in V2_sample, u in u2_sample]
+
+# Create the optimization model
+model = Model(Gurobi.Optimizer)
+set_optimizer_attribute(model, "NumericFocus", 3)
+
+## ----------- SIMULATIONS ----------- ##
+
+### Unit 01: Bonneville Dam (Downstream)
+## Define variables
+@variable(model, s1[1:T] >= 0) # Spill Outflow [m3/hr]
+@variable(model, p1[1:T] >= 0) # Power Generation
+@variable(model, lam1[1:M, 1:N, 1:T] >= 0)  # lambda matrix
+
+## Expressions
+@expression(model, V1[t=1:T], sum(lam1[m,n,t] * V1_sample[m] for m=1:M, n=1:N))
+@expression(model, u1[t=1:T], sum(lam1[m,n,t] * u1_sample[n] for m=1:M, n=1:N))
+@expression(model, y1[t=1:T], sum(lam1[m,n,t] * Y1[m,n]      for m=1:M, n=1:N))
+
+## Initial conditions (t = 1)
+@constraint(model, MassBalInit1, V1[1] == V0_01)
+@constraint(model, RampRateInit1, u1[1] == min_ut1)
+
+## Constraints
+@constraint(model, MassBal1[t in 2:T], V1[t] == V1[t-1] + q1[t] - u1[t] - s1[t])
+@constraint(model, Release1[t in 2:T], min_ut1 <= u1[t] <= max_ut1)
+@constraint(model, ReleaseEnergy1[t in 1:T], p1[t] == (eta * g * rho_w * a1 * y1[t])/(3.6e9))
+@constraint(model, RampRate1[t in 2:T], RR_dn1 <= u1[t] - u1[t-1] <= RR_up1)
+@constraint(model, FeederCap1[t in 1:T], 0 <= p1[t] <= F1)
+@constraint(model, Volume1[t in 1:T], min_V1 <= V1[t] <= max_V1)
+@constraint(model, lambda1[t in 1:T], sum(lam1[:,:,t]) == 1)
+
+### Unit 02: Dalles Dam (Downstream)
+## Define variables
+@variable(model, s2[1:T] >= 0) # Spill Outflow [m3/hr]
+@variable(model, p2[1:T] >= 0)
+@variable(model, lam2[1:M, 1:N, 1:T] >= 0)  # lambda matrix
+
+## Expressions
+@expression(model, V2[t=1:T], sum(lam2[m,n,t] * V2_sample[m] for m=1:M, n=1:N))
+@expression(model, u2[t=1:T], sum(lam2[m,n,t] * u2_sample[n] for m=1:M, n=1:N))
+@expression(model, y2[t=1:T], sum(lam2[m,n,t] * Y2[m,n]      for m=1:M, n=1:N))
+
+## Initial conditions
+@constraint(model, MassBalInit2, V2[1] == V0_02)
+@constraint(model, RampRateInit2, u2[1] == min_ut2)
+
+## Constraints
+@constraint(model, MassBal2[t in 2:T], V2[t] == V2[t-1] + q2[t] - u2[t] - s2[t])
+@constraint(model, Release2[t in 2:T], min_ut2 <= u2[t] <= max_ut2)
+@constraint(model, ReleaseEnergy2[t in 1:T], p2[t] == (eta * g * rho_w * a2 * y2[t])/(3.6e9))
+@constraint(model, RampRate2[t in 2:T], RR_dn2 <= u2[t] - u2[t-1] <= RR_up2)
+@constraint(model, FeederCap2[t in 1:T], 0 <= p2[t] <= F2)
+@constraint(model, Volume2[t in 1:T], min_V2 <= V2[t] <= max_V2)
+@constraint(model, lambda2[t in 1:T], sum(lam2[:,:,t]) == 1)
+
+# Objective function
+@objective(model, Max, sum(p1 + p2)) 
+
+# Solve the optimization problem
+optimize!(model)
+
+# Total Generation
+obj = objective_value(model);
+
+# Testbed Variable Save (replaces return)
+s1 = value.(s1)
+lam1 = value.(lam1)
+V1 = value.(V1)
+u1 = value.(u1)
+p1 = value.(p1)
+s2 = value.(s2)
+lam2 = value.(lam2)
+V2 = value.(V2) 
+u2 = value.(u2)
+p2 = value.(p2)
 
 println("Objective: " * string(obj))
 
