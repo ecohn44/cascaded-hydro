@@ -51,13 +51,13 @@ global F2 = 1780                            # nameplate capacity [MW]
 
 ## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
 
-M = 10 
-N = 15
+global M = 50 
+global N = 50
 
 # -----------------  DATA LOAD  ----------------- #
 println("--- DATA LOAD BEGIN ---")
 
-gage, inflow, _ = fullsim_dataload();
+gage, inflow, storage = fullsim_dataload();
 
 # Filter Dataset
 start_date = DateTime("2023-06-01T00:00:00")
@@ -66,8 +66,12 @@ inflow_s = inflow[(inflow.datetime .>= start_date) .&& (inflow.datetime .<= end_
 global T = nrow(inflow_s);
 
 # Storage Levels [m3]
-V0_01 = af_to_m3(697000) #storage.bon_S_m3[end]
-V0_02 = storage.tda_S_m3[end]
+SOC_01 = 0.5
+SOC_02 = 0.5 
+
+# Initial Conditions
+V0_01 = SOC_01*(max_V1 - min_V1) + min_V1  
+V0_02 = SOC_02*(max_V2 - min_V2) + min_V2 
 
 # Inflow [m3/hr] 
 q1 = s2hr*inflow_s.bon_inflow_m3s         # historic downstream inflow to 01 Bonneville [m3/s] --> [m3/hr]
@@ -83,31 +87,35 @@ method = "MINLP"
 println("--- SIMULATION BEGIN ---")
 
 if method == "CHA"
-    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx(M, N)
-    stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS") * " CONVEX HULL";
+    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx()
 elseif method == "MINLP"
     model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
-    stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS");
 end
 
 println("Objective: " * string(obj))
 
 model_report(model)
+variable_report(method, obj, p1, u1, s1, p2, u2, s2)
 
 println("--- SIMULATION COMPLETE ---")
 
 # -----------------  PLOTS  ----------------- #
 
-# Create directory for this run 
-dir = "./plots/" ;
-path = dir * stamp;
-mkdir(path)
+print = false 
 
-head1 = a1 .* (V1.^b1)
-p1_max =  (eta * g * rho_w * u1 .* head1)/(3.6e9)
-sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1, head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
+if print
+    # Create directory for this run 
+    dir = "./plots/" ;
+    stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS ") * method;
+    path = dir * stamp;
+    mkdir(path)
 
-head2 = a2 .* (V2.^b2)
-p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
-sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2, head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
+    head1 = a1 .* (V1.^b1)
+    p1_max =  (eta * g * rho_w * u1 .* head1)/(3.6e9)
+    sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1, head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
+
+    head2 = a2 .* (V2.^b2)
+    p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
+    sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2, head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
+end 
 
