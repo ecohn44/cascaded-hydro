@@ -43,23 +43,21 @@ global F2 = 1780                       # nameplate capacity [MW]
 # -----------------  DATA LOAD  ----------------- #
 println("--- DATA LOAD BEGIN ---")
 
-flow, inflow, bon, tda = fullsim_dataload();
+gage, inflow, storage = fullsim_dataload();
 
 # Filter Dataset
 start_date = DateTime("2023-06-01T00:00:00")
 end_date   = DateTime("2023-06-07T23:59:59") # 1 Day
-flow_s = flow[(flow.datetime .>= start_date) .&& (flow.datetime .<= end_date), :]
 inflow_s = inflow[(inflow.datetime .>= start_date) .&& (inflow.datetime .<= end_date), :]
-N = nrow(flow_s);
+N = nrow(inflow_s);
 
 # Storage Levels [m3]
-V0_01 = bon.S_m3[end]
-V0_02 = tda.S_m3[end]
+V0_01 = storage.bon_S_m3[end]
+V0_02 = storage.tda_S_m3[end]
 
-# Historic Inflow [m3/s] (~check units)
-# q1 = flow_s.down_inflow_m         # downstream inflow to 01 Bonneville
-q2 = s2hr*inflow_s.inflow_m3s       # upstream inflow to 02 Dalles Dam [m3/s] --> [m3/hr]
-q1 = copy(q2)                       # temp until streamflow rating curve compelte
+# Inflow [m3/hr] 
+q1 = s2hr*inflow_s.bon_inflow_m3s         # historic downstream inflow to 01 Bonneville
+q2 = s2hr*inflow_s.tda_inflow_m3s         # historic upstream inflow to 02 Dalles Dam [m3/s] --> [m3/hr]
 
 println("--- DATA LOAD COMPLETE ---")
 
