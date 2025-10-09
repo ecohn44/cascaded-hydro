@@ -49,21 +49,72 @@ global RR_dn2 = s2hr*cfs_to_m3s(-4900)      # down ramp rate limit [m3/hr]
 global RR_up2 = s2hr*cfs_to_m3s(4700)       # up ramp rate limit [m3/hr]
 global F2 = 1780                            # nameplate capacity [MW]
 
-## ----------- DATA SAMPLING FOR CONVEX HULL APPROXIMATION ----------- ##
+## --------------- SEASONAL OLS PARAMETERS --------------- ##
 
-global M = 7 
-global N = 7
+wet_params = (
+    center_day = 157,    # DoY
+    inflow_mean =  2.58e7,
+    inflow_std = 9.21e6,
+    outflow_mean = 2.37e7,
+    outflow_std = 9.12e6,
+    constant = -0.0018,
+    coef1 = 0.836,   # inflow_lag1 [m3/hr]
+    coef2 = 0.165,   # outflow_lag1 [m3/hr]
+    resid_var = 0.0092
+)
+
+dry_params = (
+    center_day = 275,    # DoY
+    inflow_mean =  1.06e7,
+    inflow_std = 2.47e6,
+    outflow_mean = 9.69e6,
+    outflow_std = 2.79e6,
+    constant = -0.0013,
+    coef1 = 0.830,   # inflow_lag1 [m3/hr]
+    coef2 = 0.169,   # outflow_lag1 [m3/hr]
+    resid_var = 0.087
+)
+
+## ----------- SIMULATION SETTINGS ----------- ##
+
+## Seasonality
+season = "DRY"
+# season = "WET"
+
+## Solution Method
+method = "MINLP"
+# method = "CHA"
+
+## Uncertainty Framework
+# framework = "DET"
+framework = "DIU"
 
 # -----------------  DATA LOAD  ----------------- #
+
 println("--- DATA LOAD BEGIN ---")
 
-gage, inflow, storage = fullsim_dataload();
+if season == "DRY"
+    params = dry_params
+end
+
+if season == "WET"
+    params = wet_params
+end
+
+_, inflow, _ = fullsim_dataload();
 
 # Filter Dataset
-start_date = DateTime("2023-06-01T00:00:00")
-end_date   = DateTime("2023-06-01T06:00:00") # Run for T = 6 hrs
+global T = 12   # Number of simulation hours
+global D = 0    # Number of days in season (TO DO: will be 30 or 90 post PWL approx)
+global lag = 1  # Number of lag terms in OLS model
+year = 2023     # Simulation year 
+
+#sim_center_date = DateTime("2023-06-01T00:00:00")
+dt = Date(year) + Day(params.center_day - 1)      
+sim_center_date = DateTime(string(dt, "T00:00:00"))
+start_date = sim_center_date - Day(D/2) - Hour(lag)
+end_date   = sim_center_date + Day(D/2) + Hour(T)
 inflow_s = inflow[(inflow.datetime .>= start_date) .&& (inflow.datetime .<= end_date), :]
-global T = nrow(inflow_s);
 
 # Storage Levels [m3]
 SOC_01 = 0.5
@@ -79,22 +130,22 @@ q2 = s2hr*inflow_s.tda_inflow_m3s         # historic upstream inflow to 02 Dalle
 
 println("--- DATA LOAD COMPLETE ---")
 
+## ----------- PIECE WISE APPROXIMATION PARAMS ----------- ##
+
+global M = 7 
 
 ## ----------- SIMULATIONS ----------- ##
  
-method = "MINLP"
-# method = "CHA"
-
-framework = "DET"
-# framework = "DUI"
 
 println("--- SIMULATION BEGIN ---")
 
+if method == "MINLP"
+    # model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
+    model, obj, V1, p1, u1, s1, q1_pred, V2, p2, u2, s2 = MINLP_loop(q1, q2, framework, params)
+end
+
 if method == "CHA"
     model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx()
-elseif method == "MINLP"
-    # model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
-    model, obj, V1, p1, u1, s1, q1_pred, V2, p2, u2, s2 = MINLP_loop(q1, q2) #, framework)
 end
 
 println("Objective: " * string(obj))
@@ -106,13 +157,13 @@ println("--- SIMULATION COMPLETE ---")
 
 # -----------------  PLOTS  ----------------- #
 
-printplot = false 
+printplot = true 
 
 head1 = a1 .* (V1.^b1)
 p1_max =  (eta * g * rho_w * u1 .* head1)/(3.6e9)
 
-#head2 = a2 .* (V2.^b2)
-#p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
+head2 = a2 .* (V2.^b2)
+p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
 
 if printplot
     # Create directory for this run 
