@@ -23,6 +23,7 @@ global g = 9.8           # acceleration due to gravity [m/s^2]
 
 # ----------------- UNIT 1 SITE PARAMETERS (BONNEVILE)  ----------------- #
 
+scale1 = 1
 global a1 = 0.0026;                         # hydraulic head parameter 1 
 global b1 = 0.4404;                         # hydraulic head parameter 2 
 global min_ut1 = s2hr*cfs_to_m3s(30600)     # min water release rate  [m3/hr] 
@@ -37,10 +38,11 @@ global F1 = 1154                            # nameplate capacity [MW]
 
 # ----------------- UNIT 2 SITE PARAMETERS (DALLES)  ----------------- #
 
+scale2 = 1  # scale resecale the reservoir
 global a2 = 4.1;                            # hydraulic head parameter 1 
 global b2 = 0.134;                          # hydraulic head parameter 2 
 global min_ut2 = s2hr*cfs_to_m3s(51700)     # min water release rate  [m3/hr] 
-global max_ut2 = s2hr*cfs_to_m3s(161600)    # max water release rate [m3/hr] 
+global max_ut2 = scale2*s2hr*cfs_to_m3s(161600)    # max water release rate [m3/hr] 
 global min_h2 = ft_to_m(155)                # min forebay elevation levels [m]
 global max_h2 = ft_to_m(165)                # max forebay elevation levels [m]
 global min_V2 = (min_h2/a2)^(1/b2)          # min volume [m3]
@@ -97,6 +99,31 @@ dry_params = (
     error_std = 0.11
 )
 
+## ----------- HYDRAULIC HEAD SUB-INTERVALS ----------- ##
+
+# Function to create N sub-intervals and their midpoint references
+function create_intervals_and_references(min_h, max_h, N)
+    # Create N+1 breakpoints to define N intervals
+    breakpoints = range(min_h, max_h, length = N + 1)
+    breakpoints = collect(breakpoints)
+    
+    # Create interval bounds
+    left_bounds = breakpoints[1:end-1]   # First N points
+    right_bounds = breakpoints[2:end]    # Last N points
+    
+    # Create reference vector with midpoints
+    reference_values = [right_bounds[i] for i in 1:N]
+
+    return left_bounds, right_bounds, reference_values
+end
+
+
+# Create intervals and references
+N = 20
+global h1_lbounds, h1_rbounds, h1_refvals = create_intervals_and_references(min_h1, max_h1, N)
+global h2_lbounds, h2_rbounds, h2_refvals = create_intervals_and_references(min_h2, max_h2, N)
+
+
 ## ----------- SIMULATION SETTINGS ----------- ##
 
 ## Seasonality
@@ -104,8 +131,8 @@ season = "DRY"
 # season = "WET"
 
 ## Solution Method
-method = "MINLP"
-# method = "CHA"
+# method = "MINLP"
+method = "PWL"
 
 ## Uncertainty Framework
 # framework = "DET"
@@ -127,16 +154,16 @@ end
 _, inflow, _ = fullsim_dataload();
 
 # Filter Dataset
-global T = 12   # Number of simulation hours
-global D = 0    # Number of days in season (TO DO: will be 30 or 90 post PWL approx)
+D = 30    
+global T = 12 + 24*D   # Number of simulation hours
 global lag = 1  # Number of lag terms in OLS model
-year = 2023     # Simulation year 
+year = 2022     # Simulation year 
 
 #sim_center_date = DateTime("2023-06-01T00:00:00")
 dt = Date(year) + Day(params.center_day - 1)      
 sim_center_date = DateTime(string(dt, "T00:00:00"))
-start_date = sim_center_date - Day(D/2) - Hour(lag)
-end_date   = sim_center_date + Day(D/2) + Hour(T-1)
+start_date = sim_center_date - Hour(T/2) - Hour(lag)
+end_date   = sim_center_date + Hour(T/2 - 1)
 inflow_s = inflow[(inflow.datetime .>= start_date) .&& (inflow.datetime .<= end_date), :]
 
 # Storage Levels [m3]
@@ -153,49 +180,71 @@ q2 = s2hr*inflow_s.tda_inflow_m3s         # historic upstream inflow to 02 Dalle
 
 println("--- DATA LOAD COMPLETE ---")
 
-## ----------- PIECE WISE APPROXIMATION PARAMS ----------- ##
 
-global M = 7 
+# -----------------  PLOT DIRECTORY ----------------- #
 
-## ----------- SIMULATIONS ----------- ##
- 
+make_dir = true 
 
-println("--- SIMULATION BEGIN ---")
-
-if method == "MINLP"
-    # model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
-    model, obj, V1, p1, u1, s1, q1_pred, std_hat, V2, p2, u2, s2 = MINLP_loop(q1, q2, framework, params)
-end
-
-if method == "CHA"
-    model, obj, s1, lam1, V1, u1, p1, s2, lam2, V2, u2, p2 = convex_hull_approx()
-end
-
-println("Objective: " * string(obj))
-
-# model_report(model)
-variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2)
-
-println("--- SIMULATION COMPLETE ---")
-
-# -----------------  PLOTS  ----------------- #
-
-printplot = true
-
-head1 = a1 .* (V1.^b1)
-p1_max =  (eta * g * rho_w * u1 .* head1)/(3.6e9)
-
-head2 = a2 .* (V2.^b2)
-p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
-
-if printplot
-    # Create directory for this run 
+if make_dir
     dir = "./plots/" ;
-    stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS ") * " " * method * " " * season * " " * framework;
+    stamp = Dates.format(now(), "mm-dd-yyyy HH.MM.SS ") * " " * method * " " * season * " " * framework * " T = " * string(T);
     path = dir * stamp;
     mkdir(path)
+end
 
-    sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1_pred, q1[2:end], head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
-    sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2[2:end], q2[2:end], head2, F1, p2_max, min_ut2, max_ut2, min_h2, max_h2)
-end 
+## ----------- SIMULATIONS ----------- ##
+
+monte_carlo = false 
+M = 20
+q1_M = zeros(Float64, T, M)
+
+if monte_carlo
+    for m = 1:M
+
+        model, obj, V1, p1, u1, s1, q1_pred, std_hat, V2, p2, u2, s2 = simulation_loop(q1, q2, framework, method, params)
+        variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2, N)
+
+        # Save simulation behavior
+        q1_M[:, m] = q1_pred
+
+    end 
+
+    # Observe how the generation profile / volume changes as we scale up or down the upstream Unit
+    # Test number 1: increasing the maximum outflow in upstream unit 
+    # how does it change during the wet or dry season?
+
+    ## Plot: Monte Carlo Inflow
+    monte_carlo_plot(path, "Unit1", T, q1_M, q1[2:end], scale2)
+
+else
+    println("--- SIMULATION BEGIN ---")
+
+    model, obj, V1, p1, u1, s1, q1_pred, std_hat, V2, p2, u2, s2 = simulation_loop(q1, q2, framework, method, params)
+
+    println("Objective: " * string(obj))
+
+    println("--- SIMULATION COMPLETE ---")
+
+    # Multi-period Nonlinear Framework 
+    # model, obj, s1, V1, u1, p1, s2, V2, u2, p2 = MINLP()
+
+    # model_report(model)
+    variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2, N)
+
+    printplot = true
+
+    if printplot
+        head1 = a1 .* (V1.^b1)
+        p1_max =  (eta * g * rho_w * u1 .* head1)/(3.6e9)
+
+        head2 = a2 .* (V2.^b2)
+        p2_max =  (eta * g * rho_w * u2 .* head2)/(3.6e9)
+
+        sim_plots(path, "Unit1", T, u1, s1, p1, V1, q1_pred, q1[(1 + lag):end], head1, F1, p1_max, min_ut1, max_ut1, min_h1, max_h1)
+        sim_plots(path, "Unit2", T, u2, s2, p2, V2, q2[(1 + lag):end], q2[(1 + lag):end], head2, F2, p2_max, min_ut2, max_ut2, min_h2, max_h2)
+    end 
+
+end
+
+
 

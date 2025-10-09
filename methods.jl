@@ -114,7 +114,7 @@ function MINLP()
     @constraint(model, RampRateInit2, u2[1] == min_ut2)
 
     # Objective function
-    @objective(model, Max, (p1 + p2) - (s1+s2))
+    @objective(model, Max, sum(p1 + p2) - sum(s1 + s2))
 
     ## Constraints
     # Unit 1
@@ -145,6 +145,25 @@ function MINLP()
 end
 
 
+# Function to map a given h value to its corresponding interval and reference
+function map_V_to_h(h, left_bounds, right_bounds, reference_values)
+    N = length(left_bounds)
+    
+    # Handle boundary cases - return only the reference value
+    if h <= left_bounds[1]
+        return reference_values[1]  # Just the Float64
+    elseif h >= right_bounds[end]
+        return reference_values[N]  # Just the Float64
+    end
+    
+    # Use searchsortedlast for efficient binary search
+    interval_idx = searchsortedlast(left_bounds, h)
+    interval_idx = min(interval_idx, N)
+    
+    return reference_values[interval_idx]  # Just the Float64
+end
+
+
 function normalize_flow(flow, mean, std)
     return (flow - mean)/std
 end
@@ -157,7 +176,7 @@ end
 
 function forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
 
-    print = true
+    print = false
 
     # Normalize predictors 
     q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std)
@@ -231,7 +250,7 @@ function forecast_inflow_diu(q_prev, params)
 end
 
 
-function MINLP_loop(q1_s, q2_s, framework, params)
+function simulation_loop(q1_s, q2_s, framework, method, params)
     
     # Initialize empty vectors to store DVs
     V1_s = zeros(Float64, T)
@@ -270,7 +289,6 @@ function MINLP_loop(q1_s, q2_s, framework, params)
     ## Constraints
     # Unit 1
     @constraint(model, MassBal1, V1 + u1 + s1 == V1_s[1] + q1_s[1])
-    @constraint(model, ReleaseEnergy1, p1 == (eta * g * rho_w * u1 * a1 * (V1^b1))/(3.6e9))
     @constraint(model, Release1, min_ut1 <= u1 <= max_ut1)
     @constraint(model, RampRateDn1,  -u1 <= -(RR_dn1 + u1_s[1]))
     @constraint(model, RampRateUp1, u1 <= RR_up1 + u1_s[1])
@@ -279,12 +297,21 @@ function MINLP_loop(q1_s, q2_s, framework, params)
 
     # Unit 2
     @constraint(model, MassBal2, V2 + u2 + s2 == V2_s[1] + q2_s[1])
-    @constraint(model, ReleaseEnergy2, p2 == (eta * g * rho_w * u2 * a2 * (V2^b2))/(3.6e9))
     @constraint(model, Release2, min_ut2 <= u2 <= max_ut2)
     @constraint(model, RampRateDn2,  -u2 <= -(RR_dn2 + u2_s[1]))
     @constraint(model, RampRateUp2, u2 <= RR_up2 + u2_s[1])
     @constraint(model, FeederCap2, 0 <= p2 <= F2)
     @constraint(model, Volume2, min_V2 <= V2 <= max_V2) 
+
+    if method == "MINLP"
+        @constraint(model, ReleaseEnergy1, p1 == (eta * g * rho_w * u1 * a1 * (V1^b1))/(3.6e9))
+        @constraint(model, ReleaseEnergy2, p2 == (eta * g * rho_w * u2 * a2 * (V2^b2))/(3.6e9))
+    end
+
+    if method == "PWL"
+        @constraint(model, ReleaseEnergy1, p1 == (eta * g * rho_w * u1 * a1 * (V0_01^b1))/(3.6e9))
+        @constraint(model, ReleaseEnergy2, p2 == (eta * g * rho_w * u2 * a2 * (V0_02^b2))/(3.6e9))
+    end
 
     for t = 1:T
 
@@ -304,17 +331,35 @@ function MINLP_loop(q1_s, q2_s, framework, params)
 
         if framework == "DDU"
             if t <= lag
-                println("T = ", t)
-                println("Not enough info - using prev inflow as predictor")
+                # println("T = ", t)
+                # println("Not enough info - using prev inflow as predictor")
                 q1_pred[t] = q1_s[t] # use previous inflow as predictor
                 std_hat[t] = 0
             else
-                println("T = ", t)
-                println("Entering DDU Framework")
+                # println("T = ", t)
+                # println("Entering DDU Framework")
                 # Inputs: previous inflow, total upstream release, model params
                 q1_pred[t], std_hat[t] = forecast_inflow_ddu(q1_s[t], q1_pred[t-1], (u2_s[t-1] + s2_s[t-1]), params)
             end
         end
+
+
+        if method == "PWL"
+            if t > 1
+                ## Unit 01
+                # Look up reference value using previous volume and update power prod upper bound
+                h1_lookup = a1 * V1_s[t-1] ^ b1
+                h1_ref = map_V_to_h(h1_lookup, h1_lbounds, h1_rbounds, h1_refvals)
+                set_normalized_coefficient(ReleaseEnergy1, u1, -eta * g * rho_w * h1_ref / 3.6e9)
+
+                ## Unit 02
+                # Look up reference value using previous volume and update power prod upper bound
+                h2_lookup = a2 * V2_s[t-1] ^ b2
+                h2_ref = map_V_to_h(h2_lookup, h2_lbounds, h2_rbounds, h2_refvals)
+                set_normalized_coefficient(ReleaseEnergy2, u2, -eta * g * rho_w * h2_ref / 3.6e9)
+            end
+        end
+
 
         if t == 1
             ## Set initial flow conditions 
@@ -389,22 +434,20 @@ function model_report(model)
 end
 
 
-function variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2)
+function variable_report(method, framework, season, obj, p1, u1, s1, p2, u2, s2, N)
 
     sd = 4
 
     println()
     println("--- VARIABLE REPORT ---")
     println("Method used: " * method)  
-    if method == "CHA"
-        println("M = ", M)
+    if method == "PLW"
         println("N = ", N)
     end 
     println("Uncertainty Framework: " * framework)
     println("Season: " * season)
     println()
     println("Total Generation [MWh]: ", round(obj, sigdigits=sd+1))
-    println("---Cumulative Values---")
     println("Generation 01 [MWh]: ", round(sum(p1), sigdigits=sd+1))
     println("Generation 02 [MWh]: ", round(sum(p2), sigdigits=sd+1))
     println("Generation Release 01 [m3]: ", round(sum(u1), sigdigits=sd))

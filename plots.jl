@@ -1,6 +1,7 @@
 using LaTeXStrings
 using Plots
 using Plots.PlotMeasures
+using StatsPlots
 
 function sim_plots(path, label, N, u, s, p, V, q_pred, q, h, PF, hh, min_ut, max_ut, min_V, max_V)
     font = 10
@@ -88,3 +89,32 @@ function hhead_plots(path, N, hh, hh_d)
 
 end
 
+
+function monte_carlo_plot(path, label, T, q1_M, q1, scale)
+    
+    ##Monte Carlo Inflows
+    #=
+    plot4 = plot(1:T, q1_M, lw=2, legend=false)
+    plot!(plot4, q1, color=:green, linestyle=:dash, legend=false)
+    xlabel!(plot4, "Hour")
+    ylabel!(plot4, "Flow (m3/hr)")
+    title!(plot4, "Inflow")
+    =#
+
+    # Calculate average predicted inflow over M simulations
+    mean_soc = [mean(q1_M[t, :]) for t in 1:T]
+    # Calculate onfidence spread over M simulations
+    p25_soc = [quantile(q1_M[t, :], 0.25) for t in 1:T]
+    p75_soc = [quantile(q1_M[t, :], 0.75) for t in 1:T]
+
+    time_hours = 1:T
+    p = plot(time_hours, p25_soc, fillrange=p75_soc, fillcolor=:green, linecolor=:lightblue, linewidth=1, label="25th-75th percentile", size=(1200, 300))
+    plot!(p, time_hours, mean_soc, linewidth=2, linecolor=:blue, label="Predicted (Avg)", xlabel="Time", ylabel="Value", size=(800, 400)) 
+    plot!(p, time_hours, q1, color=:red, linewidth=1.5, linestyle=:dash, legend=true, label="Observed")
+    xlabel!(p, "Hour")
+    ylabel!(p, "Flow (m3/hr)")
+    title!(p, "Inflow Spread over M Simulations, Upstream Scale x" * string(scale))
+
+    savefig(p, path * "/" * label * "MC.png")
+
+end
