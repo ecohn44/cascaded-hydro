@@ -4,6 +4,7 @@
 % Paper: Optimization of Cascaded Hydroelectric Systems under DDU
 
 clear; clc; close all;
+addpath('/Library/gurobi1202/macos_universal2/matlab');
 
 %% ========================================================================
 % SECTION 1: DATA LOADING AND PARAMETER DEFINITION
@@ -24,7 +25,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "diu", "jcc-ssh");
+simSettings = initSimSettings("dry", "pwl", "diu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -63,7 +64,7 @@ q(:,2) = [0; X(:,3) + X(:,4)];
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir = false;
+make_dir = true; % Set to true to enable directory creation and plotting
 printplot = false; 
 
 if make_dir
