@@ -25,7 +25,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "diu", "jcc-ssh");
+simSettings = initSimSettings("dry", "pwl", "ddu", "jcc-ssh");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -33,7 +33,8 @@ modelparams.rho = 0.1135; % Calculated offline between (q1_hist, s1 + u1)
 
 % Date range settings 
 D = 5;                        % Simulation duration in days
-T = 12 + 24*D;                % Number of simulation hours
+% T = 12 + 24*D;                % Number of simulation hours
+T = 80;
 lag = 1;                      % Number of lag terms in OLS model
 year = 2022;                   % Simulation year
 

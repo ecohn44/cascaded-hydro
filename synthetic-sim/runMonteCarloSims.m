@@ -12,7 +12,7 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
 
 
     % Monte Carlo samples
-    nSim = 100;  
+    nSim = 1000;  
     % Extract T from simulations 
     T = size(X,1);
 
