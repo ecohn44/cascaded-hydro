@@ -140,8 +140,8 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
                     % Add deterministic / ICC / Bonferroni volume bounds
                     cons = [cons, u1(t) + s1(t) <= X(t-1,1) - (s(1).min_V + q1_min)];  
                     cons = [cons, u1(t) + s1(t) >= X(t-1,1) - (s(1).max_V - q1_max)];
-                    cons = [cons, u2(t) + s2(t) <= X(t-1,6) - (s(2).min_V + q2_min)];  
-                    cons = [cons, u2(t) + s2(t) >= X(t-1,6) - (s(2).max_V - q2_max)]; 
+                    cons = [cons, u2(t) + s2(t) <= -q2_min + X(t-1,6) - s(2).min_V];  
+                    cons = [cons, u2(t) + s2(t) >= q2_max + X(t-1,6) - s(2).max_V]; 
 
                     % Store bound changes 
                     V_eff(t, 1) = s(1).min_V + z*std_hat(t,1); % lower bounds increase
