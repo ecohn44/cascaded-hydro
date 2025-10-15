@@ -402,6 +402,7 @@ function [q_hat, std_hat_m3] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_
     q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
 
     % Rescale standard deviation back to inflow units 
-    std_hat_m3 = std_hat*params.inflow_std;
+    params.std_scale_DDU = 1.5;   % (TEMP)
+    std_hat_m3 = params.std_scale_DDU * std_hat * params.inflow_std;
 end
 

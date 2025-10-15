@@ -25,7 +25,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "diu", "icc");
+simSettings = initSimSettings("dry", "pwl", "diu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -49,8 +49,7 @@ inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :
 % q = [parabola_decay(inflow_s.bon_inflow_m3hr(1), T)]';
 
 q0 = inflow_s.bon_inflow_m3hr(1);      % your baseline level
-t0   = round(0.5*T) + lag;               % center pulse mid-horizon
-q = makeInflowPulse(q0, T, lag, 0.35, 0.6, 0.4, 2, 2);
+q = makeInflowPulse(q0, T, lag, [0.2 0.6], 0.20, 0.80, 2, 2);
 
 fprintf('Data loading complete.\n');
 
@@ -112,21 +111,21 @@ if simSettings.bounds == "jcc-ssh"
 end 
 
 
-function q = makeInflowPulse(q0, T, lag, t0, amp_up, amp_dn, w_up, w_dn)
-% makeInflowPulse  Create an upstream inflow pulse (q1) mid-horizon.
-% q0      : scalar baseline (m^3/hr) OR vector of length T+lag
-% T, lag  : horizon length and model lag (q must be length T+lag)
-% t0      : pulse location. If t0<1, interpreted as fraction of horizon (0..1);
-%           otherwise treated as absolute index in 1..T+lag.
-% amp_up  : fractional bump during expansion (e.g., 0.6 => +60%)
-% amp_dn  : fractional dip during contraction (e.g., 0.4 => −40%)
-% w_up    : width (hours) of expansion segment
-% w_dn    : width (hours) of contraction segment (immediately after)
+function q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2)
+% makeInflowPulse  Two positive pulses in q1 at arbitrary positions.
+% q0   : scalar baseline (m^3/hr) OR vector of length T+lag
+% T,lag: horizon & lag (output length = T+lag)
+% t0   : pulse positions:
+%        - if scalar <1: one pulse at fraction t0 of horizon
+%        - if scalar >=1: one pulse at absolute index
+%        - if 2-vector: two pulses; each entry may be fraction (<1) or index
+% amp1 : fractional bump for pulse #1 (e.g., 0.2 => +20%)
+% amp2 : fractional bump for pulse #2 (e.g., 0.8 => +80%)
+% w1,w2: widths (hours) for pulses #1 and #2
 %
-% Returns:
-%   q     : vector length T+lag with the pulse applied (nonnegative)
+% Returns: q (T+lag x 1) nonnegative
 
-    % Baseline
+    % --- Baseline ---
     if isscalar(q0)
         q = q0 * ones(T+lag,1);
     else
@@ -134,34 +133,33 @@ function q = makeInflowPulse(q0, T, lag, t0, amp_up, amp_dn, w_up, w_dn)
         q = q0(:);
     end
 
-    % --- Interpret t0 ---
-    if t0 < 1                   % allow fractional placement in [0,1]
-        t0 = lag + round(t0 * T);
-    end
-    t0   = max(1, min(T+lag, round(t0)));
-    w_up = max(0, round(w_up));
-    w_dn = max(0, round(w_dn));
+    % --- Normalize positions to absolute indices in 1..T+lag ---
+    if nargin < 4 || isempty(t0), t0 = [0.2 0.8]; end     % default 20% and 80%
+    t0 = t0(:)';                                           % row
+    if numel(t0) == 1, t0 = [t0]; end
 
-    % Expansion (centered at t0)
-    if w_up > 0
-        half = floor((w_up-1)/2);
-        i_up_start = max(1, t0 - half);
-        i_up_end   = min(T+lag, i_up_start + w_up - 1);
-        q(i_up_start:i_up_end) = q(i_up_start:i_up_end) .* (1 + amp_up);
-        last_up = i_up_end;
-    else
-        last_up = t0;
-    end
+    toIndex = @(x) ( x < 1 ) .* (lag + round(x*T)) + ( x >= 1 ) .* round(x);
+    t_idx = arrayfun(@(x) max(1, min(T+lag, toIndex(x))), t0);
 
-    % Contraction (right after expansion)
-    if w_dn > 0
-        i_dn_start = min(T+lag, last_up + 1);
-        i_dn_end   = min(T+lag, i_dn_start + w_dn - 1);
-        if i_dn_end >= i_dn_start
-            q(i_dn_start:i_dn_end) = q(i_dn_start:i_dn_end) .* (1 - amp_dn);
-        end
+    % --- Widths (allow 0 => no pulse) ---
+    w1 = max(0, round(w1));  w2 = max(0, round(w2));
+    amp1 = max(0, amp1);     amp2 = max(0, amp2);
+
+    % --- Helper: apply one centered box pulse (multiplicative) ---
+    function applyPulse(center_idx, width, amp)
+        if width <= 0 || amp <= 0, return; end
+        half = floor((width-1)/2);
+        i_start = max(1, center_idx - half);
+        i_end   = min(T+lag, i_start + width - 1);
+        q(i_start:i_end) = q(i_start:i_end) .* (1 + amp);
     end
 
-    % Nonnegative safeguard
+    % Pulse #1 at t_idx(1), Pulse #2 at t_idx(2) if present
+    applyPulse(t_idx(1), w1, amp1);
+    if numel(t_idx) >= 2
+        applyPulse(t_idx(2), w2, amp2);
+    end
+
+    % --- Nonnegative safeguard ---
     q = max(q, 0);
 end
