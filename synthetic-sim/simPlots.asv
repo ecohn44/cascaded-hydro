@@ -25,10 +25,6 @@ function simPlots(path, X, q, sysparams, T, c, lag, printplot)
         head = sp.a .* (V.^sp.b);
         p_max = (c * u .* head);
 
-        % Compute effecitve min/max volume
-        min_U_eff = U_eff(:,vbase+1);
-        max_U_eff = U_eff(:,vbase+2);
-
         % ---- Create new figure for this unit ----
         fig = figure('Position',[100 100 1200 600]);
 
@@ -38,8 +34,8 @@ function simPlots(path, X, q, sysparams, T, c, lag, printplot)
         % Subplot 1: Outflow
         subplot(2,3,1);
         plot(1:T, u, 'LineWidth', 2, 'DisplayName', 'Outflow'); hold on;
-        % plot(1:T, max_U_eff, '--g','LineWidth', 1.5); hold on
-        plot(1:T, min_U_eff, '--g','LineWidth', 1.5);
+        plot(1:T, max_U_eff, '--g','LineWidth', 1.5); hold on
+        % plot(1:T, min_U_eff, '--g','LineWidth', 1.5);
         yline(sp.max_ut, '--r', 'LineWidth', 1.5);
         yline(sp.min_ut, '--r', 'LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
@@ -74,11 +70,10 @@ function simPlots(path, X, q, sysparams, T, c, lag, printplot)
         % Subplot 5: Inflow
         subplot(2,3,5);
         plot(1:T, q_pred, 'LineWidth', 2, 'DisplayName', 'Pred Inflow'); hold on
-        plot(1:T, q_hist, '--g', 'LineWidth', 2, 'DisplayName', 'Hist Inflow')
+        % plot(1:T, q_hist, '--g', 'LineWidth', 2, 'DisplayName', 'Hist Inflow')
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
         title('Inflow','FontSize',font);
         xlim([1, T]);
-        ylim([2e6,14e6]);
 
         % Subplot 6: Forebay Elevation 
         subplot(2,3,6)

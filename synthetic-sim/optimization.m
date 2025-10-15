@@ -103,7 +103,8 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T,
         flow_max2 = Vprev2 + q2_min - s(2).min_V;
         flow_min2 = Vprev2 + q2_max - s(2).max_V;
 
-        % Intersect chance constrained flow bounds with ramps
+        %{ 
+        Intersect chance constrained flow bounds with ramps
         if t == 1
             u1_lo = s(1).min_ut;  u2_lo = s(2).min_ut;
             u1_hi = s(1).min_ut;  u2_hi = s(2).min_ut;
@@ -124,7 +125,8 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T,
         % Keep ordering (in case clipping collapses interval)
         if flow_min1 > flow_max1, flow_min1 = flow_max1; end
         if flow_min2 > flow_max2, flow_min2 = flow_max2; end
-        
+        %}
+
         % Store effective flow bounds
         U_eff(t,:) = [flow_max1, flow_min1, flow_max2, flow_min2];
 
@@ -402,7 +404,7 @@ function [q_hat, std_hat_m3] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_
     q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
 
     % Rescale standard deviation back to inflow units 
-    params.std_scale_DDU = 1.5;   % (TEMP)
-    std_hat_m3 = params.std_scale_DDU * std_hat * params.inflow_std;
+    scale = 1; % (TEMP)
+    std_hat_m3 = std_hat * params.inflow_std;
 end
 

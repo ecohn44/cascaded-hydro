@@ -1,4 +1,4 @@
-function simPlots(path, X, q, sysparams, T, c, lag, printplot)
+function simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot)
     % simPlots: Create one figure per unit and save as PNG
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1,
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2, ...
@@ -20,6 +20,9 @@ function simPlots(path, X, q, sysparams, T, c, lag, printplot)
         s = X(:, base+4);
         q_pred = X(:, base+5);
         q_hist = q((1+lag):end, i);
+
+        max_U_eff = U_eff(:, vbase+2);
+        min_U_eff = U_eff(:, vbase+1);
 
         % Compute head and max power
         head = sp.a .* (V.^sp.b);

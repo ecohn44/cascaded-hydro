@@ -25,7 +25,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "diu", "jcc-bon");
+simSettings = initSimSettings("dry", "pwl", "ddu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -50,6 +50,7 @@ inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :
 
 q0 = inflow_s.bon_inflow_m3hr(1);      % your baseline level
 q = makeInflowPulse(q0, T, lag, [0.2 0.6], 0.20, 0.80, 2, 2);
+% q = q0*ones(T+1,1);
 
 fprintf('Data loading complete.\n');
 
@@ -82,10 +83,19 @@ if make_dir
 end
 
 % Plot simulation behavior for all units
-simPlots(path, X, q, sysparams, T, c, lag, printplot);
+simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot);
 
-% Save results
-save(sprintf('unit2_%s.mat', lower(simSettings.framework)), 'X','U_eff','std_hat','sysparams','-v7');
+results_dir = "./results/";
+if ~exist(results_dir, 'dir')
+    mkdir(results_dir);
+end
+
+for i = 1:numel(sysparams)
+    sp = sysparams(i);
+    fname = sprintf('results_unit%d_%s.mat', sp.unit, lower(simSettings.framework));
+    save(fullfile(results_dir, fname), ...
+        'X', 'U_eff', 'std_hat', 'q', 'sysparams', 'T', 'c', 'lag', '-v7');
+end
 
 %% ========================================================================
 % SECTION 5: MONTE CARLO SIMS
