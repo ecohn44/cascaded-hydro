@@ -25,7 +25,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "ddu", "icc");
+simSettings = initSimSettings("dry", "pwl", "diu", "icc");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -46,7 +46,11 @@ inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :
 
 % Extract historic inflow timeseries [m3/hr]
 % q = [inflow_s.bon_inflow_m3hr];
-q = [parabola_decay(inflow_s.bon_inflow_m3hr(1), T)]';
+% q = [parabola_decay(inflow_s.bon_inflow_m3hr(1), T)]';
+
+q0 = inflow_s.bon_inflow_m3hr(1);      % your baseline level
+t0   = round(0.5*T) + lag;               % center pulse mid-horizon
+q = makeInflowPulse(q0, T, lag, 0.35, 0.6, 0.4, 2, 2);
 
 fprintf('Data loading complete.\n');
 
@@ -54,24 +58,11 @@ fprintf('Data loading complete.\n');
 % SECTION 3: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-[model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T, N, c, q, lag, ...
+[model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 % Extract q2 reference inflow
 q(:,2) = [0; X(:,3) + X(:,4)];
-
-% Set V_eff(t=1) to min/max_V
-V_eff(1,1) = sysparams(1).min_V;
-V_eff(1,2) = sysparams(1).max_V;
-V_eff(1,3) = sysparams(2).min_V;
-V_eff(1,4) = sysparams(2).max_V;
-
-% Correct V_eff(t=2) from e(t=2) being too large from initialization structure 
-V_eff(2,1) = V_eff(3,1);
-V_eff(2,2) = V_eff(3,2);
-V_eff(2,3) = V_eff(3,3);
-V_eff(2,4) = V_eff(3,4);
-
 
 
 %% ========================================================================
@@ -80,7 +71,7 @@ V_eff(2,4) = V_eff(3,4);
 
 % Toggle for creating folder and plotting
 make_dir = true; % Set to true to enable directory creation and plotting
-printplot = false; 
+printplot = true; 
 
 if make_dir
     dir_path = "./plots/";
@@ -92,8 +83,10 @@ if make_dir
 end
 
 % Plot simulation behavior for all units
-simPlots(path, X, V_eff, q, sysparams, T, c, lag, printplot);
+simPlots(path, X, q, sysparams, T, c, lag, printplot);
 
+% Save results
+save(sprintf('unit2_%s.mat', lower(simSettings.framework)), 'X','U_eff','std_hat','sysparams','-v7');
 
 %% ========================================================================
 % SECTION 5: MONTE CARLO SIMS
@@ -101,7 +94,7 @@ simPlots(path, X, V_eff, q, sysparams, T, c, lag, printplot);
 
 fprintf('Running Monte Carlo Sims.\n');
 
-[V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X);
+[V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X, path, printplot);
 
 fprintf('Simulation complete.\n');
 
@@ -118,9 +111,57 @@ if simSettings.bounds == "jcc-ssh"
     grid on;
 end 
 
-function y = parabola_decay(c0, T)
-% y(0)=c0, decays quadratically to y(T)=c0/2 with unit steps.
-    if nargin < 2, T = 40; end
-    t = 0:T;
-    y = c0 * (0.5 + 0.5*(1 - t/T).^2);
+
+function q = makeInflowPulse(q0, T, lag, t0, amp_up, amp_dn, w_up, w_dn)
+% makeInflowPulse  Create an upstream inflow pulse (q1) mid-horizon.
+% q0      : scalar baseline (m^3/hr) OR vector of length T+lag
+% T, lag  : horizon length and model lag (q must be length T+lag)
+% t0      : pulse location. If t0<1, interpreted as fraction of horizon (0..1);
+%           otherwise treated as absolute index in 1..T+lag.
+% amp_up  : fractional bump during expansion (e.g., 0.6 => +60%)
+% amp_dn  : fractional dip during contraction (e.g., 0.4 => −40%)
+% w_up    : width (hours) of expansion segment
+% w_dn    : width (hours) of contraction segment (immediately after)
+%
+% Returns:
+%   q     : vector length T+lag with the pulse applied (nonnegative)
+
+    % Baseline
+    if isscalar(q0)
+        q = q0 * ones(T+lag,1);
+    else
+        assert(numel(q0) == T+lag, 'q0 must be scalar or length T+lag');
+        q = q0(:);
+    end
+
+    % --- Interpret t0 ---
+    if t0 < 1                   % allow fractional placement in [0,1]
+        t0 = lag + round(t0 * T);
+    end
+    t0   = max(1, min(T+lag, round(t0)));
+    w_up = max(0, round(w_up));
+    w_dn = max(0, round(w_dn));
+
+    % Expansion (centered at t0)
+    if w_up > 0
+        half = floor((w_up-1)/2);
+        i_up_start = max(1, t0 - half);
+        i_up_end   = min(T+lag, i_up_start + w_up - 1);
+        q(i_up_start:i_up_end) = q(i_up_start:i_up_end) .* (1 + amp_up);
+        last_up = i_up_end;
+    else
+        last_up = t0;
+    end
+
+    % Contraction (right after expansion)
+    if w_dn > 0
+        i_dn_start = min(T+lag, last_up + 1);
+        i_dn_end   = min(T+lag, i_dn_start + w_dn - 1);
+        if i_dn_end >= i_dn_start
+            q(i_dn_start:i_dn_end) = q(i_dn_start:i_dn_end) .* (1 - amp_dn);
+        end
+    end
+
+    % Nonnegative safeguard
+    q = max(q, 0);
 end

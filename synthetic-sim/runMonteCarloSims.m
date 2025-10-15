@@ -1,4 +1,4 @@
-function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
+function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
 % runMonteCarloCheck - Monte Carlo bound violation checker for reservoir simulation
 %
 %   Inputs:
@@ -118,6 +118,9 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
     legend('1 Std Dev', 'V1_{opt}', 'MC Mean', 'Location', 'best');
     title('Optimal Trajectory vs Monte Carlo Simulations');
     grid on;
+    if printplot
+        saveas(gcf, fullfile(savePath, ['mc_reservoir1_' char(bounds) '.png']));
+    end
 
     % Plot Reservoir 2 Monte Carlo Sims
     figure;
@@ -134,4 +137,8 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X)
     legend('1 Std Dev', 'V2_{opt}', 'MC Mean', 'Location', 'best');
     title('Optimal Trajectory vs Monte Carlo Simulations');
     grid on;
+    if printplot
+        saveas(gcf, fullfile(savePath, ['mc_reservoir2_' char(bounds) '.png']));
+    end
+
 end

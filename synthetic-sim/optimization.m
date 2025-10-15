@@ -1,4 +1,4 @@
-function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T, N, c, q, lag, framework, bounds, params, s)
+function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, framework, bounds, params, s)
 
     % Initialize decision variable storage
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1, 
@@ -7,13 +7,13 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
     std_hat = zeros(T,2); 
     alpha_vals = zeros(T,2); 
     phi_vals = zeros(T);
-    V_eff = zeros(T,4); % 2*n
+    U_eff = zeros(T,4); % 2*n
 
     % Extract streamflow time series 
     q1_s = q(:,1); % historical reference for upstream unit (already lagged)
 
     % Define risk level 
-    eps_t = 0.95;
+    eps_t = 0.99;
     n = 2; % number of units 
 
     % Define decision variables (YALMIP)
@@ -45,8 +45,8 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
     cons = [cons, 0 <= p2 <= s(2).F];
     
     % Volume Bounds
-    % cons = [cons, s(1).min_V <= V1 <= s(1).max_V];
-    % cons = [cons, s(2).min_V <= V2 <= s(2).max_V];
+    cons = [cons, s(1).min_V <= V1 <= s(1).max_V];
+    cons = [cons, s(2).min_V <= V2 <= s(2).max_V];
 
     % Spill Bounds
     cons = [cons, 0 <= s1];
@@ -58,7 +58,7 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
        
         %% Forecast Inflow
         % q_i = predicted mean inflow, stdhat_i = prdicted std dev of inflow 
-        [q1, q2, std_hat(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params);
+        [q1, q2, std_hat(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params, s);
 
         %% Determine Volume Bounds
         switch bounds
@@ -67,11 +67,11 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
                 q1_min = q1;
                 q1_max = q1; 
                 q2_min = q2;
-                q2_max= q2;
+                q2_max = q2;
+
             case "icc"   
                 % Calculate z-score 
-                % (TEMP) invcdf(0.99) = 8.2
-                z = 8.2095; % norminv(eps_t); 
+                z = norminv(eps_t); 
 
                 % Individual Chance Constraints
                 q1_min = q1 - z*std_hat(t,1);
@@ -81,7 +81,7 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
 
             case "jcc-bon"
                 % Calculate z-score 
-                z = norminv(eps_t + (1-eps_t)/n);
+                z = norminv(1 - (1 - eps_t)/n);
 
                 % Individual Chance Constraints
                 q1_min = q1 - z*std_hat(t,1);
@@ -90,13 +90,51 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
                 q2_max = q2 + z*std_hat(t,2);
         end
 
+        % Compute allowable outflow bands (m3/hr) 
+        if t == 1
+            Vprev1 = s(1).V0;  Vprev2 = s(2).V0;
+        else
+            Vprev1 = X(t-1,1);  Vprev2 = X(t-1,6);
+        end
+
+        % Storage-implied band from chance constraints
+        flow_max1 = Vprev1 + q1_min - s(1).min_V;   % ensures V >= min_V
+        flow_min1 = Vprev1 + q1_max - s(1).max_V;   % ensures V <= max_V
+        flow_max2 = Vprev2 + q2_min - s(2).min_V;
+        flow_min2 = Vprev2 + q2_max - s(2).max_V;
+
+        % Intersect chance constrained flow bounds with ramps
+        if t == 1
+            u1_lo = s(1).min_ut;  u2_lo = s(2).min_ut;
+            u1_hi = s(1).min_ut;  u2_hi = s(2).min_ut;
+        else
+            % signed convention: RR_dn <= 0, RR_up >= 0
+            u1_lo = max(s(1).min_ut, X(t-1,3) + s(1).RR_dn);
+            u2_lo = max(s(2).min_ut, X(t-1,8) + s(2).RR_dn);
+            u1_hi = min(s(1).max_ut, X(t-1,3) + s(1).RR_up);
+            u2_hi = min(s(2).max_ut, X(t-1,8) + s(2).RR_up);
+        end
+        
+        % Clip both sides to [u_lo, u_hi] so the band is truly feasible
+        flow_max1 = min(max(flow_max1, u1_lo), u1_hi);
+        flow_min1 = min(max(flow_min1, u1_lo), u1_hi);
+        flow_max2 = min(max(flow_max2, u2_lo), u2_hi);
+        flow_min2 = min(max(flow_min2, u2_lo), u2_hi);
+        
+        % Keep ordering (in case clipping collapses interval)
+        if flow_min1 > flow_max1, flow_min1 = flow_max1; end
+        if flow_min2 > flow_max2, flow_min2 = flow_max2; end
+        
+        % Store effective flow bounds
+        U_eff(t,:) = [flow_max1, flow_min1, flow_max2, flow_min2];
+
 
         %% Time-Varying Constraints
         if t == 1 % Initial conditions
             % Volume Bounds
-            cons = [cons, u1(t) + s1(t) <= q1_min + s(1).V0 - s(1).min_V];  
+            cons = [cons, u1(t) + s1(t) <= flow_max1];   
             cons = [cons, u1(t) + s1(t) >= q1_max + s(1).V0 - s(1).max_V];
-            cons = [cons, u2(t) + s2(t) <= q2_min + s(2).V0 - s(2).min_V];  
+            cons = [cons, u2(t) + s2(t) <= flow_max2];   
             cons = [cons, u2(t) + s2(t) >= q2_max + s(2).V0 - s(2).max_V];  
 
 
@@ -138,16 +176,10 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
             switch bounds
                 case {"det","icc","jcc-bon"}
                     % Add deterministic / ICC / Bonferroni volume bounds
-                    cons = [cons, u1(t) + s1(t) <= X(t-1,1) - (s(1).min_V + q1_min)];  
-                    cons = [cons, u1(t) + s1(t) >= X(t-1,1) - (s(1).max_V - q1_max)];
-                    cons = [cons, u2(t) + s2(t) <= X(t-1,6) - (s(2).min_V + q2_min)];  
-                    cons = [cons, u2(t) + s2(t) >= X(t-1,6) - (s(2).max_V - q2_max)]; 
-
-                    % Store bound changes 
-                    V_eff(t, 1) = s(1).min_V + z*std_hat(t,1); % lower bounds increase
-                    V_eff(t, 3) = s(2).min_V + z*std_hat(t,2);
-                    V_eff(t, 2) = s(1).max_V - z*std_hat(t,1); % upper bounds decrease
-                    V_eff(t, 4) = s(2).max_V - z*std_hat(t,2);
+                    cons = [cons, u1(t) + s1(t) <= flow_max1];  
+                    cons = [cons, u1(t) + s1(t) >= X(t-1,1) + q1_max - s(1).max_V];
+                    cons = [cons, u2(t) + s2(t) <= flow_max2];  
+                    cons = [cons, u2(t) + s2(t) >= X(t-1,6) + q2_max - s(2).max_V]; 
             end
                           
         end
@@ -158,7 +190,12 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
             case {"det","icc","jcc-bon"}
                 % Standard solve
                 model = optimize(cons, -Objective, options);
-    
+
+                % Abort early on infeasible/numerical issues
+                if model.problem ~= 0
+                    error('Solver issue at t=%d: %s', t, yalmiperror(model.problem));
+                end
+                    
                 X(t,1) = value(V1(t));
                 X(t,2) = value(p1(t));
                 X(t,3) = value(u1(t));
@@ -169,6 +206,17 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
                 X(t,8) = value(u2(t));
                 X(t,9) = value(s2(t));
                 X(t,10)= q2;
+
+                % POST-SOLVE CHECKS (ICC, t>1) 
+                if (strcmp(bounds,"icc") || strcmp(bounds,"jcc-bon")) && t > 1
+                    tol = 1e-6;
+                    V1_t = X(t,1); V2_t = X(t,6);
+                    assert(isfinite(V1_t) && isfinite(V2_t), 'V NaN/Inf at t=%d', t);
+                    assert(V1_t >= s(1).min_V - tol && V1_t <= s(1).max_V + tol, ...
+                           'V1 out of bounds at t=%d (%.4g)', t, V1_t);
+                    assert(V2_t >= s(2).min_V - tol && V2_t <= s(2).max_V + tol, ...
+                           'V2 out of bounds at t=%d (%.4g)', t, V2_t);
+                end
     
             case "jcc-ssh"
                 % Calculate Covariance Matrix
@@ -206,7 +254,7 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, V_eff] = optimization(T,
                                              x_slater, eps_t, s, Objective, options);
         
                     % Store result
-                    X(t,1:10) = [x_sol(1) x_sol(2) x_sol(3) x_sol(4) q1 ...s
+                    X(t,1:10) = [x_sol(1) x_sol(2) x_sol(3) x_sol(4) q1 ...
                                  x_sol(5) x_sol(6) x_sol(7) x_sol(8) q2];
                 end 
         end
@@ -264,9 +312,9 @@ function q = rescale_flow(flow_norm, mean_val, std_val)
 end
 
 
-function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params)
+function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params, s)
     
-    std_hat = [0; 0];
+    std_hat = [0, 0];
     
     % Calculate previous release
     if t <= lag 
@@ -285,28 +333,22 @@ function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params)
             q2 = X1_prev; % lagged upstream release
 
         case "diu"
+            % Forecast Q1
+            [q1, std_hat(1)] = forecast_inflow_diu(q1_s(t), params); %q1_s is lagged historical inflow
+            
+            % Forecast Q2
+            % (TEMP) will use q2_s(t) "local flow" in Columbia River
+            [q2, std_hat(2)] = forecast_inflow_diu(X1_prev, params);
+           
+        
+        case "ddu"
             if t <= lag
-                % Calculate Q1
-                q1 = q1_s(t); % use prev inflow as predictor 
-
-                % Calculate Q2
-                q2 = X1_prev; % min flow
-            else
                 % Forecast Q1
                 [q1, std_hat(1)] = forecast_inflow_diu(q1_s(t), params); %q1_s is lagged historical inflow
                 
                 % Forecast Q2
                 % (TEMP) will use q2_s(t) "local flow" in Columbia River
                 [q2, std_hat(2)] = forecast_inflow_diu(X1_prev, params);
-            end
-        
-        case "ddu"
-            if t <= lag
-                % Calculate Q1
-                q1 = q1_s(t); % use prev inflow as predictor 
-
-                % Calculate Q2
-                q2 = X1_prev; % no flow
             else
                 % Forecast Q1 (DIU - no upstream to condition on)
                 [q1, std_hat(1)] = forecast_inflow_diu(q1_s(t), params);

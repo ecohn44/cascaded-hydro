@@ -1,0 +1,97 @@
+function plotDIUvDDU(X_diu, std_diu, X_ddu, std_ddu, s, savePath, opts, Ueff_diu, Ueff_ddu)
+% plotSocAndSigma_U2  Minimal DIU vs DDU plots (Unit 2 only) with event marker
+% Required:
+%   X_diu, X_ddu   : [T x 10] solver outputs
+%   std_diu/_ddu   : [T x 2]  forecast std; col 2 is downstream
+%   s              : sysparams struct array (uses s(2))
+%   savePath       : '' to skip saving, else folder path
+%   opts.titleTag  : (optional) text for titles
+% Optional (for shaded SoC corridors):
+%   Ueff_diu/_ddu  : [T x 4] effective outflow bands; cols 3=U2_hi, 4=U2_lo
+%
+% Produces two figures:
+%   (A) σ₂(t): DIU vs DDU (+ event marker at DDU spike)
+%   (B) SoC(t): DIU vs DDU (+ same event marker), with optional shaded corridors
+
+    if nargin < 6 || isempty(savePath), savePath = ''; end
+    if nargin < 7 || ~isstruct(opts), opts = struct; end
+    if ~isfield(opts,'titleTag'), opts.titleTag = ''; end
+    if ~isempty(savePath) && ~exist(savePath,'dir'), mkdir(savePath); end
+
+    T = size(X_ddu,1); t = (1:T)';
+
+    % Find DDU event time (max σ2). If std_ddu is empty, skip marker.
+    haveSigma = ~isempty(std_ddu) && size(std_ddu,2) >= 2;
+    t_evt = NaN;
+    if haveSigma
+        [~, t_evt] = max(std_ddu(:,2));
+    end
+
+    % Unit 2 series
+    V2_diu = X_diu(:,6);  V2_ddu = X_ddu(:,6);
+    q2_diu = X_diu(:,10); q2_ddu = X_ddu(:,10);
+
+    % --- Figure A: sigma2(t) ---
+    fh1 = figure; hold on; grid on;
+    if ~isempty(std_diu), plot(t, std_diu(:,2), 'LineWidth',1.8); end
+    if ~isempty(std_ddu), plot(t, std_ddu(:,2), 'LineWidth',1.8); end
+    if ~isnan(t_evt)
+        xline(t_evt, 'k--', '\sigma spike', 'LineWidth',1, ...
+            'LabelOrientation','horizontal','LabelVerticalAlignment','bottom');
+    end
+    xlabel('Hour'); ylabel('\sigma_{q2} (m^3/hr)');
+    legend('DIU','DDU','Location','best');
+    title(sprintf('Unit 2 Inflow Uncertainty — DIU vs DDU %s', opts.titleTag));
+
+    % --- Figure B: SoC(t) with optional corridors ---
+    Vmin = s(2).min_V; Vmax = s(2).max_V; span = Vmax - Vmin;
+    soc_diu = (V2_diu - Vmin)/span;
+    soc_ddu = (V2_ddu - Vmin)/span;
+
+    fh2 = figure; hold on; grid on;
+    yline(0,'b'); yline(1,'b'); % SoC hard bounds
+
+    haveBands = (nargin >= 9) && ~isempty(Ueff_diu) && ~isempty(Ueff_ddu);
+    if haveBands
+        % Build SoC corridors from bands (post-clip) for each run
+        V0 = s(2).V0;
+        soc_fill = @(V,q,Uhi,Ulo) deal( ...
+            ([V0; V(1:end-1)] + q - Uhi - Vmin)/span, ... % lower SoC bound (max outflow)
+            ([V0; V(1:end-1)] + q - Ulo - Vmin)/span);    % upper SoC bound (min outflow)
+
+        [soc_lo_diu, soc_hi_diu] = soc_fill(V2_diu, q2_diu, Ueff_diu(:,3), Ueff_diu(:,4));
+        [soc_lo_ddu, soc_hi_ddu] = soc_fill(V2_ddu, q2_ddu, Ueff_ddu(:,3), Ueff_ddu(:,4));
+
+        % Shaded corridors
+        fill([t;flipud(t)], [soc_lo_diu; flipud(soc_hi_diu)], ...
+             [0.70 1.00 0.70], 'EdgeColor','none','FaceAlpha',0.45); % DIU green
+        fill([t;flipud(t)], [soc_lo_ddu; flipud(soc_hi_ddu)], ...
+             [1.00 0.60 0.40], 'EdgeColor','none','FaceAlpha',0.45); % DDU red
+    end
+
+    % Strategy lines
+    plot(t, soc_diu, 'Color',[0.1 0.5 0.1], 'LineWidth',2.0);  % DIU SoC
+    plot(t, soc_ddu, 'Color',[0.6 0.0 0.0], 'LineWidth',2.0);  % DDU SoC
+
+    % Same event marker on SoC plot
+    if ~isnan(t_evt)
+        xline(t_evt, 'k--', 'risk event', 'LineWidth',1, ...
+            'LabelOrientation','horizontal','LabelVerticalAlignment','bottom');
+    end
+
+    xlabel('Hour'); ylabel('SoC = (V - V_{min})/(V_{max}-V_{min})');
+    if haveBands
+        legend('SoC=0','SoC=1','DIU corridor','DDU corridor', ...
+               'DIU SoC','DDU SoC','Location','best');
+        title(sprintf('Unit 2 — SoC: DIU (green) vs DDU (red) %s', opts.titleTag));
+    else
+        legend('SoC=0','SoC=1','DIU SoC','DDU SoC','Location','best');
+        title(sprintf('Unit 2 — SoC (no corridors) %s', opts.titleTag));
+    end
+
+    % Save (optional)
+    if ~isempty(savePath)
+        saveas(fh1, fullfile(savePath, 'u2_sigma_diu_vs_ddu.png'));
+        saveas(fh2, fullfile(savePath, 'u2_soc_diu_vs_ddu.png'));
+    end
+end
