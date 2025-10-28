@@ -21,8 +21,8 @@ function simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot)
         q_pred = X(:, base+5);
         q_hist = q((1+lag):end, i);
 
-        max_U_eff = U_eff(:, vbase+2);
-        min_U_eff = U_eff(:, vbase+1);
+        % max_U_eff = U_eff(:, vbase+2);
+        % min_U_eff = U_eff(:, vbase+1);
 
         % Compute head and max power
         head = sp.a .* (V.^sp.b);

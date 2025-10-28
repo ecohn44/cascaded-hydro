@@ -18,8 +18,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 eta = .9;          % efficiency of release-energy conversion
 rho_w = 1000;      % density of water [kg/m^3]
 g = 9.8;           % acceleration due to gravity [m/s^2]
-% c = eta*rho_w*g/3.6e9; % power prod coefficient
-c = 1;
+c = eta*rho_w*g/3.6e9; % power prod coefficient
 N = 20;             % number of sub-intervals for piecewise linear approx
 
 % Load inflow data 
@@ -30,7 +29,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "det", "det");
+simSettings = initSimSettings("dry", "pwl", "diu", "det");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -41,8 +40,8 @@ D = 2;                        % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 1;                      % Number of lag terms in OLS model
 
-% Set inflow to constant (low) flow
-q0 = 0.075;    
+
+q0 = 0.1;      % your baseline level
 q = q0*ones(T+1,1);
 % q = makeInflowPulse(q0, T, lag, [0.2 0.6], 0.20, 0.80, 2, 2);
 
@@ -52,21 +51,25 @@ fprintf('Data loading complete.\n');
 % SECTION 3: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-% [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, ...
-%     simSettings.framework, simSettings.bounds, modelparams, sysparams);
-
-[model, obj, X, std_hat] = baseOptimization(T, N, c, q, lag, ...
-    simSettings.framework, modelparams, sysparams);
+[model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, ...
+    simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 % Extract q2 reference inflow
 q(:,2) = [0; X(:,3) + X(:,4)];
+
+% Calculate percent difference (step change) for flow bounds (flow_max 02)
+pct_diff = 100 * diff(U_eff(:,3)) ./ U_eff(1:end-1,3);
+
+% Calculate percent difference (from max) for flow bounds (flow_max 02)
+max_V2 = sysparams(2).max_V;
+pct_diff_from_max = 100 * (max_V2 - U_eff(:,3)) ./ max_V2;
 
 %% ========================================================================
 % SECTION 4: PLOTTING
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir = false;
+make_dir = false; % Set to true to enable directory creation and plotting
 printplot = false; 
 
 % Make plot directory for current simulation run 
@@ -80,9 +83,14 @@ if make_dir
 end
 
 % Plot simulation behavior for all units
-simPlots(path, X, [], q, sysparams, T, c, lag, printplot);
+simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot);
 
-%{
+% Make simulation result storage folder
+results_dir = "./results/";
+if ~exist(results_dir, 'dir')
+    mkdir(results_dir);
+end
+
 % Store simulation results 
 for i = 1:numel(sysparams)
     sp = sysparams(i);
@@ -90,7 +98,6 @@ for i = 1:numel(sysparams)
     save(fullfile(results_dir, fname), ...
         'X', 'U_eff', 'std_hat', 'q', 'sysparams', 'T', 'c', 'lag', '-v7');
 end
-%}
 
 %% ========================================================================
 % SECTION 5: MONTE CARLO SIMS
