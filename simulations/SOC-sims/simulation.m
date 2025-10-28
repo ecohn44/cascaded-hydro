@@ -6,6 +6,10 @@
 clear; clc; close all;
 addpath('/Library/gurobi1202/macos_universal2/matlab');
 
+% Add shared functions to file path 
+thisFilePath = fileparts(mfilename('fullpath'));
+addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
+
 %% ========================================================================
 % SECTION 1: DATA LOADING AND PARAMETER DEFINITION
 % ========================================================================
@@ -17,7 +21,7 @@ g = 9.8;           % acceleration due to gravity [m/s^2]
 c = eta*rho_w*g/3.6e9; % power prod coefficient
 N = 20;             % number of sub-intervals for piecewise linear approx
 
-% Load inflow data
+% Load inflow data 
 [inflow, modelparams, sysparams] = dataload(N);
 
 %% ========================================================================

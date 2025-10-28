@@ -1,4 +1,4 @@
-function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, params, s)
+function [model, obj, X, std_hat] = baseOptimization(T, N, c, q, lag, framework, params, s)
 
     % Initialize decision variable storage
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1, 
@@ -51,14 +51,11 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, par
     for t = 1:T
         
         %% Forecast Inflow
-        switch method
+        switch framework
             case "det"
-                disp('Deterministic forecast selected');
                 q1 = q1_s(t + lag); % perfect foresight
-                q2 = q2_s(t + lag);
                 std_hat(t) = 0;     % no variance
             case "diu"
-                disp('DIU forecast selected');
                 if t <= lag
                     q1 = q1_s(t); % use prev inflow as predictor 
                     std_hat(t) = 0;
@@ -66,16 +63,17 @@ function [model, obj, X, std_hat] = optimization(T, N, c, q, lag, framework, par
                     [q1, std_hat(t)] = forecast_inflow_diu(q1_s(t), params);
                 end
             case "ddu"
-                disp('DDU forecast selected');
                 if t <= lag
                     q1 = q1_s(t); % use prev inflow as predictor 
                     std_hat(t) = 0;
                 else
-                    [q1, std_hat(t)] = forecast_inflow_ddu(q1_s(t), X(t-1,5) ...
-                        (X(t-1,spill2) + X(t-1,releas)), params);
+                    [q1, std_hat(t)] = forecast_inflow_ddu(q1_s(t), X(t-1,5), ...
+                        X(t-1,8) + X(t-1,9), params);
+                end
             otherwise
                 disp('Unknown method');
         end
+        q2 = q2_s(t + lag);
 
         %% Time-Varying Constraints
         if t == 1 % Initial conditions
@@ -199,24 +197,26 @@ end
 
 
 function [q_hat, std_hat] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
-    % Normalize
+    
+    % Normalize predictors
     q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std);
     outflow_prev_norm = normalize_flow(outflow_prev, params.outflow_mean, params.outflow_std);
     q_pred_prev_norm = normalize_flow(q_pred_prev, params.inflow_mean, params.inflow_std);
 
-    % Error term
+    % Calculate previous error term (norm)
     error_prev = abs(q_prev_norm - q_pred_prev_norm);
     norm_error_prev = (error_prev - params.error_mean)/params.error_std;
 
-    % Variance forecast
+    % Forecast conditional variance using GARCH-X
     var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm;
     std_hat_norm = sqrt(var_hat_norm);
+    % Rescale standard deviation 
     std_hat = std_hat_norm*params.error_std + params.error_mean;
 
-    % Sample error
+    % Sample process uncertainty
     e = randn()*std_hat;
 
-    % Forecast inflow
+    % Construct inflow forecast
     q_hat_norm = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm + e;
     q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
 end

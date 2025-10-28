@@ -100,6 +100,10 @@ function [inflow, params, sysparams] = dataload(N)
         'F', 1780, ...
         'SOC', 0.5);
 
+    % Copy Bonneville for Unit 02
+    sysparams(2) = sysparams(1);
+
+
     %% Compute Piecewise Linear Approximation
     for i = 1:numel(sysparams)
         % Compute derived parameters for this unit
