@@ -1,4 +1,5 @@
 function comparePlots(path, tag1, tag2, printplot)
+% call: comparePlots('./results', 'diu', 'ddu', true);
 % comparePlots: Overlay DIU and DDU simulation results for all units
 %
 % Inputs:

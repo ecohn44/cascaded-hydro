@@ -32,9 +32,8 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 modelparams.rho = 0.1135; % Calculated offline between (q1_hist, s1 + u1) 
 
 % Date range settings 
-D = 5;                        % Simulation duration in days
-% T = 24*D;                   % Number of simulation hours
-T = 48;
+D = 2;                        % Simulation duration in days
+T = 24*D;                     % Number of simulation hours
 lag = 1;                      % Number of lag terms in OLS model
 year = 2022;                  % Simulation year
 
@@ -49,8 +48,8 @@ inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :
 % q = [parabola_decay(inflow_s.bon_inflow_m3hr(1), T)]';
 
 q0 = inflow_s.bon_inflow_m3hr(1);      % your baseline level
-q = makeInflowPulse(q0, T, lag, [0.2 0.6], 0.20, 0.80, 2, 2);
-% q = q0*ones(T+1,1);
+% q = makeInflowPulse(q0, T, lag, [0.2 0.6], 0.20, 0.80, 2, 2);
+q = q0*ones(T+1,1);
 
 fprintf('Data loading complete.\n');
 
@@ -64,15 +63,22 @@ fprintf('Data loading complete.\n');
 % Extract q2 reference inflow
 q(:,2) = [0; X(:,3) + X(:,4)];
 
+% Calculate percent difference (step change) for flow bounds (flow_max 02)
+pct_diff = 100 * diff(U_eff(:,3)) ./ U_eff(1:end-1,3);
+
+% Calculate percent difference (from max) for flow bounds (flow_max 02)
+max_V2 = sysparams(2).max_V;
+pct_diff_from_max = 100 * (max_V2 - U_eff(:,3)) ./ max_V2;
 
 %% ========================================================================
 % SECTION 4: PLOTTING
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir = true; % Set to true to enable directory creation and plotting
-printplot = true; 
+make_dir = false; % Set to true to enable directory creation and plotting
+printplot = false; 
 
+% Make plot directory for current simulation run 
 if make_dir
     dir_path = "./plots/";
     stamp = datestr(now,'mm-dd-yyyy HH.MM.SS');
@@ -85,11 +91,13 @@ end
 % Plot simulation behavior for all units
 simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot);
 
+% Make simulation result storage folder
 results_dir = "./results/";
 if ~exist(results_dir, 'dir')
     mkdir(results_dir);
 end
 
+% Store simulation results 
 for i = 1:numel(sysparams)
     sp = sysparams(i);
     fname = sprintf('results_unit%d_%s.mat', sp.unit, lower(simSettings.framework));
@@ -101,9 +109,12 @@ end
 % SECTION 5: MONTE CARLO SIMS
 % ========================================================================
 
-fprintf('Running Monte Carlo Sims.\n');
+monte_carlo = false;
 
-[V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X, path, printplot);
+if monte_carlo
+    fprintf('Running Monte Carlo Sims.\n');
+    [V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X, path, printplot);
+end
 
 fprintf('Simulation complete.\n');
 

@@ -13,7 +13,7 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T,
     q1_s = q(:,1); % historical reference for upstream unit (already lagged)
 
     % Define risk level 
-    eps_t = 0.99;
+    eps_t = 0.95;
     n = 2; % number of units 
 
     % Define decision variables (YALMIP)
@@ -103,30 +103,6 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T,
         flow_max2 = Vprev2 + q2_min - s(2).min_V;
         flow_min2 = Vprev2 + q2_max - s(2).max_V;
 
-        %{ 
-        Intersect chance constrained flow bounds with ramps
-        if t == 1
-            u1_lo = s(1).min_ut;  u2_lo = s(2).min_ut;
-            u1_hi = s(1).min_ut;  u2_hi = s(2).min_ut;
-        else
-            % signed convention: RR_dn <= 0, RR_up >= 0
-            u1_lo = max(s(1).min_ut, X(t-1,3) + s(1).RR_dn);
-            u2_lo = max(s(2).min_ut, X(t-1,8) + s(2).RR_dn);
-            u1_hi = min(s(1).max_ut, X(t-1,3) + s(1).RR_up);
-            u2_hi = min(s(2).max_ut, X(t-1,8) + s(2).RR_up);
-        end
-        
-        % Clip both sides to [u_lo, u_hi] so the band is truly feasible
-        flow_max1 = min(max(flow_max1, u1_lo), u1_hi);
-        flow_min1 = min(max(flow_min1, u1_lo), u1_hi);
-        flow_max2 = min(max(flow_max2, u2_lo), u2_hi);
-        flow_min2 = min(max(flow_min2, u2_lo), u2_hi);
-        
-        % Keep ordering (in case clipping collapses interval)
-        if flow_min1 > flow_max1, flow_min1 = flow_max1; end
-        if flow_min2 > flow_max2, flow_min2 = flow_max2; end
-        %}
-
         % Store effective flow bounds
         U_eff(t,:) = [flow_max1, flow_min1, flow_max2, flow_min2];
 
@@ -135,9 +111,9 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T,
         if t == 1 % Initial conditions
             % Volume Bounds
             cons = [cons, u1(t) + s1(t) <= flow_max1];   
-            cons = [cons, u1(t) + s1(t) >= q1_max + s(1).V0 - s(1).max_V];
+            cons = [cons, u1(t) + s1(t) >= flow_min1];
             cons = [cons, u2(t) + s2(t) <= flow_max2];   
-            cons = [cons, u2(t) + s2(t) >= q2_max + s(2).V0 - s(2).max_V];  
+            cons = [cons, u2(t) + s2(t) >= flow_min1];  
 
 
             % Mass Balance
@@ -179,9 +155,9 @@ function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T,
                 case {"det","icc","jcc-bon"}
                     % Add deterministic / ICC / Bonferroni volume bounds
                     cons = [cons, u1(t) + s1(t) <= flow_max1];  
-                    cons = [cons, u1(t) + s1(t) >= X(t-1,1) + q1_max - s(1).max_V];
+                    cons = [cons, u1(t) + s1(t) >= flow_min1];
                     cons = [cons, u2(t) + s2(t) <= flow_max2];  
-                    cons = [cons, u2(t) + s2(t) >= X(t-1,6) + q2_max - s(2).max_V]; 
+                    cons = [cons, u2(t) + s2(t) >= flow_min2]; 
             end
                           
         end
@@ -404,7 +380,6 @@ function [q_hat, std_hat_m3] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_
     q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
 
     % Rescale standard deviation back to inflow units 
-    scale = 1; % (TEMP)
     std_hat_m3 = std_hat * params.inflow_std;
 end
 
