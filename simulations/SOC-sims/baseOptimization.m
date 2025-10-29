@@ -1,14 +1,18 @@
-function [model, obj, X, std_hat] = baseOptimization(T, N, c, q, lag, framework, params, s)
+function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, framework, bounds, params, s)
 
     % Initialize decision variable storage
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1, 
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2
     X = zeros(T,10);
     std_hat = zeros(T,2); 
+    V_eff = zeros(T,4); % 2*n
 
     % Extract streamflow time series 
     q1_s = q(:,1);
-    % q2_s = q(:,2);
+    
+    % Define risk level 
+    eps_t = 0.95;
+    n = 2; % number of units 
 
     % Define decision variables (YALMIP)
     yalmip('clear');
@@ -37,10 +41,6 @@ function [model, obj, X, std_hat] = baseOptimization(T, N, c, q, lag, framework,
     % Feeder Capacity
     cons = [cons, 0 <= p1 <= s(1).F];
     cons = [cons, 0 <= p2 <= s(2).F];
-    
-    % Volume Bounds
-    cons = [cons, s(1).min_V <= V1 <= s(1).max_V];
-    cons = [cons, s(2).min_V <= V2 <= s(2).max_V];
 
     % Spill Bounds
     cons = [cons, 0 <= s1];
@@ -54,6 +54,33 @@ function [model, obj, X, std_hat] = baseOptimization(T, N, c, q, lag, framework,
         % q_i = predicted mean inflow, stdhat_i = prdicted std dev of inflow 
         [q1, q2, std_hat(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params, s);
 
+        %% Determine Volume Bounds
+        switch bounds
+            case {"det"}
+                % Deterministic 
+                V1_min_shift = 0;
+                V1_max_shift = 0; 
+                V2_min_shift = 0;
+                V2_max_shift = 0;
+
+            case {"jcc-bon"}
+                % Calculate z-score 
+                z = norminv(1 - (1 - eps_t)/n);
+
+                % Individual Chance Constraints
+                V1_min_shift = z*std_hat(t,1);
+                V1_max_shift = -z*std_hat(t,1);
+                V2_min_shift = z*std_hat(t,2);
+                V2_max_shift = -z*std_hat(t,2);
+        end
+
+        % Volume Bounds (with chance constrained shift)
+        cons = [cons, s(1).min_V + V1_min_shift <= V1 <= s(1).max_V + V1_max_shift];
+        cons = [cons, s(2).min_V + V2_min_shift <= V2 <= s(2).max_V + V2_max_shift];
+
+        % Store effective flow bounds
+        V_eff(t,:) = [s(1).max_V + V1_max_shift, s(1).min_V + V1_min_shift, ...
+            s(2).max_V + V2_max_shift, s(2).min_V + V2_min_shift];
 
         %% Time-Varying Constraints
         if t == 1 % Initial conditions
@@ -152,13 +179,6 @@ function h_ref = map_V_to_h(h, left_bounds, right_bounds, reference_values)
     end
 end
 
-function q_norm = normalize_flow(flow, mean_val, std_val)
-    q_norm = (flow - mean_val)/std_val;
-end
-
-function q = rescale_flow(flow_norm, mean_val, std_val)
-    q = flow_norm*std_val + mean_val;
-end
 
 function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params, s)
     
@@ -208,48 +228,27 @@ function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params,
     end
 end
 
-function [q_hat, std_hat_m3] = forecast_inflow_diu(q_prev, params)
-
-    % (TEMP) scale to return forecasted std dev to original (dry)
-    scale = 1; %3.14;
-    
-    % Normalize previous observed inflow
-    q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std);
+function [q_hat, std_hat] = forecast_inflow_diu(q_prev, params)
 
     % Construct inflow forecast q_t = alpha_0 + alpha_1*q_{t-1}
-    q_hat_norm = params.AR_const + params.AR_coef*q_prev_norm;
+    q_hat = params.AR_const + params.AR_coef*q_prev;
 
-    % Rescale inflow forecast
-    q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
-
-    % Rescale standard deviation back to inflow units
-    std_hat_m3 = scale*params.AR_resid_std*params.inflow_std;
+    % Extract (normalized) standard deviation 
+    std_hat = params.AR_std;
 end
 
 
-function [q_hat, std_hat_m3] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
+function [q_hat, std_hat] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
+
+    % Calculate previous error term
+    norm_error_prev = abs(q_prev_norm - q_pred_prev_norm);
     
-    % Normalize predictors
-    q_prev_norm = normalize_flow(q_prev, params.inflow_mean, params.inflow_std);
-    outflow_prev_norm = normalize_flow(outflow_prev, params.outflow_mean, params.outflow_std);
-    q_pred_prev_norm = normalize_flow(q_pred_prev, params.inflow_mean, params.inflow_std);
-
-    % Calculate previous error term (norm)
-    error_prev = abs(q_prev_norm - q_pred_prev_norm);
-    norm_error_prev = (error_prev - params.error_mean)/params.error_std;
-
     % Forecast conditional variance using GARCH-X
     var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm;
-    std_hat_norm = sqrt(var_hat_norm);
+    std_hat = sqrt(var_hat_norm);
     
-    % Rescale standard deviation to norm inflow scale 
-    std_hat = std_hat_norm*params.error_std + params.error_mean;
-
-    % Construct inflow forecast
-    q_hat_norm = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm;
-    q_hat = rescale_flow(q_hat_norm, params.inflow_mean, params.inflow_std);
-
-    % Rescale standard deviation back to inflow units 
-    std_hat_m3 = std_hat * params.inflow_std;
+    % Construct inflow forecast from OLS model
+    q_hat = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm;
+  
 end
 

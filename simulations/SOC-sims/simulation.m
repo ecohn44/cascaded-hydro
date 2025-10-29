@@ -30,11 +30,10 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "det", "det");
+simSettings = initSimSettings("dry", "pwl", "ddu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
-modelparams.rho = 0.1135; % Calculated offline between (q1_hist, s1 + u1) 
 
 % Date range settings 
 D = 2;                        % Simulation duration in days
@@ -55,8 +54,8 @@ fprintf('Data loading complete.\n');
 % [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, ...
 %     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
-[model, obj, X, std_hat] = baseOptimization(T, N, c, q, lag, ...
-    simSettings.framework, modelparams, sysparams);
+[model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, ...
+    simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 % Extract q2 reference inflow
 q(:,2) = [0; X(:,3) + X(:,4)];
@@ -96,7 +95,7 @@ end
 % SECTION 5: MONTE CARLO SIMS
 % ========================================================================
 
-monte_carlo = false;
+monte_carlo = true;
 
 if monte_carlo
     fprintf('Running Monte Carlo Sims.\n');
