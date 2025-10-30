@@ -1,4 +1,4 @@
-function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, framework, bounds, params, s)
+function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, scale, framework, bounds, params, s)
 
     % Initialize decision variable storage
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1, 
@@ -17,37 +17,8 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, fra
     % Define decision variables (YALMIP)
     yalmip('clear');
 
-    % Unit 01
-    V1 = sdpvar(T,1);
-    p1 = sdpvar(T,1);
-    u1 = sdpvar(T,1);
-    s1 = sdpvar(T,1);
 
-    % Unit 02
-    V2 = sdpvar(T,1);
-    p2 = sdpvar(T,1);
-    u2 = sdpvar(T,1);
-    s2 = sdpvar(T,1);
-
-    % Objective
-    cons = [];
-    Objective = sum((p1 + p2) - (s1 + s2));
-
-    %% Static Constraints
-    % Water Release Bounds
-    cons = [cons, s(1).min_ut <= u1 <= s(1).max_ut];
-    cons = [cons, s(2).min_ut <= u2 <= s(2).max_ut];
-
-    % Feeder Capacity
-    cons = [cons, 0 <= p1 <= s(1).F];
-    cons = [cons, 0 <= p2 <= s(2).F];
-
-    % Spill Bounds
-    cons = [cons, 0 <= s1];
-    cons = [cons, 0 <= s2];
-
-
-    %% Build constraints
+    %% Non-Anticipatory Optimization Framework 
     for t = 1:T
         
         %% Forecast Inflow
@@ -65,7 +36,7 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, fra
 
             case {"jcc-bon"}
                 % Calculate z-score 
-                z = norminv(1 - (1 - eps_t)/n);
+                z = scale*norminv(1 - (1 - eps_t)/n);
 
                 % Individual Chance Constraints
                 V1_min_shift = z*std_hat(t,1);
@@ -74,49 +45,73 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, fra
                 V2_max_shift = -z*std_hat(t,2);
         end
 
-        % Volume Bounds (with chance constrained shift)
-        cons = [cons, s(1).min_V + V1_min_shift <= V1 <= s(1).max_V + V1_max_shift];
-        cons = [cons, s(2).min_V + V2_min_shift <= V2 <= s(2).max_V + V2_max_shift];
+        %% Define Decision Variables
+        % Unit 01
+        V1 = sdpvar(1);
+        p1 = sdpvar(1);
+        u1 = sdpvar(1);
+        s1 = sdpvar(1);
+    
+        % Unit 02
+        V2 = sdpvar(1);
+        p2 = sdpvar(1);
+        u2 = sdpvar(1);
+        s2 = sdpvar(1);
+    
+        % Objective
+        cons = [];
+        Objective = sum((p1 + p2) - (s1 + s2));
+    
+        %% Static Constraints
+        % Water Release Bounds
+        cons = [cons, s(1).min_ut <= u1 <= s(1).max_ut];
+        cons = [cons, s(2).min_ut <= u2 <= s(2).max_ut];
+    
+        % Feeder Capacity
+        cons = [cons, 0 <= p1 <= s(1).F];
+        cons = [cons, 0 <= p2 <= s(2).F];
+    
+        % Spill Bounds
+        cons = [cons, 0 <= s1];
+        cons = [cons, 0 <= s2];
 
-        % Store effective flow bounds
-        V_eff(t,:) = [s(1).max_V + V1_max_shift, s(1).min_V + V1_min_shift, ...
-            s(2).max_V + V2_max_shift, s(2).min_V + V2_min_shift];
+      
 
         %% Time-Varying Constraints
         if t == 1 % Initial conditions
             % Mass Balance
-            cons = [cons, V1(t) + u1(t) + s1(t) == s(1).V0 + q1];
-            cons = [cons, V2(t) + u2(t) + s2(t) == s(2).V0 + q2];
+            cons = [cons, V1 + u1 + s1 == s(1).V0 + q1];
+            cons = [cons, V2 + u2 + s2 == s(2).V0 + q2];
             
             % Ramp Rates
-            cons = [cons, u1(t) == s(1).min_ut];
-            cons = [cons, u2(t) == s(2).min_ut];
+            cons = [cons, u1 == s(1).min_ut];
+            cons = [cons, u2 == s(2).min_ut];
 
             % Power Production
-            cons = [cons, p1(t) == c*u1(t)*s(1).a*(s(1).V0^s(1).b)];
-            cons = [cons, p2(t) == c*u2(t)*s(2).a*(s(2).V0^s(2).b)];
+            cons = [cons, p1 == c*u1*s(1).a*(s(1).V0^s(1).b)];
+            cons = [cons, p2 == c*u2*s(2).a*(s(2).V0^s(2).b)];
+
+            % Volume Bounds (with chance constrained shift)
+            cons = [cons, s(1).min_V + V1_min_shift <= V1 <= s(1).max_V + V1_max_shift];
+            cons = [cons, s(2).min_V + V2_min_shift <= V2 <= s(2).max_V + V2_max_shift];
         
         else
             % Mass Balance
-            cons = [cons, V1(t) + u1(t) + s1(t) == X(t-1,1) + q1];
-            cons = [cons, V2(t) + u2(t) + s2(t) == X(t-1,6) + q2];
+            cons = [cons, V1 + u1 + s1 == X(t-1,1) + q1];
+            cons = [cons, V2 + u2 + s2 == X(t-1,6) + q2];
             
-            % Ramp Rate Up
-            cons = [cons, u1(t) <= s(1).RR_up + u1(t-1)];
-            cons = [cons, u2(t) <= s(2).RR_up + u2(t-1)];
-
-            % Ramp Rate Down
-            cons = [cons, -u1(t) <= -(s(1).RR_dn + u1(t-1))];
-            cons = [cons, -u2(t) <= -(s(2).RR_dn + u2(t-1))];
+            % Ramp Rates
+            cons = [cons, s(1).RR_dn <= u1 - X(t-1,3) <= s(1).RR_up];
+            cons = [cons, s(2).RR_dn <= u2 - X(t-1,8) <= s(2).RR_up];
 
             % Power Production
             h1_lookup = s(1).a * X(t-1,1)^s(1).b; % previous hydraulic head
             h1_ref = map_V_to_h(h1_lookup, s(1).h_lbounds, s(1).h_rbounds, s(1).h_refvals);
-            cons = [cons, p1(t) == c*u1(t)*h1_ref];
+            cons = [cons, p1 == c*u1*h1_ref];
 
             h2_lookup = s(2).a * X(t-1,6)^s(2).b; % previous hydraulic head
             h2_ref = map_V_to_h(h2_lookup, s(2).h_lbounds, s(2).h_rbounds, s(2).h_refvals);
-            cons = [cons, p2(t) == c*u2(t)*h2_ref];
+            cons = [cons, p2 == c*u2*h2_ref];
                           
         end
 
@@ -124,21 +119,26 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, fra
     options = sdpsettings('solver','gurobi','verbose',0);
     model = optimize(cons, -Objective, options);
 
+    % Abort early on infeasible/numerical issues
+    if model.problem ~= 0
+        error('Solver issue at t=%d: %s', t, yalmiperror(model.problem));
+    end
+
     % Store results for time t
-    X(t,1) = value(V1(t));
-    X(t,2) = value(p1(t));
-    X(t,3) = value(u1(t));
-    X(t,4) = value(s1(t));
+    X(t,1) = value(V1);
+    X(t,2) = value(p1);
+    X(t,3) = value(u1);
+    X(t,4) = value(s1);
     X(t,5) = q1;
-    X(t,6) = value(V2(t));
-    X(t,7) = value(p2(t));
-    X(t,8) = value(u2(t));
-    X(t,9) = value(s2(t));
+    X(t,6) = value(V2);
+    X(t,7) = value(p2);
+    X(t,8) = value(u2);
+    X(t,9) = value(s2);
     X(t,10) = q2;
 
     end
 
-    obj = sum(X(:,2) + X(:,7));
+    obj = sum(X(:,2) + X(:,7)); % Total power production 
     fprintf('Optimization complete.\n');
 
     % Simulation Report
@@ -179,13 +179,6 @@ function h_ref = map_V_to_h(h, left_bounds, right_bounds, reference_values)
     end
 end
 
-function q_norm = normalize_flow(flow, mean_val, std_val)
-    q_norm = (flow - mean_val)/std_val;
-end
-
-function q = rescale_flow(flow_norm, mean_val, std_val)
-    q = flow_norm*std_val + mean_val;
-end
 
 function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params, s)
     
@@ -235,31 +228,25 @@ function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params,
     end
 end
 
-function [q_hat, std_hat_m3] = forecast_inflow_diu(q_prev, params)
+function [q_hat, std_hat] = forecast_inflow_diu(q_prev, params)
 
     % Construct inflow forecast q_t = alpha_0 + alpha_1*q_{t-1}
     q_hat = params.AR_const + params.AR_coef*q_prev;
 
     % Extract (normalized) standard deviation 
-    std_hat_m3 = params.AR_resid_std;
+    std_hat = params.AR_std;
 end
 
 
-function [q_hat, std_hat_m3] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
+function [q_hat, std_hat] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
 
-    % Note: Under SOC sim conditions, q_prev, q_pred_prev, and outflow_prev
-    % are already "normalized"
-
-    % Calculate previous error term (norm)
+    % Calculate previous error term
     norm_error_prev = abs(q_prev_norm - q_pred_prev_norm);
-
+    
     % Forecast conditional variance using GARCH-X
     var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm;
-    std_hat_norm = sqrt(var_hat_norm);
+    std_hat = sqrt(var_hat_norm);
     
-    % Rescale standard deviation to norm inflow scale 
-    std_hat_m3 = std_hat_norm*params.error_std + params.error_mean;
-
     % Construct inflow forecast from OLS model
     q_hat = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm;
   

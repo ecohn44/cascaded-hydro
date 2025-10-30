@@ -30,7 +30,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "diu", "jcc-bon");
+simSettings = initSimSettings("dry", "pwl", "ddu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -53,7 +53,7 @@ amp1 = 0.4;      % 40% drop in inflow
 amp2 = 0.3;      % 30% drop in inflow
 w1 = 8;          % first drought lasts 8 hours
 w2 = 4;          % second drought lasts 4 hours
-t0 = [0.3*T, 0.8*T];   % pulses at 30% and 60% of horizon
+t0 = [0.3*T, 0.6*T];   % pulses at 30% and 60% of horizon
 
 % q = q0*ones(T+1,1);  % Constant flow 
 q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
@@ -65,9 +65,7 @@ q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
 % [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, ...
 %     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
-scale = 1; % Scale safety bounds 
-
-[model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, scale, ...
+[model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 % Extract q2 reference inflow
@@ -78,8 +76,8 @@ q(:,2) = [0; X(:,3) + X(:,4)];
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir = true;
-printplot = true; 
+make_dir = false;
+printplot = false; 
 
 % Make plot directory for current simulation run 
 if make_dir
@@ -94,14 +92,15 @@ end
 % Plot simulation behavior for all units
 simPlots(path, X, [], q, sysparams, T, c, lag, printplot);
 
+%{
 % Store simulation results 
-results_dir = "./results/";
 for i = 1:numel(sysparams)
     sp = sysparams(i);
     fname = sprintf('results_unit%d_%s.mat', sp.unit, lower(simSettings.framework));
     save(fullfile(results_dir, fname), ...
-        'X', 'V_eff', 'std_hat', 'q', 'sysparams', 'T', 'c', 'lag', '-v7');
+        'X', 'U_eff', 'std_hat', 'q', 'sysparams', 'T', 'c', 'lag', '-v7');
 end
+%}
 
 %% ========================================================================
 % SECTION 6: MONTE CARLO SIMS
