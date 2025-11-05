@@ -5,6 +5,7 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2
     X = zeros(T,10);
     std_hat = zeros(T,2); 
+    std_safety = zeros(T,2); 
     V_eff = zeros(T,4); % 2*n
 
     % Extract streamflow time series 
@@ -23,7 +24,7 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
         
         %% Forecast Inflow
         % q_i = predicted mean inflow, stdhat_i = prdicted std dev of inflow 
-        [q1, q2, std_hat(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params, s);
+        [q1, q2, std_hat(t,:), std_safety(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params, s);
 
         %% Determine Volume Bounds
         switch bounds
@@ -37,13 +38,19 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
             case {"jcc-bon"}
                 % Calculate z-score 
                 z = scale*norminv(1 - (1 - eps_t)/n);
+                
+                disp(z*std_hat(t,2));
 
                 % Individual Chance Constraints
                 V1_min_shift = z*std_hat(t,1);
                 V1_max_shift = -z*std_hat(t,1);
-                V2_min_shift = z*std_hat(t,2);
-                V2_max_shift = -z*std_hat(t,2);
+                V2_min_shift = z*std_safety(t,2); % Safety scaled estimate
+                V2_max_shift = -z*std_safety(t,2);
         end
+
+        % Store effective flow bounds
+        V_eff(t,:) = [s(1).max_V + V1_max_shift, s(1).min_V + V1_min_shift, ...
+            s(2).max_V + V2_max_shift, s(2).min_V + V2_min_shift];
 
         %% Define Decision Variables
         % Unit 01
@@ -75,8 +82,6 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
         cons = [cons, 0 <= s1];
         cons = [cons, 0 <= s2];
 
-      
-
         %% Time-Varying Constraints
         if t == 1 % Initial conditions
             % Mass Balance
@@ -92,8 +97,8 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
             cons = [cons, p2 == c*u2*s(2).a*(s(2).V0^s(2).b)];
 
             % Volume Bounds (with chance constrained shift)
-            cons = [cons, s(1).min_V + V1_min_shift <= V1 <= s(1).max_V + V1_max_shift];
-            cons = [cons, s(2).min_V + V2_min_shift <= V2 <= s(2).max_V + V2_max_shift];
+            cons = [cons, s(1).min_V + V1_min_shift <= s(1).V0 + q1 - (u1 + s1) <= s(1).max_V + V1_max_shift];
+            cons = [cons, s(2).min_V + V2_min_shift <= s(2).V0 + q2 - (u2 + s2) <= s(2).max_V + V2_max_shift];
         
         else
             % Mass Balance
@@ -112,6 +117,10 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
             h2_lookup = s(2).a * X(t-1,6)^s(2).b; % previous hydraulic head
             h2_ref = map_V_to_h(h2_lookup, s(2).h_lbounds, s(2).h_rbounds, s(2).h_refvals);
             cons = [cons, p2 == c*u2*h2_ref];
+
+            % Volume Bounds (with chance constrained shift)
+            cons = [cons, s(1).min_V + V1_min_shift <= X(t-1,1) + q1 - (u1 + s1) <= s(1).max_V + V1_max_shift];
+            cons = [cons, s(2).min_V + V2_min_shift <= X(t-1,6) + q2 - (u2 + s2) <= s(2).max_V + V2_max_shift];
                           
         end
 
@@ -180,9 +189,10 @@ function h_ref = map_V_to_h(h, left_bounds, right_bounds, reference_values)
 end
 
 
-function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params, s)
+function [q1, q2, std_hat, std_safety] = forecast_inflow(X, t, q1_s, lag, framework, params, s)
     
     std_hat = [0, 0];
+    std_safety = [0, 0];
     
     % Calculate previous release
     if t <= lag 
@@ -223,7 +233,7 @@ function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params,
                
                 % Forecast Q2
                 % (TEMP) will use q2_s(t) "local flow" for arg1
-                [q2, std_hat(2)] = forecast_inflow_ddu(X1_prev, X(t-lag,10), X1_prev, params);
+                [q2, std_hat(2), std_safety(2)] = forecast_inflow_ddu(X1_prev, X(t-lag,10), X1_prev, params);
             end
     end
 end
@@ -238,14 +248,21 @@ function [q_hat, std_hat] = forecast_inflow_diu(q_prev, params)
 end
 
 
-function [q_hat, std_hat] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
+function [q_hat, std_hat_estimate, std_hat_safety] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
+
+    % Sensitivity to upstream release
+    scale_exog = 25;
 
     % Calculate previous error term
     norm_error_prev = abs(q_prev_norm - q_pred_prev_norm);
     
     % Forecast conditional variance using GARCH-X
     var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm;
-    std_hat = sqrt(var_hat_norm);
+    std_hat_estimate = sqrt(var_hat_norm);
+
+    % Safety-bound estimate of conditional variance using GARCH-X
+    var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + scale_exog*params.gamma*outflow_prev_norm;
+    std_hat_safety = sqrt(var_hat_norm);
     
     % Construct inflow forecast from OLS model
     q_hat = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm;

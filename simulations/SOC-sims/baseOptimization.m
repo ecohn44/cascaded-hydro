@@ -5,6 +5,7 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2
     X = zeros(T,10);
     std_hat = zeros(T,2); 
+    std_safety = zeros(T,2); 
     V_eff = zeros(T,4); % 2*n
 
     % Extract streamflow time series 
@@ -23,7 +24,7 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
         
         %% Forecast Inflow
         % q_i = predicted mean inflow, stdhat_i = prdicted std dev of inflow 
-        [q1, q2, std_hat(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params, s);
+        [q1, q2, std_hat(t,:), std_safety(t,:)] = forecast_inflow(X, t, q1_s, lag, framework, params, s);
 
         %% Determine Volume Bounds
         switch bounds
@@ -41,8 +42,10 @@ function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, sca
                 % Individual Chance Constraints
                 V1_min_shift = z*std_hat(t,1);
                 V1_max_shift = -z*std_hat(t,1);
-                V2_min_shift = z*std_hat(t,2);
-                V2_max_shift = -z*std_hat(t,2);
+                V2_min_shift = z*std_safety(t,2); % Safety scaled estimate
+                V2_max_shift = -z*std_safety(t,2);
+
+                disp(V2_min_shift);
         end
 
         % Store effective flow bounds
@@ -186,9 +189,10 @@ function h_ref = map_V_to_h(h, left_bounds, right_bounds, reference_values)
 end
 
 
-function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params, s)
+function [q1, q2, std_hat, std_safety] = forecast_inflow(X, t, q1_s, lag, framework, params, s)
     
     std_hat = [0, 0];
+    std_safety = [0, 0];
     
     % Calculate previous release
     if t <= lag 
@@ -214,6 +218,7 @@ function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params,
             % (TEMP) will use q2_s(t) "local flow" in Columbia River
             [q2, std_hat(2)] = forecast_inflow_diu(X1_prev, params);
            
+            std_safety = std_hat; % Matching bounds
         
         case "ddu"
             if t <= lag
@@ -223,13 +228,16 @@ function [q1, q2, std_hat] = forecast_inflow(X, t, q1_s, lag, framework, params,
                 % Forecast Q2
                 % (TEMP) will use q2_s(t) "local flow" in Columbia River
                 [q2, std_hat(2)] = forecast_inflow_diu(X1_prev, params);
+
+                std_safety = std_hat;
             else
                 % Forecast Q1 (DIU - no upstream to condition on)
                 [q1, std_hat(1)] = forecast_inflow_diu(q1_s(t), params);
+                std_safety(1) = std_hat(1); % Copy over for top most unit
                
                 % Forecast Q2
                 % (TEMP) will use q2_s(t) "local flow" for arg1
-                [q2, std_hat(2)] = forecast_inflow_ddu(X1_prev, X(t-lag,10), X1_prev, params);
+                [q2, std_hat(2), std_safety(2)] = forecast_inflow_ddu(X1_prev, X(t-lag,10), X1_prev, params);
             end
     end
 end
@@ -244,14 +252,21 @@ function [q_hat, std_hat] = forecast_inflow_diu(q_prev, params)
 end
 
 
-function [q_hat, std_hat] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
+function [q_hat, std_hat_estimate, std_hat_safety] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
+
+    % Sensitivity to upstream release
+    scale_exog = 1;
 
     % Calculate previous error term
     norm_error_prev = abs(q_prev_norm - q_pred_prev_norm);
     
     % Forecast conditional variance using GARCH-X
     var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + params.gamma*outflow_prev_norm;
-    std_hat = sqrt(var_hat_norm);
+    std_hat_estimate = sqrt(var_hat_norm);
+
+    % Safety-bound estimate of conditional variance using GARCH-X
+    var_hat_norm = params.omega + params.alpha*(norm_error_prev^2) + scale_exog*params.gamma*outflow_prev_norm;
+    std_hat_safety = sqrt(var_hat_norm);
     
     % Construct inflow forecast from OLS model
     q_hat = params.constant + params.coef1*q_prev_norm + params.coef2*outflow_prev_norm;

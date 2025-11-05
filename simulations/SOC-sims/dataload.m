@@ -24,7 +24,7 @@ function [params, sysparams] = dataload(N)
     % Copy for Wet Season
     params(2) = params(1);
     params(2).season = 'wet';
-    params(2).gamma = 0.008;
+    params(2).gamma = 0.0008;
 
     % Unit 01
     sysparams(1) = struct( ...

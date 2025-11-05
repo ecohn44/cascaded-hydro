@@ -1,5 +1,5 @@
 %% Author: Eliza Cohn
-% Date: October 2025
+% Date: November 2025
 % Description: Main driver for cascaded hydropower simulations 
 % Paper: Optimization of Cascaded Hydroelectric Systems under DDU
 
@@ -30,7 +30,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "diu", "jcc-bon");
+simSettings = initSimSettings("dry", "pwl", "det", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -66,6 +66,7 @@ q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
 %     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 scale = 1; % Scale safety bounds 
+% scale_ddu = 25; % Scale gamma 
 
 [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, scale, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);
@@ -78,8 +79,8 @@ q(:,2) = [0; X(:,3) + X(:,4)];
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir = true;
-printplot = true; 
+make_dir = false;
+printplot = false; 
 
 % Make plot directory for current simulation run 
 if make_dir
@@ -98,9 +99,14 @@ simPlots(path, X, [], q, sysparams, T, c, lag, printplot);
 results_dir = "./results/";
 for i = 1:numel(sysparams)
     sp = sysparams(i);
-    fname = sprintf('results_unit%d_%s.mat', sp.unit, lower(simSettings.framework));
+    fname = sprintf('results_unit%d_%s.mat', ...
+        sp.unit, lower(simSettings.framework));
+
+    season = simSettings.season;  
+
     save(fullfile(results_dir, fname), ...
-        'X', 'V_eff', 'std_hat', 'q', 'sysparams', 'T', 'c', 'lag', '-v7');
+        'X', 'V_eff', 'std_hat', 'q', 'sysparams', ...
+        'T', 'c', 'lag', 'season', '-v7');
 end
 
 %% ========================================================================
