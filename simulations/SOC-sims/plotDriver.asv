@@ -36,9 +36,10 @@ end
 % =====================================================
 
 f1 = figure('Position',[100 100 850 350]); hold on; grid on;
-plot(tt, M2.std_hat(:,2), 'LineWidth',3, 'DisplayName','M2 \hat{\sigma}_t');
-plot(tt, M3.std_hat(:,2), 'LineWidth',3, 'DisplayName','M2 \hat{\sigma}_t');
-ylabel('\sigma_{q2} ');
+plot(tt, M2.std_hat(:,2), 'LineWidth',3, 'DisplayName','M2 \sigma_t');
+plot(tt, M3.std_hat(:,2), 'LineWidth',3, 'DisplayName','M3 \sigma_t');
+ylabel('Standard Deviation');
+xlabel('Time (h)')
 title('Unit 02 Inflow Uncertainty');
 legend('Location','northeast');
 
@@ -49,6 +50,7 @@ saveas(f1, fullfile(savePath, 'u2_sigma_diu_vs_ddu.png'));
 % =====================================================
 % V_eff format is: [V1_max V1_min V2_max V2_min]
 
+% Extract Volume Bounds/Trajectories for Unit 2
 V2max_M1 = M1.V_eff(:,3);
 V2min_M1 = M1.V_eff(:,4);
 V2_M1 = M1.X(:,6);
@@ -61,27 +63,46 @@ V2max_M3 = M3.V_eff(:,3);
 V2min_M3 = M3.V_eff(:,4);
 V2_M3 = M3.X(:,6);
 
+% Base MATLAB default colors
+blueBound  = [0 0 1];         % blue
+greenBound = [0 1 0];         % green
+redBound   = [1 0 0];         % red
+
+% Trajectory Colors
+blueTraj  = 0.6 * blueBound;
+greenTraj = 0.6 * greenBound;
+redTraj   = 0.6 * redBound;
 
 f2 = figure('Position',[100 480 1100 480]); hold on; grid on;
 
 % M1: Deterministic bounds and policy
-plot(tt, V2min_M1, 'b-.', 'LineWidth', 3, 'DisplayName','M1^{Theoretical}');
-plot(tt, V2max_M1, 'b-.', 'LineWidth', 3);
-plot(tt, V2_M1, 'b', 'LineWidth', 1.5, 'DisplayName','M1^{Practical}');
+plot(tt, V2min_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound, 'DisplayName','M1^{Bounds}');
+plot(tt, V2max_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound, 'HandleVisibility','off');
+plot(tt, V2_M1,    'LineWidth',2, 'Color',blueTraj, 'DisplayName','M1^{Trajectory}');
 
 % M2: DIU bounds and policy
-plot(tt, V2min_M2, 'g-.', 'LineWidth', 3, 'DisplayName','M2^{Theoretical}');
-plot(tt, V2max_M2, 'g-.', 'LineWidth', 3);
-plot(tt, V2_M2, 'g', 'LineWidth', 1.5, 'DisplayName','M2^{Practical}');
+plot(tt, V2min_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, 'DisplayName','M2^{Bounds}');
+plot(tt, V2max_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, 'HandleVisibility','off');
+plot(tt, V2_M2,    'LineWidth',2, 'Color',greenTraj, 'DisplayName','M2^{Trajectory}');
 
 % M3: DDU bounds and policy
-plot(tt, V2min_M3, 'r-.', 'LineWidth', 3, 'DisplayName','M3^{Theoretical}');
-plot(tt, V2max_M3, 'r-.', 'LineWidth', 3, 'DisplayName','');
-plot(tt, V2_M3, 'r', 'LineWidth', 1.5, 'DisplayName','M3^{Practical}');
+plot(tt, V2min_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound, 'DisplayName','M3^{Bounds}');
+plot(tt, V2max_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound, 'HandleVisibility','off');
+plot(tt, V2_M3,    'LineWidth',2, 'Color',redTraj, 'DisplayName','M3^{Trajectory}');
 
+% ylim([0,0.06]);
 ylabel('SoC Bounds');
-xlabel('Time')
-title(['SoC Trajectory and Effective Bounds ' opts.titleTag]);
-legend('Location','best');
+xlabel('Time (h)')
+set(gca, 'FontSize', 14);        % axes labels, ticks
+set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
+legend('Location','best', 'FontSize', 13);
+title('SoC Trajectory and Effective Bounds', 'FontSize', 16);
 
 saveas(f2, fullfile(savePath, 'u2_soc_diu_vs_ddu.png'));
+
+% =====================================================
+% FIGURE 3: Power Production (Normalized)
+% =====================================================
+
+% Extract power dispatch 
+p2_M1 = M1.X(:,7);

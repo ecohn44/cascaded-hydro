@@ -1,4 +1,4 @@
-function [V1, V2, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
+function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
 % runMonteCarloSims - Monte Carlo bound violation checker (FIXED POLICY, CLAMPED, WITH SIM HEAD)
 %
 %   Changes from original version:
@@ -21,7 +21,7 @@ function [V1, V2, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_h
 %       V1, V2    : TxN simulated (CLAMPED) volume trajectories
 
     %  Simulation parameters 
-    nSim = 5000;               % number of Monte Carlo runs
+    nSim = 1000;               % number of Monte Carlo runs
     T = size(X,1);             % number of time steps
     tt = (1:T)';               % time vector
     dt_hr = 1;                 % timestep (hours)
@@ -62,7 +62,7 @@ function [V1, V2, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_h
 
         for t = 1:T
             % Sample inflows
-            inflow1 = q1_mean(t) + std1(t)*randn; % To do: DDU needs to update based on updated policy 
+            inflow1 = q1_mean(t) + std1(t)*randn;
             inflow2 = q2_mean(t) + std2(t)*randn;
 
             % Fixed (solved) policy
@@ -78,7 +78,7 @@ function [V1, V2, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_h
             violation_count2(t,n) = (V2_unc < Vmin2) || (V2_unc > Vmax2);
 
             % ===================================================================
-            %  Clamp to physical bounds 
+            %  Clamp to physical bounds (simulate extra spill/deficit)
             % ===================================================================
             V1_t = min(max(V1_unc, Vmin1), Vmax1);
             V2_t = min(max(V2_unc, Vmin2), Vmax2);
@@ -109,34 +109,25 @@ function [V1, V2, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_h
     overall_avg1 = mean(avg_per_timestep1);
     overall_avg2 = mean(avg_per_timestep2);
 
-    fprintf('\n  Monte Carlo Violation Report (CLAMPED audit) \n');
+    fprintf('\n  Monte Carlo Violation Report (UNCLAMPED audit) \n');
     fprintf('Reservoir 1: %.2f%%\n', 100*overall_avg1);
     fprintf('Reservoir 2: %.2f%%\n', 100*overall_avg2);
 
     %  Compute mean total generation across all runs 
     mean_p1_MC = mean(sum(p1_sim,1));
     mean_p2_MC = mean(sum(p2_sim,1));
-    total_p_MC = mean_p1_MC + mean_p2_MC;
-
-    % Compute average generation profile for Unit 02
-    p2_mean = mean(p2_sim,2);
-    p1_mean = mean(p1_sim,2);
 
     %  Compare with deterministic baseline 
     sum_p1_opt = sum(p1_opt);  sum_p2_opt = sum(p2_opt);
-    total_p_opt = sum_p1_opt + sum_p2_opt;
 
     %   Calculate change in power production 
     drop_p1 = 100*(sum_p1_opt - mean_p1_MC)/max(sum_p1_opt,eps);
     drop_p2 = 100*(sum_p2_opt - mean_p2_MC)/max(sum_p2_opt,eps);
-    total_change = 100*(total_p_MC - total_p_opt)/total_p_opt;
 
     fprintf('\n  Average Generation from Simulated Head (CLAMPED) \n');
     fprintf('Res1: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p1_MC, sum_p1_opt, drop_p1);
     fprintf('Res2: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p2_MC, sum_p2_opt, drop_p2);
-    fprintf('Total Generation (opt): %.3f\n', total_p_opt)
-    fprintf('Total Generation (clamp): %.3f\n',total_p_MC)
-    fprintf('Percent change in Generation: %.2f\n', total_change)
+    fprintf('Total Generation (opt): %.5f, ')
 
     % ===================================================================
     %  Visualization 

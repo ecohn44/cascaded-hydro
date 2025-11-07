@@ -50,6 +50,7 @@ saveas(f1, fullfile(savePath, 'u2_sigma_diu_vs_ddu.png'));
 % =====================================================
 % V_eff format is: [V1_max V1_min V2_max V2_min]
 
+% Extract Volume Bounds/Trajectories for Unit 2
 V2max_M1 = M1.V_eff(:,3);
 V2min_M1 = M1.V_eff(:,4);
 V2_M1 = M1.X(:,6);
@@ -62,28 +63,67 @@ V2max_M3 = M3.V_eff(:,3);
 V2min_M3 = M3.V_eff(:,4);
 V2_M3 = M3.X(:,6);
 
+% Base MATLAB default colors
+blueBound  = [0 0 1];         % blue
+greenBound = [0 1 0];         % green
+redBound   = [1 0 0];         % red
+
+% Trajectory Colors
+blueTraj  = 0.6 * blueBound;
+greenTraj = 0.6 * greenBound;
+redTraj   = 0.6 * redBound;
 
 f2 = figure('Position',[100 480 1100 480]); hold on; grid on;
 
 % M1: Deterministic bounds and policy
-plot(tt, V2min_M1, 'b-.', 'LineWidth', 3, 'DisplayName','M1^{Bounds}');
-plot(tt, V2max_M1, 'b-.', 'LineWidth', 3, 'HandleVisibility','off');
-plot(tt, V2_M1, 'b', 'LineWidth', 1.5, 'DisplayName','M1^{Trajectory}');
+plot(tt, V2min_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound, 'DisplayName','M1^{Bounds}');
+plot(tt, V2max_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound, 'HandleVisibility','off');
+plot(tt, V2_M1,    'LineWidth',2, 'Color',blueTraj, 'DisplayName','M1^{Trajectory}');
 
 % M2: DIU bounds and policy
-plot(tt, V2min_M2, 'g-.', 'LineWidth', 3, 'DisplayName','M2^{Bounds}');
-plot(tt, V2max_M2, 'g-.', 'LineWidth', 3, 'HandleVisibility','off');
-plot(tt, V2_M2, 'g', 'LineWidth', 1.5, 'DisplayName','M2^{Trajectory}');
+plot(tt, V2min_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, 'DisplayName','M2^{Bounds}');
+plot(tt, V2max_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, 'HandleVisibility','off');
+plot(tt, V2_M2,    'LineWidth',2, 'Color',greenTraj, 'DisplayName','M2^{Trajectory}');
 
 % M3: DDU bounds and policy
-plot(tt, V2min_M3, 'r-.', 'LineWidth', 3, 'DisplayName','M3^{Bounds}');
-plot(tt, V2max_M3, 'r-.', 'LineWidth', 3, 'HandleVisibility','off');
-plot(tt, V2_M3, 'r', 'LineWidth', 1.5, 'DisplayName','M3^{Trajectory}');
+plot(tt, V2min_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound, 'DisplayName','M3^{Bounds}');
+plot(tt, V2max_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound, 'HandleVisibility','off');
+plot(tt, V2_M3,    'LineWidth',2, 'Color',redTraj, 'DisplayName','M3^{Trajectory}');
 
-ylim([0,0.06]);
+% ylim([0,0.06]);
 ylabel('SoC Bounds');
 xlabel('Time (h)')
-title('SoC Trajectory and Effective Bounds');
-legend('Location','best');
+set(gca, 'FontSize', 14);        % axes labels, ticks
+set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
+legend('Location','best', 'FontSize', 13);
+title('SoC Trajectory and Effective Bounds', 'FontSize', 16);
 
 saveas(f2, fullfile(savePath, 'u2_soc_diu_vs_ddu.png'));
+
+% =====================================================
+% FIGURE 3: Power Production (Normalized)
+% =====================================================
+
+% Extract power dispatch for each policy
+p2_M1 = M1.X(:,7);
+p2_M2 = M2.X(:,7);
+p2_M3 = M3.X(:,7);
+
+P_all = [p2_M1, p2_M2, p2_M3];
+
+f3 = figure('Position',[100 480 1100 480]); hold on; grid on;
+
+% Plot power dispatch 
+b = bar(tt, P_all, 'grouped');
+
+% Apply MATLAB default colors
+b(1).FaceColor = [0 0 1];    % blue
+b(2).FaceColor = [0 1 0];    % green
+b(3).FaceColor = [1 0 0];    % red
+
+ylabel('Normalized Power (p.u.)');
+xlabel('Time (h)')
+set(gca, 'FontSize', 14);        % axes labels, ticks
+set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
+legend({'M1', 'M2', 'M3'}, 'Location', 'best', 'FontSize', 13);
+title('Unit 02 Normalized Power Dispatch', 'FontSize', 16);
