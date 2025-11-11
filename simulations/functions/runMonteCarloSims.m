@@ -1,4 +1,4 @@
-function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
+function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
 % runMonteCarloSims - Monte Carlo bound violation checker (FIXED POLICY, CLAMPED, WITH SIM HEAD)
 %
 %   Changes from original version:
@@ -28,8 +28,9 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     %  Extract system parameters 
     Vmin1 = sysparams(1).min_V; Vmax1 = sysparams(1).max_V; V0_1 = sysparams(1).V0;
     Vmin2 = sysparams(2).min_V; Vmax2 = sysparams(2).max_V; V0_2 = sysparams(2).V0;
-    Umin1 = sysparams(1).min_ut; Umax1 = sysparams(1).max_ut; 
-    Umin2 = sysparams(2).min_ut; Umax2 = sysparams(2).max_ut;
+    Umin1 = 0; % sysparams(1).min_ut;
+    Umin2 = 0; % sysparams(2).min_ut; 
+    Umax1 = sysparams(1).max_ut; Umax2 = sysparams(2).max_ut; % will use for wet season
     s_min1 = 0; s_min2 = 0;
 
     %  Extract deterministic (solved) policy 
@@ -58,9 +59,9 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
 
     % Curtailed violation counts from saturated policies
     violation_curtail_count1 = false(T, nSim);
-    decifits1 = zeros(T, nSim);
+    deficits1 = zeros(T, nSim);
     violation_curtail_count2 = false(T, nSim);
-    decifits2 = zeros(T, nSim);
+    deficits2 = zeros(T, nSim);
 
     % ===================================================================
     %  MAIN MONTE CARLO LOOP
@@ -88,8 +89,8 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
             % ===================================================================
             %  State regulation via control saturation 
             % ===================================================================
-            [V1, u1, decifits1(t,n), violation_curtail_count1(t,n)] = curtail_deficit(V1_unc, u1_opt(t), Vmin1, Umin1);
-            [V2, u2, decifits2(t,n), violation_curtail_count2(t,n)] = curtail_deficit(V2_unc, u2_opt(t), Vmin2, Umin2);
+            [V1, u1, deficits1(t,n), violation_curtail_count1(t,n)] = curtail_deficit(V1_unc, u1_opt(t), Vmin1, Umin1);
+            [V2, u2, deficits2(t,n), violation_curtail_count2(t,n)] = curtail_deficit(V2_unc, u2_opt(t), Vmin2, Umin2);
 
 
             % ===================================================================
@@ -159,7 +160,7 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     fprintf('Percent change in Generation: %.2f\n', total_change)
 
     % ===================================================================
-    %  Visualization 
+    %  Visualization of Monte Carlo Runs
     % ===================================================================
     V1_mean = mean(V1_sim,2);  V1_std = std(V1_sim,0,2);
     V2_mean = mean(V2_sim,2);  V2_std = std(V2_sim,0,2);
@@ -196,13 +197,21 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     title(sprintf('Reservoir 2 — %s', bLabel));
     legend('1\sigma band','Optimal','MC mean','Location','best');
     if printplot, saveas(gcf, fullfile(savePath, ['mc_reservoir2_' char(bounds) '_fixed_clamped.png'])); end
+
+    % ===================================================================
+    %  Visualization of  Curtailment & Umin Violations
+    % ===================================================================
+
+    plotCurtailment(deficits1, u1_opt, sysparams(1).min_ut, 'Unit 1 Curtailment');
+    plotCurtailment(deficits2, u2_opt, sysparams(2).min_ut, 'Unit 2 Curtailment');
+
 end
 
 
-function [V, u, deficit, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
+function [V, u, take_turb, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
 
     % Record current volume and release
-    V = V_unc; u = u_opt; deficit = 0; viol = 0; 
+    V = V_unc; u = u_opt; take_turb = 0; viol = 0; 
 
     % Check if original release policy violated volume bounds
     if V_unc < Vmin
@@ -227,13 +236,73 @@ function [V, u, deficit, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
                 V = V_unc + take_turb;
                 
                 % Update deficit 
-                deficit = deficit - take_turb;
+                deficit_remain = deficit - take_turb;
             end
         end
     
         % If deficit still exists, then violation is unavoidable
-        if deficit > 0
+        if deficit_remain > 0
             viol = 1; 
         end
     end
+end
+
+
+function plotCurtailment(deficits, u_opt, u_min, titleStr)
+% Bars = mean(deficits); upper-only whisker = (p99 - mean)
+% Red shade = violation zone y >= max(0, u_opt - u_min)
+
+    if nargin < 4, titleStr = 'Curtailment (mean + 99th percentile upper whisker)'; end
+
+    T   = size(deficits,1);
+    tt  = (1:T)';
+
+    % stats
+    mu = mean(deficits, 2);
+
+    % 99th percentile along simulations (dim 2); fallback if prctile missing
+    if exist('prctile','file')
+        p99 = prctile(deficits, 99, 2);
+    else
+        % simple fallback
+        p99 = zeros(T,1);
+        for t = 1:T
+            y = sort(deficits(t,:));
+            k = max(1, ceil(0.99 * numel(y)));
+            p99(t) = y(k);
+        end
+    end
+    ypos = max(0, p99 - mu);  % upper-only whisker
+    yneg = zeros(T,1);
+
+    % threshold curve
+    thresh = max(0, u_opt - u_min);
+
+    % y-limit
+    yMax = 1.15 * max([p99; thresh; eps]);
+
+    figure('Color','w'); hold on; grid on; box on; ylim([0 yMax]);
+
+    % --- violation zone ---
+    xpoly = [tt; flipud(tt)];
+    ypoly = [thresh; yMax*ones(T,1)];
+    hshade = patch(xpoly, ypoly, [1 0.85 0.85], 'EdgeColor','none', 'FaceAlpha',0.35);
+    uistack(hshade,'bottom');
+
+    % threshold line
+    plot(tt, thresh, 'r--', 'LineWidth', 1.2);
+
+    % bars (mean)
+    bar(tt, mu, 'FaceColor',[0.3 0.6 0.9], 'EdgeColor','none');
+
+    % upper-only 99th percentile whisker
+    errorbar(tt, mu, yneg, ypos, 'k.', 'LineWidth', 1);
+
+    xlabel('Time step');
+    ylabel('Release Curtailment');
+    title(titleStr);
+
+    legend({'Violation Zone', ...
+            'Violation Threshold', 'Mean Curtailment', '99th Percentile Spread'}, ...
+            'Location','northwest');
 end

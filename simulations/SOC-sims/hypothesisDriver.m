@@ -34,16 +34,16 @@ printplot = false;
 path = ""; % Don't save pngs for now
 
 % Run MC Sims for M1 under DDU assumption 
-[M1_V1, M1_V2, M1_p1_mean, M1_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M1.X, path, printplot);
+[M1_V1, M1_V2, M1_u1, M2_u2, M1_p1_mean, M1_p2_mean, d1, d2] = runMonteCarloSims(s, simSettings.bounds, std_hat, M1.X, path, printplot);
 
 % Run MC Sims for M2 under DDU assumption 
-[M2_V1, M2_V2, M2_p1_mean, M2_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M2.X, path, printplot);
+%[M2_V1, M2_V2, M2_p1_mean, M2_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M2.X, path, printplot);
 
 % Run MC Sims for M3 under DDU assumption 
-[M3_V1, M3_V2, M3_p1_mean, M3_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M3.X, path, printplot);
+% [M3_V1, M3_V2, M3_p1_mean, M3_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M3.X, path, printplot);
 
 
-
+%{
 % =====================================================
 % FIGURE 1: Clamped Power Production (Normalized)
 % =====================================================
@@ -51,7 +51,7 @@ path = ""; % Don't save pngs for now
 % Extract power dispatch for each policy
 P_all = [M1_p2_mean, M2_p2_mean, M3_p2_mean];
 
-f3 = figure('Position',[100 480 1100 480]); hold on; grid on;
+f1 = figure('Position',[100 480 1100 480]); hold on; grid on;
 
 % Plot power dispatch 
 b = bar(tt, P_all, 'grouped');
@@ -69,11 +69,11 @@ legend({'M1', 'M2', 'M3'}, 'Location', 'best', 'FontSize', 13);
 title('Unit 02 Normalized Power Dispatch', 'FontSize', 16);
 
 % =====================================================
-% FIGURE 2: Clamped Power Production vs Optimal Power Production 
+% FIGURE 2: Curtailed Power Production vs Optimal Power Production 
 % =====================================================
 
 P_M1_all = [M1.X(:,7), M1_p2_mean];
-f4 = figure('Position',[100 480 1100 480]); hold on; grid on;
+f2 = figure('Position',[100 480 1100 480]); hold on; grid on;
 
 % Plot power dispatch 
 b = bar(tt, P_M1_all, 'grouped');
@@ -85,9 +85,13 @@ set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
 legend({'M1 Original', 'M1 Clamped'}, 'Location', 'best', 'FontSize', 13);
 title('Unit 02 Normalized Power Dispatch', 'FontSize', 16);
 
+% =====================================================
+% FIGURE 3: Curtailed Power Production vs Optimal Power Production 
+% =====================================================
+
 %Unit 1
 P_M1_all = [M1.X(:,2), M1_p1_mean];
-f4 = figure('Position',[100 480 1100 480]); hold on; grid on;
+f3 = figure('Position',[100 480 1100 480]); hold on; grid on;
 
 % Plot power dispatch 
 b = bar(tt, P_M1_all, 'grouped');
@@ -98,3 +102,4 @@ set(gca, 'FontSize', 14);        % axes labels, ticks
 set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
 legend({'M1 Original', 'M1 Clamped'}, 'Location', 'best', 'FontSize', 13);
 title('Unit 01 Normalized Power Dispatch', 'FontSize', 16);
+%}

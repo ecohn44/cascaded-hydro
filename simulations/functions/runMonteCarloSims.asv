@@ -1,4 +1,4 @@
-function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
+function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
 % runMonteCarloSims - Monte Carlo bound violation checker (FIXED POLICY, CLAMPED, WITH SIM HEAD)
 %
 %   Changes from original version:
@@ -28,8 +28,9 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     %  Extract system parameters 
     Vmin1 = sysparams(1).min_V; Vmax1 = sysparams(1).max_V; V0_1 = sysparams(1).V0;
     Vmin2 = sysparams(2).min_V; Vmax2 = sysparams(2).max_V; V0_2 = sysparams(2).V0;
-    Umin1 = sysparams(1).min_ut; Umax1 = sysparams(1).max_ut; 
-    Umin2 = sysparams(2).min_ut; Umax2 = sysparams(2).max_ut;
+    Umin1 = 0; % sysparams(1).min_ut;
+    Umin2 = 0; % sysparams(2).min_ut; 
+    Umax1 = sysparams(1).max_ut; Umax2 = sysparams(2).max_ut; % will use for wet season
     s_min1 = 0; s_min2 = 0;
 
     %  Extract deterministic (solved) policy 
@@ -40,10 +41,7 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     std1 = std_hat(:,1);
     std2 = std_hat(:,2);
 
-    % ===================================================================
     %  Define head functions from sysparams
-    % ===================================================================
-    % (Uses existing a,b coefficients)
     predict_h1 = @(V) sysparams(1).a .* (V.^sysparams(1).b);
     predict_h2 = @(V) sysparams(2).a .* (V.^sysparams(2).b);
 
@@ -61,9 +59,9 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
 
     % Curtailed violation counts from saturated policies
     violation_curtail_count1 = false(T, nSim);
-    decifits1 = zeros(T, nSim);
+    deficits1 = zeros(T, nSim);
     violation_curtail_count2 = false(T, nSim);
-    decifits2 = zeros(T, nSim);
+    deficits2 = zeros(T, nSim);
 
     % ===================================================================
     %  MAIN MONTE CARLO LOOP
@@ -91,9 +89,8 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
             % ===================================================================
             %  State regulation via control saturation 
             % ===================================================================
-
-            [V1, u1, decifits1(t,n), violation_curtail_count1(t,n)] = curtail_deficit(V1_unc, u1_opt(t), Vmin1, Umin1);
-            [V2, u2, decifits2(t,n), violation_curtail_count2(t,n)] = curtail_deficit(V2_unc, u2_opt(t), Vmin2, Umin2);
+            [V1, u1, deficits1(t,n), violation_curtail_count1(t,n)] = curtail_deficit(V1_unc, u1_opt(t), Vmin1, Umin1);
+            [V2, u2, deficits2(t,n), violation_curtail_count2(t,n)] = curtail_deficit(V2_unc, u2_opt(t), Vmin2, Umin2);
 
 
             % ===================================================================
@@ -104,12 +101,11 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
             p1_sim(t,n) = u1 * h1; % (TEMP) Add back in c when full scale 
             p2_sim(t,n) = u2 * h2;
 
-            % Store clamped volumes
+            % Store curtailed release and clamped volumes
             V1_sim(t,n) = V1; V2_sim(t,n) = V2;
-                  u1_sim = u1; 
-            u2_sim = u2;
+            u1_sim(t,n) = u1; u2_sim(t,n) = u2;
 
-            % Advance
+            % Advance to next state
             V1_prev = V1; V2_prev = V2;
         end
     end
@@ -124,11 +120,21 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     overall_avg1 = mean(avg_per_timestep1);
     overall_avg2 = mean(avg_per_timestep2);
 
-    fprintf('\n  Monte Carlo Violation Report (CLAMPED audit) \n');
+    fprintf('\n  Monte Carlo Violation Report (UNCLAMPED audit) \n');
     fprintf('Reservoir 1: %.2f%%\n', 100*overall_avg1);
     fprintf('Reservoir 2: %.2f%%\n', 100*overall_avg2);
 
-    %  Compute mean total generation across all runs 
+    %  Violation audit (based on CURTAILED)
+    c_avg_per_timestep1 = mean(violation_curtail_count1, 2);
+    c_avg_per_timestep2 = mean(violation_curtail_count2, 2);
+    c_overall_avg1 = mean(c_avg_per_timestep1);
+    c_overall_avg2 = mean(c_avg_per_timestep2);
+
+    fprintf('\n  Monte Carlo Violation Report (CURTAILED audit) \n');
+    fprintf('Reservoir 1: %.2f%%\n', 100*c_overall_avg1);
+    fprintf('Reservoir 2: %.2f%%\n', 100*c_overall_avg2);
+
+    % Compute mean total generation across all runs 
     mean_p1_MC = mean(sum(p1_sim,1));
     mean_p2_MC = mean(sum(p2_sim,1));
     total_p_MC = mean_p1_MC + mean_p2_MC;
@@ -137,11 +143,11 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     p2_mean = mean(p2_sim,2);
     p1_mean = mean(p1_sim,2);
 
-    %  Compare with deterministic baseline 
+    % Compare with deterministic baseline 
     sum_p1_opt = sum(p1_opt);  sum_p2_opt = sum(p2_opt);
     total_p_opt = sum_p1_opt + sum_p2_opt;
 
-    %   Calculate change in power production 
+    % Calculate change in power production 
     drop_p1 = 100*(sum_p1_opt - mean_p1_MC)/max(sum_p1_opt,eps);
     drop_p2 = 100*(sum_p2_opt - mean_p2_MC)/max(sum_p2_opt,eps);
     total_change = 100*(total_p_MC - total_p_opt)/total_p_opt;
@@ -150,11 +156,11 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     fprintf('Res1: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p1_MC, sum_p1_opt, drop_p1);
     fprintf('Res2: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p2_MC, sum_p2_opt, drop_p2);
     fprintf('Total Generation (opt): %.3f\n', total_p_opt)
-    fprintf('Total Generation (clamp): %.3f\n',total_p_MC)
+    fprintf('Total Generation (curtail): %.3f\n',total_p_MC)
     fprintf('Percent change in Generation: %.2f\n', total_change)
 
     % ===================================================================
-    %  Visualization 
+    %  Visualization of Monte Carlo Runs
     % ===================================================================
     V1_mean = mean(V1_sim,2);  V1_std = std(V1_sim,0,2);
     V2_mean = mean(V2_sim,2);  V2_std = std(V2_sim,0,2);
@@ -191,13 +197,33 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(
     title(sprintf('Reservoir 2 — %s', bLabel));
     legend('1\sigma band','Optimal','MC mean','Location','best');
     if printplot, saveas(gcf, fullfile(savePath, ['mc_reservoir2_' char(bounds) '_fixed_clamped.png'])); end
+
+    % ===================================================================
+    %  Visualization of  Curtailment & Umin Violations
+    % ===================================================================
+
+    %  Plot release curtailment 1
+    mu  = mean(deficits1, 2);        % mean deficit per time step
+    sig = std(deficits1, 0, 2);      % std deviation per time step
+    tt  = (1:size(deficits1,1))';    % time axis
+   
+    figure; hold on; grid on;
+    bar(tt, mu, 'FaceColor', [0.3 0.6 0.9], 'EdgeColor', 'none'); 
+    errorbar(tt, mu, sig, 'k.', 'LineWidth', 1);
+    xlabel('Time step');
+    ylabel('Release Curtailment');
+    title('Average Release Curtailment over nSim');
+
+    plotCurtailmentWithViolationZone(deficits1, u1_opt, sysparams(1).min_ut, 'Unit 1 Curtailment');
+
+
 end
 
 
-function [V, u, deficit, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
+function [V, u, take_turb, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
 
-    % Record current volume 
-    V = V_unc;
+    % Record current volume and release
+    V = V_unc; u = u_opt; take_turb = 0; viol = 0; 
 
     % Check if original release policy violated volume bounds
     if V_unc < Vmin
@@ -222,13 +248,81 @@ function [V, u, deficit, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
                 V = V_unc + take_turb;
                 
                 % Update deficit 
-                deficit = deficit - take_turb;
+                deficit_remain = deficit - take_turb;
             end
         end
     
         % If deficit still exists, then violation is unavoidable
-        if deficit > 0
+        if deficit_remain > 0
             viol = 1; 
         end
     end
+end
+
+
+function plotCurtailmentWithViolationZone(deficits, u_opt, u_min, titleStr)
+% Minimal violin + violation zone plot for release curtailments
+
+    if nargin < 4, titleStr = 'Curtailment With Violation Zone'; end
+
+    [T,nSim] = size(deficits);
+    tt = (1:T)';
+
+    % threshold (time-varying)
+    thresh = max(0, u_opt - u_min);
+
+    % y-limits based on full distribution
+    ymax = 1.1 * max([thresh; max(deficits,[],2)]);
+
+    figure('Color','w'); hold on; grid on; box on;
+    ylim([0 ymax]);
+
+    % --- SHADED VIOLATION ZONE ---
+    xpoly = [tt; flipud(tt)];
+    ypoly = [thresh; ymax*ones(T,1)];
+    patch(xpoly, ypoly, [1 0.85 0.85], 'EdgeColor','none', 'FaceAlpha', 0.35);
+    uistack(gca.Children(end),'bottom');
+
+    % --- THRESHOLD CURVE ---
+    plot(tt, thresh, 'r--', 'LineWidth', 1.2);
+
+    % --- VIOLINS ---
+    w = 0.35;  % violin half-width
+    for t = 1:T
+        y = deficits(t,:);
+
+        if all(y == 0)
+            % collapse violin to a flat line at zero
+            plot([t-w t+w],[0 0],'k-','LineWidth',0.8);
+            continue
+        end
+
+        % kernel density (nonnegative support)
+        try
+            [pdf, yg] = ksdensity(y, 'Support', [0 Inf], 'BoundaryCorrection','reflection');
+        catch
+            edges = linspace(0, max(y), 40);
+            counts = histcounts(y, edges, 'Normalization','pdf');
+            yg = 0.5*(edges(1:end-1)+edges(2:end));
+            pdf = counts;
+        end
+
+        % scale violin width
+        pdf = pdf / max(pdf + eps) * w;
+
+        % left/right mirrored violin
+        xv = [t - pdf, fliplr(t + pdf)];
+        yv = [yg,       fliplr(yg)];
+        patch(xv, yv, [0.3 0.6 0.9], ...
+              'EdgeColor','none','FaceAlpha',0.75);
+    end
+
+    xlabel('Time step');
+    ylabel('Curtailment Distribution');
+    title(titleStr);
+
+    legend({'Violation Zone (y ≥ u_{opt}-u_{min})',...
+            'Threshold',...
+            'Curtailment Distribution'}, ...
+           'Location','best');
 end
