@@ -1,10 +1,10 @@
-function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
+function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
 % runMonteCarloSims - Monte Carlo bound violation checker (FIXED POLICY, CLAMPED, WITH SIM HEAD)
 %
 %   Changes from original version:
-%     (1) Added clamping so volumes stay within bounds (physical behavior)
-%     (2) Added generation recalculation using known head function h(V) = a + bV
-%     (3) Added average generation & total energy reporting across runs
+%     (1) Added clamping to release/spill so volumes stay within bounds 
+%     (2) Added generation recalculation fmor adjusted water release
+%     (3) Added average generation reporting across runs
 %
 %   Inputs:
 %       sysparams : struct array (size 2) with fields .min_V, .max_V, .V0, .a, .b
@@ -21,14 +21,16 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, p
 %       V1, V2    : TxN simulated (CLAMPED) volume trajectories
 
     %  Simulation parameters 
-    nSim = 1000;               % number of Monte Carlo runs
+    nSim = 5000;               % number of Monte Carlo runs
     T = size(X,1);             % number of time steps
     tt = (1:T)';               % time vector
-    dt_hr = 1;                 % timestep (hours)
 
     %  Extract system parameters 
     Vmin1 = sysparams(1).min_V; Vmax1 = sysparams(1).max_V; V0_1 = sysparams(1).V0;
     Vmin2 = sysparams(2).min_V; Vmax2 = sysparams(2).max_V; V0_2 = sysparams(2).V0;
+    Umin1 = sysparams(1).min_ut; Umax1 = sysparams(1).max_ut; 
+    Umin2 = sysparams(2).min_ut; Umax2 = sysparams(2).max_ut;
+    s_min1 = 0; s_min2 = 0;
 
     %  Extract deterministic (solved) policy 
     V1_opt = X(:,1);  p1_opt = X(:,2);  u1_opt = X(:,3);  s1_opt = X(:,4);  q1_mean = X(:,5);
@@ -39,20 +41,29 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, p
     std2 = std_hat(:,2);
 
     % ===================================================================
-    %  Define head functions directly from sysparams
+    %  Define head functions from sysparams
     % ===================================================================
-    % (Uses your existing a,b coefficients instead of fitting via polyfit)
+    % (Uses existing a,b coefficients)
     predict_h1 = @(V) sysparams(1).a .* (V.^sysparams(1).b);
     predict_h2 = @(V) sysparams(2).a .* (V.^sysparams(2).b);
 
-    %  Allocate arrays 
-    V1 = zeros(T, nSim);
-    V2 = zeros(T, nSim);
+    %  Allocate arrays for MC policies (possible curtailment)
+    V1_sim = zeros(T, nSim);
+    V2_sim = zeros(T, nSim);
     p1_sim = zeros(T, nSim);
     p2_sim = zeros(T, nSim);
+    u1_sim = zeros(T, nSim);
+    u2_sim = zeros(T, nSim);
 
+    % Original violation counts from unaltered policies 
     violation_count1 = false(T, nSim);
     violation_count2 = false(T, nSim);
+
+    % Curtailed violation counts from saturated policies
+    violation_curtail_count1 = false(T, nSim);
+    decifits1 = zeros(T, nSim);
+    violation_curtail_count2 = false(T, nSim);
+    decifits2 = zeros(T, nSim);
 
     % ===================================================================
     %  MAIN MONTE CARLO LOOP
@@ -62,14 +73,14 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, p
 
         for t = 1:T
             % Sample inflows
-            inflow1 = q1_mean(t) + std1(t)*randn;
+            inflow1 = q1_mean(t) + std1(t)*randn; % To do: DDU needs to update based on updated policy 
             inflow2 = q2_mean(t) + std2(t)*randn;
 
             % Fixed (solved) policy
             u1 = u1_opt(t); s1 = s1_opt(t);
             u2 = u2_opt(t); s2 = s2_opt(t);
 
-            %  Compute UNCLAMPED update for auditing 
+            %  Compute next state update for auditing 
             V1_unc = V1_prev + inflow1 - u1 - s1;
             V2_unc = V2_prev + inflow2 - u2 - s2;
 
@@ -78,24 +89,28 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, p
             violation_count2(t,n) = (V2_unc < Vmin2) || (V2_unc > Vmax2);
 
             % ===================================================================
-            %  Clamp to physical bounds (simulate extra spill/deficit)
+            %  State regulation via control saturation 
             % ===================================================================
-            V1_t = min(max(V1_unc, Vmin1), Vmax1);
-            V2_t = min(max(V2_unc, Vmin2), Vmax2);
+
+            [V1, u1, decifits1(t,n), violation_curtail_count1(t,n)] = curtail_deficit(V1_unc, u1_opt(t), Vmin1, Umin1);
+            [V2, u2, decifits2(t,n), violation_curtail_count2(t,n)] = curtail_deficit(V2_unc, u2_opt(t), Vmin2, Umin2);
+
 
             % ===================================================================
             %  Recalculate generation using simulated head
             % ===================================================================
-            h1 = predict_h1(V1_t);
-            h2 = predict_h2(V2_t);
+            h1 = predict_h1(V1);
+            h2 = predict_h2(V2);
             p1_sim(t,n) = u1 * h1; % (TEMP) Add back in c when full scale 
             p2_sim(t,n) = u2 * h2;
 
             % Store clamped volumes
-            V1(t,n) = V1_t; V2(t,n) = V2_t;
+            V1_sim(t,n) = V1; V2_sim(t,n) = V2;
+                  u1_sim = u1; 
+            u2_sim = u2;
 
             % Advance
-            V1_prev = V1_t; V2_prev = V2_t;
+            V1_prev = V1; V2_prev = V2;
         end
     end
 
@@ -109,31 +124,40 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, p
     overall_avg1 = mean(avg_per_timestep1);
     overall_avg2 = mean(avg_per_timestep2);
 
-    fprintf('\n  Monte Carlo Violation Report (UNCLAMPED audit) \n');
+    fprintf('\n  Monte Carlo Violation Report (CLAMPED audit) \n');
     fprintf('Reservoir 1: %.2f%%\n', 100*overall_avg1);
     fprintf('Reservoir 2: %.2f%%\n', 100*overall_avg2);
 
     %  Compute mean total generation across all runs 
     mean_p1_MC = mean(sum(p1_sim,1));
     mean_p2_MC = mean(sum(p2_sim,1));
+    total_p_MC = mean_p1_MC + mean_p2_MC;
+
+    % Compute average generation profile for Unit 02
+    p2_mean = mean(p2_sim,2);
+    p1_mean = mean(p1_sim,2);
 
     %  Compare with deterministic baseline 
     sum_p1_opt = sum(p1_opt);  sum_p2_opt = sum(p2_opt);
+    total_p_opt = sum_p1_opt + sum_p2_opt;
 
     %   Calculate change in power production 
     drop_p1 = 100*(sum_p1_opt - mean_p1_MC)/max(sum_p1_opt,eps);
     drop_p2 = 100*(sum_p2_opt - mean_p2_MC)/max(sum_p2_opt,eps);
+    total_change = 100*(total_p_MC - total_p_opt)/total_p_opt;
 
     fprintf('\n  Average Generation from Simulated Head (CLAMPED) \n');
     fprintf('Res1: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p1_MC, sum_p1_opt, drop_p1);
     fprintf('Res2: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p2_MC, sum_p2_opt, drop_p2);
-    fprintf('Total Generation (opt): %.5f, ')
+    fprintf('Total Generation (opt): %.3f\n', total_p_opt)
+    fprintf('Total Generation (clamp): %.3f\n',total_p_MC)
+    fprintf('Percent change in Generation: %.2f\n', total_change)
 
     % ===================================================================
     %  Visualization 
     % ===================================================================
-    V1_mean = mean(V1,2);  V1_std = std(V1,0,2);
-    V2_mean = mean(V2,2);  V2_std = std(V2,0,2);
+    V1_mean = mean(V1_sim,2);  V1_std = std(V1_sim,0,2);
+    V2_mean = mean(V2_sim,2);  V2_std = std(V2_sim,0,2);
 
     % Calculate 1-sigma enevlope accross runs for Volume trajectory 
     V1_upper = V1_mean + V1_std; V1_lower = V1_mean - V1_std;
@@ -167,4 +191,44 @@ function [V1, V2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, p
     title(sprintf('Reservoir 2 — %s', bLabel));
     legend('1\sigma band','Optimal','MC mean','Location','best');
     if printplot, saveas(gcf, fullfile(savePath, ['mc_reservoir2_' char(bounds) '_fixed_clamped.png'])); end
+end
+
+
+function [V, u, deficit, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
+
+    % Record current volume 
+    V = V_unc;
+
+    % Check if original release policy violated volume bounds
+    if V_unc < Vmin
+        
+        % Calculate deviation from lower bounds
+        deficit = Vmin - V_unc;
+    
+        % Check if release needs to be curtailed
+        if deficit > 0
+            % Calculate maximum possible curtailment 
+            curtail_cap = max(0, u_opt - u_min);
+            
+            % Compare deficit to max curtailment
+            take_turb = min(deficit, curtail_cap);
+            
+            % Saturate control
+            if take_turb > 0
+                % Reduce u1
+                u = u_opt - take_turb; 
+                
+                % Update volume to represent curtailed release
+                V = V_unc + take_turb;
+                
+                % Update deficit 
+                deficit = deficit - take_turb;
+            end
+        end
+    
+        % If deficit still exists, then violation is unavoidable
+        if deficit > 0
+            viol = 1; 
+        end
+    end
 end

@@ -13,6 +13,10 @@
 
 clc; clear; close all;
 
+% Add shared functions to file path 
+thisFilePath = fileparts(mfilename('fullpath'));
+addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
+
 % Load optimal trajectories for each policy (for units n > 1)
 M1 = load('./results/results_unit2_det.mat');
 M2 = load('./results/results_unit2_diu.mat');
