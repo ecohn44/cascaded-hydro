@@ -159,6 +159,9 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     fprintf('Total Generation (curtail): %.3f\n',total_p_MC)
     fprintf('Percent change in Generation: %.2f\n', total_change)
 
+    stats1 = analyzeFlowMinViolations(u1_sim, sysparams(1).min_ut, "Unit 1");
+    stats2 = analyzeFlowMinViolations(u2_sim, sysparams(2).min_ut, "Unit 2");
+
     % ===================================================================
     %  Visualization of Monte Carlo Runs
     % ===================================================================
@@ -283,7 +286,7 @@ function plotCurtailment(deficits, u_opt, u_min, titleStr)
 
     figure('Color','w'); hold on; grid on; box on; ylim([0 yMax]);
 
-    % --- violation zone ---
+    % violation zone
     xpoly = [tt; flipud(tt)];
     ypoly = [thresh; yMax*ones(T,1)];
     hshade = patch(xpoly, ypoly, [1 0.85 0.85], 'EdgeColor','none', 'FaceAlpha',0.35);
@@ -305,4 +308,92 @@ function plotCurtailment(deficits, u_opt, u_min, titleStr)
     legend({'Violation Zone', ...
             'Violation Threshold', 'Mean Curtailment', '99th Percentile Spread'}, ...
             'Location','northwest');
+end
+
+
+function stats = analyzeFlowMinViolations(u_sim, u_min, unitLabel)
+% analyzeFlowMinViolations
+%
+% Computes violation frequency, expected shortfall, conditional severity,
+% 99th-percentile tail severity, etc., for simulated releases relative to u_min.
+%
+% Inputs:
+%   u_sim     : T x nSim matrix (simulated curtailed turbine releases)
+%   u_min     : scalar minimum release
+%   unitLabel : optional string for printing titles (e.g. "Unit 1")
+%
+% Output (struct):
+%   stats.p_violate_t   : T x 1 violation frequency per time step
+%   stats.p_violate     : scalar overall violation frequency
+%   stats.ES_t          : T x 1 expected shortfall per time step
+%   stats.ES            : scalar overall expected shortfall
+%   stats.ES_cond_t     : T x 1 conditional expected shortfall
+%   stats.p99_short_t   : T x 1 99th-percentile shortfall
+%
+%   All metrics depend ONLY on u_sim and u_min — call AFTER simulations.
+
+    if nargin < 3
+        unitLabel = "Unit";
+    end
+
+    [T, nSim] = size(u_sim);
+
+    % --- violation indicator + shortfall magnitude ---
+    viol = (u_sim < u_min);                % T x nSim logical
+    short = max(0, u_min - u_sim);         % T x nSim >= 0
+
+    % ------------------------------------------------------------------
+    % 1) Violation frequency
+    % ------------------------------------------------------------------
+    p_violate_t = mean(viol, 2);           % per time step
+    p_violate   = mean(viol, 'all');       % overall
+
+    % ------------------------------------------------------------------
+    % 2) Expected shortfall (unconditional)
+    % ------------------------------------------------------------------
+    ES_t = mean(short, 2);                 % per time step
+    ES   = mean(short, 'all');             % overall
+
+    % ------------------------------------------------------------------
+    % 3) Conditional severity (given a violation)
+    % ------------------------------------------------------------------
+    num_viol_t = sum(viol, 2);
+    ES_cond_t  = zeros(T,1);
+    nz = num_viol_t > 0;
+    ES_cond_t(nz) = sum(short(nz,:), 2) ./ num_viol_t(nz);
+
+    % ------------------------------------------------------------------
+    % 4) Tail risk: 99th percentile shortfall
+    % ------------------------------------------------------------------
+    if exist('prctile', 'file')
+        p99_short_t = prctile(short, 99, 2);
+    else
+        % fallback if prctile unavailable
+        p99_short_t = zeros(T,1);
+        for t = 1:T
+            y = sort(short(t,:));
+            k = max(1, ceil(0.99 * numel(y)));
+            p99_short_t(t) = y(k);
+        end
+    end
+
+    % ------------------------------------------------------------------
+    % 5) Package into a nice struct
+    % ------------------------------------------------------------------
+    stats = struct();
+    stats.p_violate_t = p_violate_t;
+    stats.p_violate   = p_violate;
+    stats.ES_t        = ES_t;
+    stats.ES          = ES;
+    stats.ES_cond_t   = ES_cond_t;
+    stats.p99_short_t = p99_short_t;
+
+    % ------------------------------------------------------------------
+    % 6) Optional printed summary
+    % ------------------------------------------------------------------
+    fprintf('\nFlow-Min Violation Summary: %s\n', unitLabel);
+    fprintf('Overall violation frequency: %.3f%%\n', 100*p_violate);
+    fprintf('Overall expected shortfall (uncond.): %.4g\n', ES);
+    fprintf('Mean conditional shortfall (given violate): %.4g\n', mean(ES_cond_t));
+    fprintf('Max 99th-percentile shortfall: %.4g\n', max(p99_short_t));
 end
