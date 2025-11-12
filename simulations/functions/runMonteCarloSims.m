@@ -1,9 +1,9 @@
 function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
 % runMonteCarloSims - Monte Carlo bound violation checker (FIXED POLICY, CLAMPED, WITH SIM HEAD)
 %
-%   Changes from original version:
+%   Description:
 %     (1) Added clamping to release/spill so volumes stay within bounds 
-%     (2) Added generation recalculation fmor adjusted water release
+%     (2) Added generation recalculation from adjusted water release
 %     (3) Added average generation reporting across runs
 %
 %   Inputs:
@@ -139,9 +139,13 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     mean_p2_MC = mean(sum(p2_sim,1));
     total_p_MC = mean_p1_MC + mean_p2_MC;
 
-    % Compute average generation profile for Unit 02
+    % Compute average generation profile (CURTAILED)
     p2_mean = mean(p2_sim,2);
     p1_mean = mean(p1_sim,2);
+
+    % Compute release profile (CURTAILED)
+    u2_mean = mean(u2_sim,2);
+    u1_mean = mean(u1_sim,2);
 
     % Compare with deterministic baseline 
     sum_p1_opt = sum(p1_opt);  sum_p2_opt = sum(p2_opt);
@@ -159,18 +163,23 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     fprintf('Total Generation (curtail): %.3f\n',total_p_MC)
     fprintf('Percent change in Generation: %.2f\n', total_change)
 
-    stats1 = analyzeFlowMinViolations(u1_sim, sysparams(1).min_ut, "Unit 1");
-    stats2 = analyzeFlowMinViolations(u2_sim, sysparams(2).min_ut, "Unit 2");
+    analyzeFlowMinViolations(u1_sim, sysparams(1).min_ut, "Unit 1");
+    analyzeFlowMinViolations(u2_sim, sysparams(2).min_ut, "Unit 2");
 
     % ===================================================================
     %  Visualization of Monte Carlo Runs
     % ===================================================================
-    V1_mean = mean(V1_sim,2);  V1_std = std(V1_sim,0,2);
-    V2_mean = mean(V2_sim,2);  V2_std = std(V2_sim,0,2);
+    V1_mean = mean(V1_sim,2); 
+    V2_mean = mean(V2_sim,2); 
 
-    % Calculate 1-sigma enevlope accross runs for Volume trajectory 
-    V1_upper = V1_mean + V1_std; V1_lower = V1_mean - V1_std;
-    V2_upper = V2_mean + V2_std; V2_lower = V2_mean - V2_std;
+    % IQR band
+    pr1 = prctile(V1_sim, [25 75], 2);   
+    V1_lower = pr1(:,1); 
+    V1_upper = pr1(:,2); 
+    
+    pr2 = prctile(V2_sim, [25 75], 2);
+    V2_lower = pr2(:,1); 
+    V2_upper = pr2(:,2); 
 
     switch string(bounds)
         case "det",     bLabel = "Deterministic";
@@ -205,8 +214,14 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     %  Visualization of  Curtailment & Umin Violations
     % ===================================================================
 
-    plotCurtailment(deficits1, u1_opt, sysparams(1).min_ut, 'Unit 1 Curtailment');
-    plotCurtailment(deficits2, u2_opt, sysparams(2).min_ut, 'Unit 2 Curtailment');
+    % plotCurtailment(deficits1, u1_opt, sysparams(1).min_ut, 'Unit 1 Curtailment');
+    % plotCurtailment(deficits2, u2_opt, sysparams(2).min_ut, 'Unit 2 Curtailment');
+
+    % ===================================================================
+    %  Compare water release policies before and after curtailment 
+    % ===================================================================
+    plotReleasePolicies(tt, u1_opt, u1_sim, sysparams(1).min_ut, sysparams(1).max_ut, deficits1, "Unit 1")
+    plotReleasePolicies(tt, u2_opt, u2_sim, sysparams(2).min_ut, sysparams(2).max_ut, deficits2, "Unit 2")
 
 end
 
@@ -248,6 +263,67 @@ function [V, u, take_turb, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
             viol = 1; 
         end
     end
+end
+
+
+
+function plotReleasePolicies(tt, u_opt, u_mc, u_min, u_max, deficits, name)
+
+    titlestr = [name, ' Generation Release'];
+
+    % Percentiles across simulations 
+    pr = prctile(u_mc, [1 99], 2);
+    u_lower = pr(:,1);
+    u_upper = pr(:,2);
+
+    % Timesteps with no curtailment
+    mask = mean(deficits, 2) == 0;   
+    u_upper(mask) = 0;
+
+    % Mean of curtailed release 
+    u_mean  = mean(u_mc, 2);
+
+    % Grouped bars [Original, Curtailed]
+    U_all = [u_opt, u_mean];
+
+    figure('Color','w'); hold on; grid on; box on;
+    b = bar(tt, U_all, 'grouped');
+    b(1).FaceColor = [0 0 1];   
+    b(2).FaceColor = [0.6 0.8 1.0];   
+
+    % Symmetric IQR and error bars
+    yneg = max(0, u_mean - u_lower);
+    ypos = max(0, u_upper - u_mean);
+    x2 = b(2).XEndPoints;
+    errorbar(x2, u_mean, yneg, ypos, 'k.', 'LineWidth', 1, 'CapSize', 3, ...
+             'LineStyle','none');
+
+    % Flow bounds
+    yline(u_min, '--r', 'LineWidth', 1.2, 'HandleVisibility', 'on');
+    yline(u_max, '--r', 'LineWidth', 1.2, 'HandleVisibility', 'off');
+    ylim([0.03, u_max*1.1])
+    xlabel('Time (h)');
+    ylabel('Generation Release');
+    title(titlestr);
+    set(gca, 'FontSize', 13);
+
+    % Legend
+    legend({'Original','Curtailed','Curtailed Spread (1st-99th Percentile)', 'Bounds'}, ...
+           'Location', 'southoutside', 'Orientation', 'horizontal', 'Box', 'off');
+
+    % ==============================================================
+    %  Summary printout for total release comparison
+    % ==============================================================
+    total_opt  = sum(u_opt);       % total planned release
+    total_mean = sum(mean(u_mc,2)); % total release after curtailment (mean profile)
+    diff_rel   = total_mean - total_opt;
+    perc_diff  = 100 * diff_rel / max(total_opt, eps);
+    
+    fprintf('\n--- Release Summary (%s) ---\n', name);
+    fprintf('Total (optimal policy):      %.4f\n', total_opt);
+    fprintf('Total (curtailed, mean):     %.4f\n', total_mean);
+    fprintf('Difference (curt - opt):     %.4f (%.2f%%)\n', diff_rel, perc_diff);
+
 end
 
 
@@ -311,89 +387,28 @@ function plotCurtailment(deficits, u_opt, u_min, titleStr)
 end
 
 
-function stats = analyzeFlowMinViolations(u_sim, u_min, unitLabel)
-% analyzeFlowMinViolations
-%
-% Computes violation frequency, expected shortfall, conditional severity,
-% 99th-percentile tail severity, etc., for simulated releases relative to u_min.
-%
+function analyzeFlowMinViolations(u_sim, u_min, unitLabel)
+% Computes violation frequency
+% 
 % Inputs:
 %   u_sim     : T x nSim matrix (simulated curtailed turbine releases)
 %   u_min     : scalar minimum release
 %   unitLabel : optional string for printing titles (e.g. "Unit 1")
 %
-% Output (struct):
+% Output:
 %   stats.p_violate_t   : T x 1 violation frequency per time step
 %   stats.p_violate     : scalar overall violation frequency
-%   stats.ES_t          : T x 1 expected shortfall per time step
-%   stats.ES            : scalar overall expected shortfall
-%   stats.ES_cond_t     : T x 1 conditional expected shortfall
-%   stats.p99_short_t   : T x 1 99th-percentile shortfall
-%
-%   All metrics depend ONLY on u_sim and u_min — call AFTER simulations.
 
     if nargin < 3
         unitLabel = "Unit";
     end
 
-    [T, nSim] = size(u_sim);
-
-    % --- violation indicator + shortfall magnitude ---
+    % Violation indicator 
     viol = (u_sim < u_min);                % T x nSim logical
     short = max(0, u_min - u_sim);         % T x nSim >= 0
-
-    % ------------------------------------------------------------------
-    % 1) Violation frequency
-    % ------------------------------------------------------------------
     p_violate_t = mean(viol, 2);           % per time step
     p_violate   = mean(viol, 'all');       % overall
 
-    % ------------------------------------------------------------------
-    % 2) Expected shortfall (unconditional)
-    % ------------------------------------------------------------------
-    ES_t = mean(short, 2);                 % per time step
-    ES   = mean(short, 'all');             % overall
-
-    % ------------------------------------------------------------------
-    % 3) Conditional severity (given a violation)
-    % ------------------------------------------------------------------
-    num_viol_t = sum(viol, 2);
-    ES_cond_t  = zeros(T,1);
-    nz = num_viol_t > 0;
-    ES_cond_t(nz) = sum(short(nz,:), 2) ./ num_viol_t(nz);
-
-    % ------------------------------------------------------------------
-    % 4) Tail risk: 99th percentile shortfall
-    % ------------------------------------------------------------------
-    if exist('prctile', 'file')
-        p99_short_t = prctile(short, 99, 2);
-    else
-        % fallback if prctile unavailable
-        p99_short_t = zeros(T,1);
-        for t = 1:T
-            y = sort(short(t,:));
-            k = max(1, ceil(0.99 * numel(y)));
-            p99_short_t(t) = y(k);
-        end
-    end
-
-    % ------------------------------------------------------------------
-    % 5) Package into a nice struct
-    % ------------------------------------------------------------------
-    stats = struct();
-    stats.p_violate_t = p_violate_t;
-    stats.p_violate   = p_violate;
-    stats.ES_t        = ES_t;
-    stats.ES          = ES;
-    stats.ES_cond_t   = ES_cond_t;
-    stats.p99_short_t = p99_short_t;
-
-    % ------------------------------------------------------------------
-    % 6) Optional printed summary
-    % ------------------------------------------------------------------
     fprintf('\nFlow-Min Violation Summary: %s\n', unitLabel);
     fprintf('Overall violation frequency: %.3f%%\n', 100*p_violate);
-    fprintf('Overall expected shortfall (uncond.): %.4g\n', ES);
-    fprintf('Mean conditional shortfall (given violate): %.4g\n', mean(ES_cond_t));
-    fprintf('Max 99th-percentile shortfall: %.4g\n', max(p99_short_t));
 end

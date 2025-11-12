@@ -34,13 +34,13 @@ printplot = false;
 path = ""; % Don't save pngs for now
 
 % Run MC Sims for M1 under DDU assumption 
-%[M1_V1, M1_V2, M1_u1, M2_u2, M1_p1_mean, M1_p2_mean, d1, d2] = runMonteCarloSims(s, simSettings.bounds, std_hat, M1.X, path, printplot);
+[M1_V1, M1_V2, M1_u1, M2_u2, M1_p1_mean, M1_p2_mean, d1, d2] = runMonteCarloSims(s, simSettings.bounds, std_hat, M1.X, path, printplot);
 
 % Run MC Sims for M2 under DDU assumption 
 % [M2_V1, M2_V2, M2_p1_mean, M2_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M2.X, path, printplot);
 
 % Run MC Sims for M3 under DDU assumption 
-[M3_V1, M3_V2, M3_p1_mean, M3_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M3.X, path, printplot);
+% [M3_V1, M3_V2, M3_p1_mean, M3_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M3.X, path, printplot);
 
 
 %{
