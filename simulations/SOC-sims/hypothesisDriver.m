@@ -50,7 +50,7 @@ fprintf('M3\n');
 [M3_V1, M3_V2, M3_u1, M3_u2, M3_p1_mean, M3_p2_mean, M3_d1, M3_d2] = runMonteCarloSims(s, p(1), simSettings.bounds, std_hat, M3.X, path, printplot, curtail);
 
 
-%{
+
 % =====================================================
 % FIGURE 1: Clamped Power Production (Normalized)
 % =====================================================
@@ -109,5 +109,5 @@ set(gca, 'FontSize', 14);        % axes labels, ticks
 set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
 legend({'M1 Original', 'M1 Clamped'}, 'Location', 'best', 'FontSize', 13);
 title('Unit 01 Normalized Power Dispatch', 'FontSize', 16);
-%}
+
 
