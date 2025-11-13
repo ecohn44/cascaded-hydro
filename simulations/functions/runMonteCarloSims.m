@@ -1,4 +1,4 @@
-function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
+function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2] = runMonteCarloSims(sysparams, params, bounds, std_hat, X, savePath, printplot, curtail)
 % runMonteCarloSims - Monte Carlo bound violation checker (FIXED POLICY, CLAMPED, WITH SIM HEAD)
 %
 %   Description:
@@ -20,6 +20,9 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
 %   Outputs:
 %       V1, V2    : TxN simulated (CLAMPED) volume trajectories
 
+    % Set random seed
+    rng(0, 'twister');
+
     %  Simulation parameters 
     nSim = 5000;               % number of Monte Carlo runs
     T = size(X,1);             % number of time steps
@@ -36,10 +39,6 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     %  Extract deterministic (solved) policy 
     V1_opt = X(:,1);  p1_opt = X(:,2);  u1_opt = X(:,3);  s1_opt = X(:,4);  q1_mean = X(:,5);
     V2_opt = X(:,6);  p2_opt = X(:,7);  u2_opt = X(:,8);  s2_opt = X(:,9);  q2_mean = X(:,10);
-
-    %  Extract inflow uncertainty (std) 
-    std1 = std_hat(:,1);
-    std2 = std_hat(:,2);
 
     %  Define head functions from sysparams
     predict_h1 = @(V) sysparams(1).a .* (V.^sysparams(1).b);
@@ -69,7 +68,19 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     for n = 1:nSim
         V1_prev = V0_1; V2_prev = V0_2;
 
+        %  Extract inflow uncertainty (std) 
+        std1 = std_hat(:,1);
+        std2 = std_hat(:,2);
+
         for t = 1:T
+
+            % Update standard deviation estimation for downstream units
+            if t > 1 && curtail
+                % Forecast conditional variance using GARCH-X
+                var_hat = params.omega + 1e-6 + params.gamma*u1_sim(t-1, n);
+                std2(t) = sqrt(var_hat);
+            end 
+
             % Sample inflows
             inflow1 = q1_mean(t) + std1(t)*randn; % To do: DDU needs to update based on updated policy 
             inflow2 = q2_mean(t) + std2(t)*randn;
@@ -89,8 +100,16 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
             % ===================================================================
             %  State regulation via control saturation 
             % ===================================================================
-            [V1, u1, deficits1(t,n), violation_curtail_count1(t,n)] = curtail_deficit(V1_unc, u1_opt(t), Vmin1, Umin1);
-            [V2, u2, deficits2(t,n), violation_curtail_count2(t,n)] = curtail_deficit(V2_unc, u2_opt(t), Vmin2, Umin2);
+            
+            if curtail 
+                % Reduce water release for volume boundaries
+                [V1, u1, deficits1(t,n), violation_curtail_count1(t,n)] = curtail_deficit(V1_unc, u1_opt(t), Vmin1, Umin1);
+                [V2, u2, deficits2(t,n), violation_curtail_count2(t,n)] = curtail_deficit(V2_unc, u2_opt(t), Vmin2, Umin2);
+            else
+                % Allow behavior outside volume constraints
+                V1 = V1_unc;
+                V2 = V2_unc;
+            end
 
 
             % ===================================================================
@@ -111,7 +130,7 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     end
 
     % ===================================================================
-    %  Report violation rates and generation stats
+    %  Report violation rates 
     % ===================================================================
 
     %  Violation audit (based on UNCLAMPED) 
@@ -134,37 +153,9 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     fprintf('Reservoir 1: %.2f%%\n', 100*c_overall_avg1);
     fprintf('Reservoir 2: %.2f%%\n', 100*c_overall_avg2);
 
-    % Compute mean total generation across all runs 
-    mean_p1_MC = mean(sum(p1_sim,1));
-    mean_p2_MC = mean(sum(p2_sim,1));
-    total_p_MC = mean_p1_MC + mean_p2_MC;
-
-    % Compute average generation profile (CURTAILED)
-    p2_mean = mean(p2_sim,2);
-    p1_mean = mean(p1_sim,2);
-
-    % Compute release profile (CURTAILED)
-    u2_mean = mean(u2_sim,2);
-    u1_mean = mean(u1_sim,2);
-
-    % Compare with deterministic baseline 
-    sum_p1_opt = sum(p1_opt);  sum_p2_opt = sum(p2_opt);
-    total_p_opt = sum_p1_opt + sum_p2_opt;
-
-    % Calculate change in power production 
-    drop_p1 = 100*(sum_p1_opt - mean_p1_MC)/max(sum_p1_opt,eps);
-    drop_p2 = 100*(sum_p2_opt - mean_p2_MC)/max(sum_p2_opt,eps);
-    total_change = 100*(total_p_MC - total_p_opt)/total_p_opt;
-
-    fprintf('\n  Average Generation from Simulated Head (CLAMPED) \n');
-    fprintf('Res1: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p1_MC, sum_p1_opt, drop_p1);
-    fprintf('Res2: mean p = %.5f (vs %.5f opt) | Δ=%.2f%%\n', mean_p2_MC, sum_p2_opt, drop_p2);
-    fprintf('Total Generation (opt): %.3f\n', total_p_opt)
-    fprintf('Total Generation (curtail): %.3f\n',total_p_MC)
-    fprintf('Percent change in Generation: %.2f\n', total_change)
-
-    analyzeFlowMinViolations(u1_sim, sysparams(1).min_ut, "Unit 1");
-    analyzeFlowMinViolations(u2_sim, sysparams(2).min_ut, "Unit 2");
+    reportFlowViolations(u1_sim, u2_sim, sysparams(1).min_ut, sysparams(2).min_ut);
+    volumeSafetyMargin(V1_sim, V2_sim, sysparams);
+    violationProbability(u1_sim, u2_sim, sysparams(1).min_ut, sysparams(2).min_ut);
 
     % ===================================================================
     %  Visualization of Monte Carlo Runs
@@ -223,6 +214,100 @@ function [V1_sim, V2_sim, u1_sim, u2_sim, p1_mean, p2_mean, deficits1, deficits2
     plotReleasePolicies(tt, u1_opt, u1_sim, sysparams(1).min_ut, sysparams(1).max_ut, deficits1, "Unit 1")
     plotReleasePolicies(tt, u2_opt, u2_sim, sysparams(2).min_ut, sysparams(2).max_ut, deficits2, "Unit 2")
 
+    % ==============================================================
+    %  Total Release Comparison (Mean and 1st Percentile)
+    % ==============================================================
+    
+    % Compute release profile (CURTAILED)
+    u2_mean = mean(u2_sim,2);
+    u1_mean = mean(u1_sim,2);
+
+    % 1st percentile across all simulations
+    u1_p1 = prctile(u1_sim, 1, 2);
+    u2_p1 = prctile(u2_sim, 1, 2);
+    
+    % Total release 
+    total_u_opt  = sum(u1_opt + u2_opt);      % deterministic optimal total release
+    total_u_mean = sum(u1_mean + u2_mean);    % average curtailed total
+    total_u_p1  = sum(u1_p1 + u2_p1);      % 99th-percentile curtailed total
+    
+    % Percentage changes
+    change_mean = 100 * (total_u_mean - total_u_opt) / max(total_u_opt, eps);
+    change_p1  = 100 * (total_u_p1  - total_u_opt) / max(total_u_opt, eps);
+    
+    % Print summary
+    fprintf('\nTotal Release Comparison\n');
+    fprintf('Total (optimal): %.4f\n', total_u_opt);
+    fprintf('Total (mean curtailed): %.4f  (Δ = %+8.4f, %+6.2f%%)\n', ...
+            total_u_mean, total_u_mean - total_u_opt, change_mean);
+    fprintf('Total (1st percentile): %.4f  (Δ = %+8.4f, %+6.2f%%)\n', ...
+            total_u_p1, total_u_p1 - total_u_opt, change_p1);
+
+    % ==============================================================
+    %  Total Power Generation Comparison (Mean and 1st Percentile)
+    % ==============================================================
+    
+    % Curtailed means (per time step), then totals
+    p1_mean = mean(p1_sim, 2);
+    p2_mean = mean(p2_sim, 2);
+    
+    % Lower-tail (worst) generation per time step
+    p1_p01  = prctile(p1_sim, 1, 2);
+    p2_p01  = prctile(p2_sim, 1, 2);
+    
+    % Totals (sum over time)
+    tot_p1_opt  = sum(p1_opt);
+    tot_p2_opt  = sum(p2_opt);
+    tot_p1_mean = sum(p1_mean);
+    tot_p2_mean = sum(p2_mean);
+    tot_p1_p01  = sum(p1_p01);
+    tot_p2_p01  = sum(p2_p01);
+    
+    % Per-unit deltas and percents
+    d1_mean   = tot_p1_mean - tot_p1_opt;
+    d1_p01    = tot_p1_p01  - tot_p1_opt;
+    pct1_mean = 100 * d1_mean / max(tot_p1_opt, eps);
+    pct1_p01  = 100 * d1_p01 / max(tot_p1_opt, eps);
+    
+    d2_mean   = tot_p2_mean - tot_p2_opt;
+    d2_p01    = tot_p2_p01  - tot_p2_opt;
+    pct2_mean = 100 * d2_mean / max(tot_p2_opt, eps);
+    pct2_p01  = 100 * d2_p01 / max(tot_p2_opt, eps);
+
+     % Combined totals
+    total_p_opt  = tot_p1_opt  + tot_p2_opt;
+    total_p_mean = tot_p1_mean + tot_p2_mean;
+    total_p_p01  = tot_p1_p01  + tot_p2_p01;
+    
+    d_mean_tot   = total_p_mean - total_p_opt;
+    d_p01_tot    = total_p_p01  - total_p_opt;
+    
+    pct_mean_tot = 100 * d_mean_tot / max(total_p_opt, eps);
+    pct_p01_tot  = 100 * d_p01_tot  / max(total_p_opt, eps);
+    
+    % Total summary
+    fprintf('\nTotal Generation Comparison\n');
+    fprintf('Total (optimal):                %.4f\n', total_p_opt);
+    fprintf('Total (mean curtailed):         %.4f  (Δ = %+8.4f, %+6.2f%%)\n', ...
+            total_p_mean, d_mean_tot, pct_mean_tot);
+    fprintf('Total (1st percentile):         %.4f  (Δ = %+8.4f, %+6.2f%%)\n', ...
+            total_p_p01,  d_p01_tot,  pct_p01_tot);
+    
+    % Print per-unit summaries
+    fprintf('\n Generation Summary: Unit 1\n');
+    fprintf('Total (optimal policy):         %.4f\n', tot_p1_opt);
+    fprintf('Total (curtailed, mean):        %.4f\n', tot_p1_mean);
+    fprintf('   Δ (mean - opt):              %+8.4f  (%+6.2f%%)\n', d1_mean,  pct1_mean);
+    fprintf('Total (curtailed, 1st perc.):   %.4f\n', tot_p1_p01);
+    fprintf('   Δ (p01 - opt):               %+8.4f  (%+6.2f%%)\n', d1_p01,   pct1_p01);
+    
+    fprintf('\n Generation Summary: Unit 2\n');
+    fprintf('Total (optimal policy):         %.4f\n', tot_p2_opt);
+    fprintf('Total (curtailed, mean):        %.4f\n', tot_p2_mean);
+    fprintf('   Δ (mean - opt):              %+8.4f  (%+6.2f%%)\n', d2_mean,  pct2_mean);
+    fprintf('Total (curtailed, 1st perc.):   %.4f\n', tot_p2_p01);
+    fprintf('   Δ (p01 - opt):               %+8.4f  (%+6.2f%%)\n', d2_p01,   pct2_p01);
+
 end
 
 
@@ -230,6 +315,7 @@ function [V, u, take_turb, viol] = curtail_deficit(V_unc, u_opt, Vmin, u_min)
 
     % Record current volume and release
     V = V_unc; u = u_opt; take_turb = 0; viol = 0; 
+    deficit_remain = 0;
 
     % Check if original release policy violated volume bounds
     if V_unc < Vmin
@@ -269,60 +355,73 @@ end
 
 function plotReleasePolicies(tt, u_opt, u_mc, u_min, u_max, deficits, name)
 
+    % Title
     titlestr = [name, ' Generation Release'];
-
-    % Percentiles across simulations 
-    pr = prctile(u_mc, [1 99], 2);
-    u_lower = pr(:,1);
-    u_upper = pr(:,2);
-
-    % Timesteps with no curtailment
-    mask = mean(deficits, 2) == 0;   
-    u_upper(mask) = 0;
-
-    % Mean of curtailed release 
-    u_mean  = mean(u_mc, 2);
-
+    
+    % Percentiles across simulations (row-wise)
+    pr     = prctile(u_mc, [1 50 99], 2);
+    u_p01  = pr(:,1);
+    u_med  = pr(:,2);
+    u_p99  = pr(:,3);
+    
+    % Mean curtailed profile (2nd bar)
+    u_mean = mean(u_mc, 2);
+    
+    % --- Use deficits to detect if any curtailment happened at each t ---
+    tol = 1e-9;                             % treat tiny values as zero
+    curt_happened = any(deficits > tol, 2); % T x 1 logical
+    
+    % Zero whiskers where no curtailment occurred
+    yneg = max(0, u_mean - u_p01);
+    ypos = max(0, u_p99  - u_mean);
+    yneg(~curt_happened) = 0;
+    ypos(~curt_happened) = 0;
+    
     % Grouped bars [Original, Curtailed]
     U_all = [u_opt, u_mean];
-
+    
     figure('Color','w'); hold on; grid on; box on;
-    b = bar(tt, U_all, 'grouped');
-    b(1).FaceColor = [0 0 1];   
-    b(2).FaceColor = [0.6 0.8 1.0];   
-
-    % Symmetric IQR and error bars
-    yneg = max(0, u_mean - u_lower);
-    ypos = max(0, u_upper - u_mean);
+    b = bar(tt, U_all, 'grouped', 'BarWidth', 0.78);
+    b(1).FaceColor = [0.2, 0.4, 0.8];   % soft dark blue
+    b(2).FaceColor = [1.0, 1.0, 0.5];   % light yellow
+    
+    % Error bars (only where curtailment happened)
     x2 = b(2).XEndPoints;
     errorbar(x2, u_mean, yneg, ypos, 'k.', 'LineWidth', 1, 'CapSize', 3, ...
              'LineStyle','none');
-
-    % Flow bounds
-    yline(u_min, '--r', 'LineWidth', 1.2, 'HandleVisibility', 'on');
-    yline(u_max, '--r', 'LineWidth', 1.2, 'HandleVisibility', 'off');
-    ylim([0.03, u_max*1.1])
-    xlabel('Time (h)');
-    ylabel('Generation Release');
+    
+    % Bounds (single legend entry)
+    yline(u_min, '--r', 'LineWidth', 1.2, 'HandleVisibility','on');
+    yline(u_max, '--r', 'LineWidth', 1.2, 'HandleVisibility','off');
+    
+    ylim([0, u_max*1.1]);
+    xlabel('Time (h)'); ylabel('Generation Release');
     title(titlestr);
     set(gca, 'FontSize', 13);
-
-    % Legend
-    legend({'Original','Curtailed','Curtailed Spread (1st-99th Percentile)', 'Bounds'}, ...
-           'Location', 'southoutside', 'Orientation', 'horizontal', 'Box', 'off');
-
-    % ==============================================================
-    %  Summary printout for total release comparison
-    % ==============================================================
-    total_opt  = sum(u_opt);       % total planned release
-    total_mean = sum(mean(u_mc,2)); % total release after curtailment (mean profile)
-    diff_rel   = total_mean - total_opt;
-    perc_diff  = 100 * diff_rel / max(total_opt, eps);
     
-    fprintf('\n--- Release Summary (%s) ---\n', name);
-    fprintf('Total (optimal policy):      %.4f\n', total_opt);
-    fprintf('Total (curtailed, mean):     %.4f\n', total_mean);
-    fprintf('Difference (curt - opt):     %.4f (%.2f%%)\n', diff_rel, perc_diff);
+    legend({'Original','Curtailed','Curtailed spread (p01–p99)','Bounds'}, ...
+           'Location','southoutside','Orientation','horizontal','Box','off');
+    
+    % ===============================
+    % Summary printout (using deficits mask)
+    % For releases: worst case = LOWER tail → p01
+    % ===============================
+    total_opt  = sum(u_opt);
+    total_mean = sum(u_mean);
+    total_p01  = sum(u_p01);
+    
+    d_mean = total_mean - total_opt;
+    d_p01  = total_p01  - total_opt;
+    
+    pct_mean = 100 * d_mean / max(total_opt, eps);
+    pct_p01  = 100 * d_p01  / max(total_opt, eps);
+    
+    fprintf('\n Release Summary: %s\n', name);
+    fprintf('Total (optimal policy):         %.4f\n', total_opt);
+    fprintf('Total (curtailed, mean):        %.4f\n', total_mean);
+    fprintf('   Δ (mean - opt):              %+8.4f  (%+6.2f%%)\n', d_mean, pct_mean);
+    fprintf('Total (curtailed, 1st perc.):   %.4f\n', total_p01);
+    fprintf('   Δ (p01 - opt):               %+8.4f  (%+6.2f%%)\n', d_p01,  pct_p01);
 
 end
 
@@ -387,28 +486,135 @@ function plotCurtailment(deficits, u_opt, u_min, titleStr)
 end
 
 
-function analyzeFlowMinViolations(u_sim, u_min, unitLabel)
-% Computes violation frequency
-% 
-% Inputs:
-%   u_sim     : T x nSim matrix (simulated curtailed turbine releases)
-%   u_min     : scalar minimum release
-%   unitLabel : optional string for printing titles (e.g. "Unit 1")
+function reportFlowViolations(u1_sim, u2_sim, umin1, umin2)
+% RELEASE_METRICS - Print Integrated Violation Index (IVI) summary
+%                   for Unit 1, Unit 2, and the combined system.
 %
-% Output:
-%   stats.p_violate_t   : T x 1 violation frequency per time step
-%   stats.p_violate     : scalar overall violation frequency
+%   Inputs:
+%       u1_sim : T x N simulated releases for Unit 1
+%       u2_sim : T x N simulated releases for Unit 2
+%       umin1  : scalar, minimum flow constraint for Unit 1
+%       umin2  : scalar, minimum flow constraint for Unit 2
+%
+%   Computes:
+%       - Integrated Violation Index (IVI_50): median run
+%       - Integrated Violation Index (IVI_p01): 1st percentile tail
+%
+%   Prints formatted summary for:
+%       Unit 1, Unit 2, and Total
 
-    if nargin < 3
-        unitLabel = "Unit";
+    % ===============================================================
+    % Helper to compute IVI metrics for a single unit
+    % ===============================================================
+    function [IVI_50, IVI_p01] = compute_IVI(u_sim, u_min)
+        short_all = max(0, u_min - u_sim);  % violation magnitude per run
+        A_all = sum(short_all, 1);          % total violation per run
+        IVI_50 = median(A_all);             % median (typical run)
+    
+        u_p01 = prctile(u_sim, 1, 2);       % tail (1st percentile profile)
+        short_p01 = max(0, u_min - u_p01);
+        IVI_p01 = sum(short_p01);           % integrated tail violation
     end
 
-    % Violation indicator 
-    viol = (u_sim < u_min);                % T x nSim logical
-    short = max(0, u_min - u_sim);         % T x nSim >= 0
-    p_violate_t = mean(viol, 2);           % per time step
-    p_violate   = mean(viol, 'all');       % overall
+    % ===============================================================
+    % Compute IVIs for Unit 1, Unit 2, and Combined
+    % ===============================================================
+    [IVI50_1, IVIp01_1] = compute_IVI(u1_sim, umin1);
+    [IVI50_2, IVIp01_2] = compute_IVI(u2_sim, umin2);
 
-    fprintf('\nFlow-Min Violation Summary: %s\n', unitLabel);
-    fprintf('Overall violation frequency: %.3f%%\n', 100*p_violate);
+    % Total (weighted or direct sum across both units)
+    IVI50_total  = IVI50_1 + IVI50_2;
+    IVIp01_total = IVIp01_1 + IVIp01_2;
+
+    % ===============================================================
+    % Print formatted summary
+    % ===============================================================
+    fprintf('\n=================================================\n');
+    fprintf(' Integrated Violation Index Summary (Flow-Min)\n');
+    fprintf('=================================================\n');
+
+    fprintf('\n  Unit 1:\n');
+    fprintf('IVI (median run):        %.6f\n', IVI50_1);
+    fprintf('IVI (1st percentile):    %.6f\n', IVIp01_1);
+
+    fprintf('\n  Unit 2:\n');
+    fprintf('IVI (median run):        %.6f\n', IVI50_2);
+    fprintf('IVI (1st percentile):    %.6f\n', IVIp01_2);
+
+    fprintf('\n  Total (Unit 1 + Unit 2):\n');
+    fprintf('IVI (median run):        %.6f\n', IVI50_total);
+    fprintf('IVI (1st percentile):    %.6f\n', IVIp01_total);
+
+    fprintf('-------------------------------------------------\n');
+end
+
+
+function volumeSafetyMargin(V1_sim, V2_sim, sysparams)
+% VOLUMESAFETYMARGIN  Computes and prints Volume Safety Margin Index (VSMI)
+%
+%   Inputs:
+%       V1_sim, V2_sim : T x N matrices of simulated reservoir volumes
+%       sysparams      : struct array with fields .min_V, .max_V
+%
+%   Definition:
+%       VSMI = mean( max(0, V - Vmin) / (Vmax - Vmin) )
+%
+%   Larger VSMI → reservoir stays further above the minimum bound
+%                 (i.e., greater safety margin)
+%
+
+    % Extract parameters
+    Vmin1 = sysparams(1).min_V;  Vmax1 = sysparams(1).max_V;
+    Vmin2 = sysparams(2).min_V;  Vmax2 = sysparams(2).max_V;
+
+    % Compute normalized distance above min
+    safe1 = max(0, (V1_sim - Vmin1) ./ (Vmax1 - Vmin1));
+    safe2 = max(0, (V2_sim - Vmin2) ./ (Vmax2 - Vmin2));
+
+    % Mean safety margin across all time steps and simulations
+    VSMI1 = mean(safe1(:));
+    VSMI2 = mean(safe2(:));
+    VSMI_total = (VSMI1 + VSMI2)/2;
+
+    % Display results
+    fprintf('\n=================================================\n');
+    fprintf(' Volume Safety Margin Index (VSMI)\n');
+    fprintf('=================================================\n');
+    fprintf('  Unit 1: %.5f\n', VSMI1);
+    fprintf('  Unit 2: %.5f\n', VSMI2);
+    fprintf('  Total : %.5f (mean of units)\n', VSMI_total);
+    fprintf('-------------------------------------------------\n');
+end
+
+
+function violationProbability(u1_sim, u2_sim, umin1, umin2)
+% VIOLATIONPROBABILITY  Computes and prints Violation Probability Index (VPI)
+%
+%   Inputs:
+%       u1_sim, u2_sim : T x N simulated turbine releases
+%       umin1, umin2   : minimum flow constraints
+%
+%   Definition:
+%       VPI = mean( u < u_min )
+%
+%   Smaller VPI → fewer true violations → safer policy
+%
+
+    % Logical indicators of violation
+    viol1 = (u1_sim < umin1);
+    viol2 = (u2_sim < umin2);
+
+    % Probability of violation across all runs/timesteps
+    VPI1 = mean(viol1(:));
+    VPI2 = mean(viol2(:));
+    VPI_total = (VPI1 + VPI2)/2;
+
+    % Display results
+    fprintf('\n=================================================\n');
+    fprintf(' Violation Probability Index (VPI)\n');
+    fprintf('=================================================\n');
+    fprintf('  Unit 1: %.4f%%\n', 100*VPI1);
+    fprintf('  Unit 2: %.4f%%\n', 100*VPI2);
+    fprintf('  Total : %.4f%% (mean of units)\n', 100*VPI_total);
+    fprintf('-------------------------------------------------\n');
 end

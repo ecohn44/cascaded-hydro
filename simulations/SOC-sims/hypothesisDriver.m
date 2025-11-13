@@ -29,18 +29,25 @@ std_hat = M3.std_hat;
 
 % Load simulation settings 
 simSettings.bounds = "jcc-bon";
-s = M1.sysparams;
+[p, s] = dataload(20);
+% s = M1.sysparams;
+% p = M1.params;
 printplot = false; 
 path = ""; % Don't save pngs for now
 
+curtail = true; 
+
+fprintf('M1\n');
 % Run MC Sims for M1 under DDU assumption 
-[M1_V1, M1_V2, M1_u1, M2_u2, M1_p1_mean, M1_p2_mean, d1, d2] = runMonteCarloSims(s, simSettings.bounds, std_hat, M1.X, path, printplot);
+[M1_V1, M1_V2, M1_u1, M1_u2, M1_p1_mean, M1_p2_mean, M1_d1, M1_d2] = runMonteCarloSims(s, p(1), simSettings.bounds, std_hat, M1.X, path, printplot, curtail);
 
+fprintf('M2\n');
 % Run MC Sims for M2 under DDU assumption 
-% [M2_V1, M2_V2, M2_p1_mean, M2_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M2.X, path, printplot);
+[M2_V1, M2_V2, M2_u1, M2_u2, M2_p1_mean, M2_p2_mean, M2_d1, M2_d2] = runMonteCarloSims(s, p(1), simSettings.bounds, std_hat, M2.X, path, printplot, curtail);
 
+fprintf('M3\n');
 % Run MC Sims for M3 under DDU assumption 
-% [M3_V1, M3_V2, M3_p1_mean, M3_p2_mean] = runMonteCarloSims(s, simSettings.bounds, std_hat, M3.X, path, printplot);
+[M3_V1, M3_V2, M3_u1, M3_u2, M3_p1_mean, M3_p2_mean, M3_d1, M3_d2] = runMonteCarloSims(s, p(1), simSettings.bounds, std_hat, M3.X, path, printplot, curtail);
 
 
 %{
@@ -103,3 +110,4 @@ set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
 legend({'M1 Original', 'M1 Clamped'}, 'Location', 'best', 'FontSize', 13);
 title('Unit 01 Normalized Power Dispatch', 'FontSize', 16);
 %}
+
