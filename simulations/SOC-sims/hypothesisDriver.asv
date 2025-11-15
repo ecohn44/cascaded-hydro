@@ -96,36 +96,18 @@ title('Unit 02 Normalized Power Dispatch', 'FontSize', 16);
 % FIGURE 2B: Curtailed Water Release vs Optimal Water Release
 % =====================================================
  
-P_M1_all = [M1.X(:,8), mean(M1_u2, 2)];
-figure('Position',[100 480 1100 480]); hold on; grid on;
+P_M1_all = [M1.X(:,8), mean(M1_u1,2)];
+f2 = figure('Position',[100 480 1100 480]); hold on; grid on;
 
 % Plot power dispatch 
-bar(tt, P_M1_all, 'grouped');
+b = bar(tt, P_M1_all, 'grouped');
 
-ylabel('Normalized Release (p.u.)');
+ylabel('Normalized Power (p.u.)');
 xlabel('Time (h)')
 set(gca, 'FontSize', 14);        % axes labels, ticks
 set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
 legend({'M1 Original', 'M1 Clamped'}, 'Location', 'best', 'FontSize', 13);
-title('Unit 02 Normalized Water Release', 'FontSize', 16);
-
-% =====================================================
-% FIGURE 2C: Curtailed Volume vs Optimal Volume
-% =====================================================
- 
-P_M1_all = [M1.X(:,6), mean(M1_V2, 2)];
-figure('Position',[100 480 1100 480]); hold on; grid on;
-
-% Plot power dispatch 
-bar(tt, P_M1_all, 'grouped');
-
-ylabel('Normalized Volume (p.u.)');
-xlabel('Time (h)')
-set(gca, 'FontSize', 14);        % axes labels, ticks
-set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
-legend({'M1 Original', 'M1 Clamped'}, 'Location', 'best', 'FontSize', 13);
-title('Unit 02 Normalized Volume', 'FontSize', 16);
-
+title('Unit 02 Normalized Power Dispatch', 'FontSize', 16);
 
 
 % =====================================================
