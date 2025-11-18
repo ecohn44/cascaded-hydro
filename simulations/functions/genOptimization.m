@@ -1,4 +1,4 @@
-function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, framework, bounds, params, s)
+function [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = genOptimization(T, N, c, q, lag, framework, bounds, params, s)
 
     % Initialize decision variable storage
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1, 

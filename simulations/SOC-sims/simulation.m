@@ -62,14 +62,13 @@ q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-% [model, obj, X, std_hat, phi_vals, alpha_vals, U_eff] = optimization(T, N, c, q, lag, ...
-%     simSettings.framework, simSettings.bounds, modelparams, sysparams);
-
 scale = 1; % Scale safety bounds 
 % scale_ddu = 25; % Scale gamma 
 
 [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, scale, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);
+
+
 
 % Extract q2 reference inflow
 q(:,2) = [0; X(:,3) + X(:,4)];
@@ -113,8 +112,9 @@ end
 % SECTION 6: MONTE CARLO SIMS
 % ========================================================================
 
-monte_carlo = true;
+monte_carlo = false;
 
+% Update this
 if monte_carlo
     fprintf('Running Monte Carlo Sims.\n');
     [V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X, path, printplot);
