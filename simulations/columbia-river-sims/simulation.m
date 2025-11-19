@@ -49,10 +49,10 @@ inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :
 
 % Extract historic inflow timeseries [m3/hr]
 % q = [inflow_s.bon_inflow_m3hr];
-% q = [parabola_decay(inflow_s.bon_inflow_m3hr(1), T)]';
 
+% Synthetic Inflows
 q0 = inflow_s.bon_inflow_m3hr(1);      % your baseline level
-% q = makeInflowPulse(q0, T, lag, [0.2 0.6], 0.20, 0.80, 2, 2);
+% q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
 q = q0*ones(T+1,1);
 
 fprintf('Data loading complete.\n');
@@ -93,7 +93,7 @@ if make_dir
 end
 
 % Plot simulation behavior for all units
-simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot);
+simPlots(path, X, sysparams, T, c, printplot);
 
 % Make simulation result storage folder
 results_dir = "./results/";
@@ -134,57 +134,3 @@ if simSettings.bounds == "jcc-ssh"
     title('Adaptive Risk Allocation (SSH vs. Bonferroni)');
     grid on;
 end 
-
-
-function q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2)
-% makeInflowPulse  Two positive pulses in q1 at arbitrary positions.
-% q0   : scalar baseline (m^3/hr) OR vector of length T+lag
-% T,lag: horizon & lag (output length = T+lag)
-% t0   : pulse positions:
-%        - if scalar <1: one pulse at fraction t0 of horizon
-%        - if scalar >=1: one pulse at absolute index
-%        - if 2-vector: two pulses; each entry may be fraction (<1) or index
-% amp1 : fractional bump for pulse #1 (e.g., 0.2 => +20%)
-% amp2 : fractional bump for pulse #2 (e.g., 0.8 => +80%)
-% w1,w2: widths (hours) for pulses #1 and #2
-%
-% Returns: q (T+lag x 1) nonnegative
-
-    % --- Baseline ---
-    if isscalar(q0)
-        q = q0 * ones(T+lag,1);
-    else
-        assert(numel(q0) == T+lag, 'q0 must be scalar or length T+lag');
-        q = q0(:);
-    end
-
-    % --- Normalize positions to absolute indices in 1..T+lag ---
-    if nargin < 4 || isempty(t0), t0 = [0.2 0.8]; end     % default 20% and 80%
-    t0 = t0(:)';                                           % row
-    if numel(t0) == 1, t0 = [t0]; end
-
-    toIndex = @(x) ( x < 1 ) .* (lag + round(x*T)) + ( x >= 1 ) .* round(x);
-    t_idx = arrayfun(@(x) max(1, min(T+lag, toIndex(x))), t0);
-
-    % --- Widths (allow 0 => no pulse) ---
-    w1 = max(0, round(w1));  w2 = max(0, round(w2));
-    amp1 = max(0, amp1);     amp2 = max(0, amp2);
-
-    % --- Helper: apply one centered box pulse (multiplicative) ---
-    function applyPulse(center_idx, width, amp)
-        if width <= 0 || amp <= 0, return; end
-        half = floor((width-1)/2);
-        i_start = max(1, center_idx - half);
-        i_end   = min(T+lag, i_start + width - 1);
-        q(i_start:i_end) = q(i_start:i_end) .* (1 + amp);
-    end
-
-    % Pulse #1 at t_idx(1), Pulse #2 at t_idx(2) if present
-    applyPulse(t_idx(1), w1, amp1);
-    if numel(t_idx) >= 2
-        applyPulse(t_idx(2), w2, amp2);
-    end
-
-    % --- Nonnegative safeguard ---
-    q = max(q, 0);
-end

@@ -37,7 +37,7 @@ simSettings = initSimSettings("dry", "pwl", "det", "jcc-bon");
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings 
-D = 7;                        % Simulation duration in days
+D = 2;                        % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 1;                      % Number of lag terms in OLS model
 
@@ -48,7 +48,7 @@ fprintf('Data loading complete.\n');
 % ========================================================================
 
 % Matrix for local streamflow 
-q = zeros(T+lag, n);
+q = zeros(T, n);
 
 q0 = 0.075;    % Dry season base inflow 
 
@@ -63,7 +63,7 @@ t0 = [0.3*T, 0.8*T];   % pulses at 30% and 60% of horizon
 q(:,1) = q0*ones(T+lag,1);  % Constant flow 
 
 % Simulate drought event 
-% q(:,1) = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
+% q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
 
 %% ========================================================================
 % SECTION 4: OPTIMIZATION FRAMEWORK
@@ -78,6 +78,12 @@ scale = 1; % Scale safety bounds
 [model, obj, X, std_hat, V_eff] = genOptimization(T, N, c, q, lag, scale, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
+
+% (TEMP) Extract qi reference inflow
+    for i = 1:n
+        idxQ = 5*(i-1) + 5;   % qi column
+        q_:, i) = X(:, idxQ);
+    end
 
 %% ========================================================================
 % SECTION 5: PLOTTING
@@ -98,7 +104,7 @@ if make_dir
 end
 
 % Plot simulation behavior for all units
-simPlots(path, X, sysparams, T, c, printplot);
+simPlots(path, X, [], q, sysparams, T, c, lag, printplot);
 
 % Store simulation results 
 results_dir = "./results/";
@@ -114,6 +120,65 @@ for i = 1:numel(sysparams)
         'T', 'c', 'lag', 'season', '-v7');
 end
 
+%% ========================================================================
+% SECTION 6: MONTE CARLO SIMS
+% ========================================================================
+
+monte_carlo = false;
+
+% Update this
+if monte_carlo
+    fprintf('Running Monte Carlo Sims.\n');
+    [V1, V2] = runMonteCarloSims(sysparams, simSettings.bounds, std_hat, X, path, printplot);
+end
 
 fprintf('Simulation complete.\n');
 
+
+function q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, season)
+    % makeInflowPulse  Generate inflow with up to two pulses
+    % q0     baseline (scalar or vector length T+lag)
+    % T,lag  horizon and lag
+    % t0     pulse positions (fractions <1 or absolute indices)
+    % amp1,amp2  fractional amplitudes (0.2 = +20%)
+    % w1,w2      pulse widths (in hours)
+    % season     'wet' → positive pulses, 'dry' → negative pulses
+    %
+    % Returns q (T+lag x 1) >= 0
+    
+    n = T + lag;
+    
+    if isscalar(q0)
+        q = q0 * ones(n,1);
+    else
+        q = q0(:);
+    end
+    
+    t0 = t0(:)';  % ensure row vector
+    idx = @(x) round((x < 1) .* (lag + x*T) + (x >= 1) .* x);
+    t_idx = max(1, min(n, arrayfun(idx, t0)));
+    
+    sign_mult = 1;
+    if strcmpi(season, 'dry')
+        sign_mult = -1;
+    end
+    
+    for k = 1:numel(t_idx)
+        if k == 1
+            amp = sign_mult * max(0, amp1);
+            wid = max(0, round(w1));
+        else
+            amp = sign_mult * max(0, amp2);
+            wid = max(0, round(w2));
+        end
+        if amp == 0 || wid == 0
+            continue
+        end
+        half = floor((wid-1)/2);
+        i1 = max(1, t_idx(k) - half);
+        i2 = min(n, i1 + wid - 1);
+        q(i1:i2) = q(i1:i2) .* (1 + amp);
+    end
+    
+    q = max(q, 0);
+    end

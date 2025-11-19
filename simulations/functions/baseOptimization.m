@@ -1,3 +1,23 @@
+%% Simple Optimization for Coupled System 
+% ========================================================================
+% Author: Eliza Cohn
+% Description: Hard coded optimiaztion framework for n =2 under Bonferroni 
+% INPUTS
+%   T           : Number of time periods in optimization horizon.
+%   N           : Number of segments in the PWL head approximation (for reporting).
+%   c           : Power conversion coefficient (unitless or W·s/m³ per your scaling).
+%   q           : Exogenous inflow series (T × k). 
+%                 Only column 1 is used for the top-of-cascade unit.
+%   lag         : Lag length for inflow forecasting (typically 1).
+%   scale       : Scaling factor for chance-constraint z-value.
+%   framework   : Uncertainty type: "det", "diu", or "ddu".
+%   bounds      : Volume bound type: "det" or "jcc-bon".
+%   params      : Struct of uncertainty model parameters 
+%                 (AR const/coef/std for DIU; omega/alpha/gamma for DDU).
+%   s           : Struct array of system parameters for each unit i=1..n:
+% ========================================================================
+
+
 function [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, scale, framework, bounds, params, s)
 
     % Initialize decision variable storage

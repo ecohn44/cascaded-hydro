@@ -327,15 +327,15 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
 
             % DDU (i > 1): GARCH-X / OLS using local flow & upstream outflow.
 
-            % Upstream Unit (01) uses DIU model
+            % Upstream Unit (01) uses DIU model 
             q1_loc_prev = q(t, 1);
             [q_t(1), std_hat(1)] = forecast_inflow_diu(q1_loc_prev, params);
             std_safety(1) = std_hat(1);
 
-            % Downstream units 
+            % Downstream units
             for i = 2:n
 
-                % q_loc_prev = q(t, i);     % (TEMP) local flow into unit i
+                q_loc_prev = q(t, i);     % local flow into unit i
                 up_out_prev = outflow_prev(i-1); % upstream outflow
 
                 if t <= lag
@@ -351,14 +351,13 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
                     idxQ = 5*(i-1)+5;                % previous predicted inflow for unit i
                     q_pred_prev = X(t-lag, idxQ);    % from stored X
 
-                    % (TEMP) Add back in normalization for river data
-                    % q_prev_norm       = q_loc_prev;
+                    % (TEMP) add back in normalization for river data
+                    q_prev_norm       = q_loc_prev;
                     q_pred_prev_norm  = q_pred_prev;
                     outflow_prev_norm = up_out_prev;
 
-                    % (TEMP), will replace arg1 with q_prev (observed val)
                     [q_hat_i, std_est_i, std_safety_i] = ...
-                        forecast_inflow_ddu(outflow_prev_norm, q_pred_prev_norm, ...
+                        forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, ...
                                             outflow_prev_norm, params);
 
                     q_t(i)        = q_hat_i;
@@ -383,7 +382,6 @@ function [q_hat, std_hat] = forecast_inflow_diu(q_prev, params)
 end
 
 
-% (TEMP) add back in normalization for full river 
 function [q_hat, std_hat_estimate, std_hat_safety] = forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params)
 
     % Sensitivity to upstream release

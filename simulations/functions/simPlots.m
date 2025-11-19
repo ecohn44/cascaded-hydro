@@ -1,4 +1,4 @@
-function simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot)
+function simPlots(path, X, sysparams, T, c, printplot)
     % simPlots: Create one figure per unit and save as PNG
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1,
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2, ...
@@ -11,24 +11,19 @@ function simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot)
     for i = 1:n_units
         sp = sysparams(i);
         base = (i-1)*5; % offset into X matrix
-        vbase = (i-1)*2; % offset into Veff matrix
 
         % Extract decision variables for this unit
         V = X(:, base+1);
         p = X(:, base+2);
         u = X(:, base+3);
         s = X(:, base+4);
-        q_pred = X(:, base+5);
-        q_hist = q((1+lag):end, i);
+        q = X(:, base+5);
 
-        % max_U_eff = U_eff(:, vbase+2);
-        % min_U_eff = U_eff(:, vbase+1);
-
-        % Compute head and max power
+        % Compute nonlinear and nonapproximated head and max power
         head = sp.a .* (V.^sp.b);
         p_max = (c * u .* head);
 
-        % ---- Create new figure for this unit ----
+        % Create new figure for this unit 
         fig = figure('Position',[100 100 1200 600]);
 
         % Add a banner title
@@ -37,8 +32,6 @@ function simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot)
         % Subplot 1: Outflow
         subplot(2,3,1);
         plot(1:T, u, 'LineWidth', 2, 'DisplayName', 'Outflow'); hold on;
-        % plot(1:T, max_U_eff, '--g','LineWidth', 1.5); hold on
-        % plot(1:T, min_U_eff, '--g','LineWidth', 1.5);
         yline(sp.max_ut, '--r', 'LineWidth', 1.5);
         yline(sp.min_ut, '--r', 'LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
@@ -72,8 +65,7 @@ function simPlots(path, X, U_eff, q, sysparams, T, c, lag, printplot)
 
         % Subplot 5: Inflow
         subplot(2,3,5);
-        plot(1:T, q_pred, 'LineWidth', 2, 'DisplayName', 'Pred Inflow'); hold on
-        % plot(1:T, q_hist, '--g', 'LineWidth', 2, 'DisplayName', 'Hist Inflow')
+        plot(1:T, q, 'LineWidth', 2, 'DisplayName', 'Inflow'); hold on
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
         title('Inflow','FontSize',font);
         xlim([1, T]);
