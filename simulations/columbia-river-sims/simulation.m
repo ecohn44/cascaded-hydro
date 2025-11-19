@@ -28,8 +28,8 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "ddu", "jcc-bon");
+% Initialize settings (season, drought, linear approximation, uncertainty, bounds)
+simSettings = initSimSettings("dry", "constant", "pwl", "ddu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));

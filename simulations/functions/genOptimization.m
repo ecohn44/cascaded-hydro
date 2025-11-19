@@ -37,7 +37,7 @@
 %                     For each unit i:
 %                        col 2*i-1 = max_V_eff(i,t)
 %                        col 2*i   = min_V_eff(i,t)
-%
+% -------------------------------------------------------------------------
 
 
 function [model, obj, X, std_hat, V_eff] = genOptimization(T, N, c, q, lag, scale, framework, bounds, params, s)
@@ -76,10 +76,11 @@ function [model, obj, X, std_hat, V_eff] = genOptimization(T, N, c, q, lag, scal
         [q_t, std_hat(t,:), std_safety(t,:)] = ...
             forecast_inflow(X, t, q, lag, framework, params, s);
 
-        %% Determine Volume Bounds (chance constraints)
-        V_min_shift = zeros(1,n);
-        V_max_shift = zeros(1,n);
+        V_min_shift = zeros(1, n);
+        V_max_shift = zeros(1, n);
 
+
+        %% Determine Volume Bounds (chance constraints)
         switch bounds
             case {"det"}
                 % Deterministic: no shifts
@@ -313,13 +314,15 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
                     
                     % Apply regression and estimate variance 
                     [q_t(i), std_hat(i)] = forecast_inflow_diu(q_loc_prev, params);
-                    std_safety(i) = std_hat(i);   % matching bound
                 
                 % Forecast Qi
                 else
                     % (TEMP) will use forecast_inflow_diu on qi(t-lag)
-                    q_t(i) = forecast_inflow_diu(outflow_prev(i-1, params));
+                    [q_t(i), std_hat(i)] = forecast_inflow_diu(outflow_prev(i-1), params);
                 end
+
+                % Same DIU std used for safety
+                std_safety(i) = std_hat(i);
 
             end
         

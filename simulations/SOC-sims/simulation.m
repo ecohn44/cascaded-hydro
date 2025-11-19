@@ -24,17 +24,20 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 n = 4;              % number of units in cascaded network 
 
 % Load inflow data 
-[modelparams, sysparams] = dataload(n, N);
+[modelparams, sysparams, droughtparams] = dataload(n, N);
 
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "pwl", "det", "jcc-bon");
+% Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
+
+% Extract drought simulation mode
+droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
 
 % Date range settings 
 D = 7;                        % Simulation duration in days
@@ -50,20 +53,11 @@ fprintf('Data loading complete.\n');
 % Matrix for local streamflow 
 q = zeros(T+lag, n);
 
-q0 = 0.075;    % Dry season base inflow 
-
-% Inflow pulse parameters
-amp1 = 0.4;      % 40% drop in inflow
-amp2 = 0.3;      % 30% drop in inflow
-w1 = 8;          % first drought lasts 8 hours
-w2 = 4;          % second drought lasts 4 hours
-t0 = [0.3*T, 0.8*T];   % pulses at 30% and 60% of horizon
-
-% Upstream inflow
-q(:,1) = q0*ones(T+lag,1);  % Constant flow 
+% Base inflow
+q0 = 0.075;   
 
 % Simulate drought event 
-% q(:,1) = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
+q(:,1) = droughtSimulator(q0, T, lag, simSettings.season, droughtparams.mode, droughtparams);
 
 %% ========================================================================
 % SECTION 4: OPTIMIZATION FRAMEWORK
@@ -71,9 +65,6 @@ q(:,1) = q0*ones(T+lag,1);  % Constant flow
 
 scale = 1; % Scale safety bounds 
 % scale_ddu = 25; % Scale gamma 
-
-% [model, obj, X, std_hat, V_eff] = baseOptimization(T, N, c, q, lag, scale, ...
-%    simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 [model, obj, X, std_hat, V_eff] = genOptimization(T, N, c, q, lag, scale, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);

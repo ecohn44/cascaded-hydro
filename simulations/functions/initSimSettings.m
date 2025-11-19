@@ -1,8 +1,9 @@
-function settings = initSimSettings(season, method, framework, bounds)
+function settings = initSimSettings(season, drought, method, framework, bounds)
     validSeasons = ["dry", "wet"];
     validMethods = ["minlp", "pwl"];
     validFrameworks = ["det", "diu", "ddu"];
     validBounds = ["det", "icc", "jcc-bon", "jcc-ssh"];
+    validDroughts = ["constant", "pulse", "extended"];
 
     if ~ismember(season, validSeasons)
         error('Invalid season. Choose "DRY" or "WET".');
@@ -16,6 +17,9 @@ function settings = initSimSettings(season, method, framework, bounds)
     if ~ismember(bounds, validBounds)
         error('Invalid bounds framework".');
     end
+    if ~ismember(drought, validDroughts)
+        error('Invalid drought framework".');
+    end
 
-    settings = struct('season', season, 'method', method, 'framework', framework, 'bounds', bounds);
+    settings = struct('season', season, 'drought', drought, 'method', method, 'framework', framework, 'bounds', bounds);
 end

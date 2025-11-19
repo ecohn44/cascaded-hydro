@@ -2,7 +2,7 @@
 % DATALOAD FUNCTIONS
 % ========================================================================
 
-function [params, sysparams] = dataload(n, N)
+function [params, sysparams, droughtparams] = dataload(n, N)
     % Inputs:
     %   n        - number of hydropower units
     %   N        - number of PWL segments for head approximation
@@ -65,7 +65,7 @@ function [params, sysparams] = dataload(n, N)
         if i < n
             sysparams(i).SOC = 0.5;
         else
-            sysparams(i).SOC = 0.05;
+            sysparams(i).SOC = 0.45;
         end
     end
 
@@ -86,6 +86,42 @@ function [params, sysparams] = dataload(n, N)
         % Calculate initial volume from SOC
         sysparams(i).V0 = d.SOC*(d.max_V - d.min_V) + d.min_V;
     end
+
+    %% Drought scenario parameters
+    droughtTemplate = struct( ...
+        'mode',         '',  ...
+        'amp1',         [],  ...
+        'amp2',         [],  ...
+        'w1',           [],  ...
+        'w2',           [],  ...
+        't0',           [],  ...
+        'nEvents',      [],  ...
+        'daysPerEvent', [],  ...
+        'tauHours',     [] );
+
+    % Preallocate 1x2 struct array with same fields
+    droughtparams(1) = droughtTemplate;
+    droughtparams(2) = droughtTemplate;
+    droughtparams(3) = droughtTemplate;
+
+    % Pulse-type drought (uses t0 as FRACTIONS of horizon; T+lag handled later)
+    droughtparams(1).mode         = 'pulse';
+    droughtparams(1).amp1         = 0.4;      % 40% drop in inflow (dry) or +40% (wet)
+    droughtparams(1).amp2         = 0.3;      % 30% drop / bump for second pulse
+    droughtparams(1).w1           = 8;        % first drought pulse lasts 8 hours
+    droughtparams(1).w2           = 4;        % second drought pulse lasts 4 hours
+    droughtparams(1).t0           = [0.3, 0.8];  % pulses at 30% and 80% of horizon
+    % Fields not used by pulse mode remain [] (nEvents, daysPerEvent, tauHours)
+
+    % Extended drought (single-decay events)
+    droughtparams(2).mode         = 'extended';
+    droughtparams(2).amp1         = 0.2;
+    droughtparams(2).nEvents      = 3;
+    droughtparams(2).daysPerEvent = 2;
+    droughtparams(2).tauHours     = 36;
+
+    droughtparams(3).mode         = 'constant';
+
 end
 
 
