@@ -90,7 +90,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     %% Drought scenario parameters
     droughtTemplate = struct( ...
         'mode',         '',  ...
-        'q0',           0.045, ...
+        'q0',           [],  ...
         'amp1',         [],  ...
         'amp2',         [],  ...
         'w1',           [],  ...
@@ -112,14 +112,14 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     droughtparams(1).w1           = 8;        % first drought pulse lasts 8 hours
     droughtparams(1).w2           = 4;        % second drought pulse lasts 4 hours
     droughtparams(1).t0           = [0.3, 0.8];  % pulses at 30% and 80% of horizon
+    droughtparams(1).q0 = 0.045;
 
     % Extended drought (single-decay events)
     droughtparams(2).mode         = 'extended';
-    droughtparams(2).amp1         = 0.35;   % Maginitude of drought event
-    droughtparams(2).nEvents      = 1;      % ONE main event (less whiplash)
-    droughtparams(2).daysPerEvent = 4;      % longer, sustained drought
-    droughtparams(2).tauHours     = 48;     % smoother, slower decay
-
+    droughtparams(2).amp1         = 0.2;      % magnitude of drought event relative to base flow
+    droughtparams(2).nEvents      = 2;        % number of drought events over total horizon
+    droughtparams(2).daysPerEvent = 3;        % number of days drought event lasts
+    droughtparams(2).tauHours     = 36;       % decay coefficient 
 
     droughtparams(3).mode         = 'constant';
 

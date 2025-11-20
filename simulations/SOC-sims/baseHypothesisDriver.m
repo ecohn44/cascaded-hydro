@@ -3,6 +3,7 @@
 % Author: Eliza Cohn
 % Description: Test perforamnce of various policies under uncertainty
 % frameworks in a Monte Carlo simulation setting 
+% Hardcoded to work for base optimization problem 
 % 
 % Inputs: For uncertainty framework
 %       X: Trajectory of optimal deicision variables 
@@ -18,9 +19,9 @@ thisFilePath = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 
 % Load optimal trajectories for each policy (for units n > 1)
-M1 = load('./results/results_unit2_det.mat');
-M2 = load('./results/results_unit2_diu.mat');
-M3 = load('./results/results_unit2_ddu.mat');
+M1 = load('./baseResults/results_unit2_det.mat');
+M2 = load('./baseResults/results_unit2_diu.mat');
+M3 = load('./baseResults/results_unit2_ddu.mat');
 T  = M1.T;
 tt = (1:T)';
 

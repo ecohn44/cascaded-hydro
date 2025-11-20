@@ -70,7 +70,7 @@ function simPlots(path, X, sysparams, T, c, printplot)
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
         title('Inflow','FontSize',font);
         xlim([1, T]);
-        ylim([0, 1.1*max(q)])
+        
 
         % Subplot 6: Forebay Elevation 
         subplot(2,3,6)
@@ -82,7 +82,7 @@ function simPlots(path, X, sysparams, T, c, printplot)
         xlim([1, T]);
 
         if printplot
-            % Save figure with unit number 
+            % ---- Save figure with unit number ----
             filename = fullfile(path, sprintf("Unit%d_results.png", sp.unit));
             saveas(figs(i), filename);
             % close(fig); % close to avoid clutter

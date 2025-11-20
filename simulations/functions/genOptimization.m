@@ -7,8 +7,7 @@
 %   T           : Number of time periods in optimization horizon.
 %   N           : Number of segments in the PWL head approximation (for reporting).
 %   c           : Power conversion coefficient (unitless or W·s/m³ per your scaling).
-%   q           : Exogenous inflow series (T × k). 
-%                 Only column 1 is used for the top-of-cascade unit.
+%   q           : Exogenous inflow series (T + lag × n).
 %   lag         : Lag length for inflow forecasting (typically 1).
 %   scale       : Scaling factor for chance-constraint z-value.
 %   framework   : Uncertainty type: "det", "diu", or "ddu".
@@ -253,15 +252,9 @@ function h_ref = map_V_to_h(h, left_bounds, right_bounds, reference_values)
     end
 end
 
-%% ------------------------------------------------------------------------
-% Inflow forecasting
-%   q has n columns; column i is local flow for unit i.
-%   Downstream units use local flow + upstream outflow as predictors in DDU.
-%   DIU/DDU primitives are kept exactly as in your original code.
-% -------------------------------------------------------------------------
+
 function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, params, s)
     
-    % Extract number of units
     n = numel(s);
 
     q_t        = zeros(1,n);
@@ -270,11 +263,10 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
 
     % Compute previous outflows (t-lag) for each unit
     outflow_prev = zeros(1,n);
-    
     if t <= lag
         % Fallback: minimum turbine release, zero spill
         for i = 1:n
-            outflow_prev(i) = s(i).min_ut;  % approximate
+            outflow_prev(i) = s(i).min_ut;
         end
     else
         row = t - lag;
@@ -285,93 +277,64 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
         end
     end
 
-    switch framework
-        case "det"
-     
-            % DET: Each unit uses its local inflow series, no uncertainty
-            for i = 1:n
+    % Calculate inflow for each unit
+    for i = 1:n
+        
+        q_loc_prev = q(t, i);           % local flow predictor for unit i
+        up_out_prev = [];               % upstream outflow, if needed
+        
+        if i > 1
+            up_out_prev = outflow_prev(i-1);
+        end
+
+        switch framework
+            case "det"
                 
-                % Calculate Q1
-                if i == 1
-                    q_t(i) = q(t+lag, i); % (TEMP) Perfect foresight
-                % Calculate downstream Qi
-                else
-                    q_t(i) = outflow_prev(i-1); % (TEMP) will use qi(t-1) lagged AR term
-                end 
+                % Deterministic: use local inflow series, ignore std
+                [q_t(i), ~] = forecast_inflow_diu(q_loc_prev, params);
 
-                % std_hat/std_safety remain 0 for DET
-            end
 
-        case "diu"
+            case "diu"
 
-            % DIU: Each unit uses its local inflow series, constant std
-            for i = 1:n
-
-                % Forecast Q1 
-                if i == 1
-                    % Calculate previous inflow
-                    q_loc_prev = q(t, i);  % local flow at time t-lag
-                    
-                    % Apply regression and estimate variance 
-                    [q_t(i), std_hat(i)] = forecast_inflow_diu(q_loc_prev, params);
-                
-                % Forecast Qi
-                else
-                    % (TEMP) will use forecast_inflow_diu on qi(t-lag)
-                    [q_t(i), std_hat(i)] = forecast_inflow_diu(outflow_prev(i-1), params);
-                end
-
-                % Same DIU std used for safety
+                % DIU: each unit gets DIU forecast with constant std
+                [q_t(i), std_hat(i)] = forecast_inflow_diu(q_loc_prev, params);
                 std_safety(i) = std_hat(i);
 
-            end
-        
-        case "ddu"
-
-            % DDU (i > 1): GARCH-X / OLS using local flow & upstream outflow.
-
-            % Upstream Unit (01) uses DIU model
-            q1_loc_prev = q(t, 1);
-            [q_t(1), std_hat(1)] = forecast_inflow_diu(q1_loc_prev, params);
-            std_safety(1) = std_hat(1);
-
-            % Downstream units 
-            for i = 2:n
-
-                % q_loc_prev = q(t, i);     % (TEMP) local flow into unit i
-                up_out_prev = outflow_prev(i-1); % upstream outflow
-
-                if t <= lag
-
-                    % Initialization: Use DIU model
-                    % (TEMP) will use local flow q(t,i)
-                    [q_t(i), std_hat(i)] = forecast_inflow_diu(up_out_prev, params);
-                    std_safety(i) = std_hat(i);
+            case "ddu"
+                
+                if i == 1
+                    % Upstream unit uses DIU model
+                    [q_t(1), std_hat(1)] = forecast_inflow_diu(q_loc_prev, params);
+                    std_safety(1) = std_hat(1);
 
                 else
+                    % Downstream units
+                    if t <= lag
+                        
+                        % Initialization: DIU using local flow (simple start)
+                        [q_t(i), std_hat(i)] = forecast_inflow_diu(q_loc_prev, params);
+                        std_safety(i) = std_hat(i);
 
-                    % Full DDU with local flow & upstream outflow as predictors
-                    idxQ = 5*(i-1)+5;                % previous predicted inflow for unit i
-                    q_pred_prev = X(t-lag, idxQ);    % from stored X
+                    else
+                        
+                        % Full DDU with local flow & upstream outflow as predictors
+                        idxQ          = 5*(i-1)+5;          % previous predicted inflow
+                        q_pred_prev   = X(t-lag, idxQ);
 
-                    % (TEMP) Add back in normalization for river data
-                    % q_prev_norm       = q_loc_prev;
-                    q_pred_prev_norm  = q_pred_prev;
-                    outflow_prev_norm = up_out_prev;
+                        % (TEMP) normalization placeholders
+                        q_prev_norm       = q_loc_prev;
+                        q_pred_prev_norm  = q_pred_prev;
+                        outflow_prev_norm = up_out_prev;
 
-                    % (TEMP), will replace arg1 with q_prev (observed val)
-                    [q_hat_i, std_est_i, std_safety_i] = ...
-                        forecast_inflow_ddu(outflow_prev_norm, q_pred_prev_norm, ...
-                                            outflow_prev_norm, params);
+                        [q_hat_i, std_est_i, std_safety_i] = ...
+                            forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params);
 
-                    q_t(i)        = q_hat_i;
-                    std_hat(i)    = std_est_i;
-                    std_safety(i) = std_safety_i;
+                        q_t(i)        = q_hat_i;
+                        std_hat(i)    = std_est_i;
+                        std_safety(i) = std_safety_i;
+                    end
                 end
-            end
-
-        otherwise
-            error('Unknown framework: %s', framework);
+        end
     end
 end
 
