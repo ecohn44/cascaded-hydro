@@ -43,7 +43,7 @@ droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought))
 % Date range settings 
 D = 7;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
-lag = 3;                      % Number of lag terms in OLS model
+lag = 1;                      % Travel tim ebetween units (hrs)
 
 fprintf('Data loading complete.\n');
 
@@ -57,7 +57,7 @@ q = zeros(T+lag, n);
 % Cascaded drought parameters
 baseDrought = droughtparams;
 severityScales = [1.0, 0.8, 0.2, 0.1];    
-plotDroughtProfiles(baseDrought, severityScales, T, lag, n);
+plotDroughtProfiles(baseDrought, severityScales, T, lag)
 
 % Simulate drought event 
 for i = 1:n
@@ -121,57 +121,72 @@ end
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
 
-function plotDroughtProfiles(baseDrought, severityScales, T, lag, n_units)
-% plotDroughtProfiles  Visualize regional extended-drought profile per unit
+
+function plotDroughtProfiles(baseDrought, severityScales, T, lag)
+% plotDroughtProfiles
+%   Visualize drought multiplicative factors applied to each unit.
+%   This matches the EXTENDED drought logic used in applyExtendedDrought.
 %
-%   baseDrought   : struct like droughtparams(2) for Unit 01
-%   severityScales: 1 x n_units vector, e.g. linspace(1.0, 0.5, n_units)
-%   T             : main horizon length (in steps, e.g. hours)
-%   lag           : extra steps (your inflow lag length)
-%   n_units       : number of hydro units
+%   baseDrought     = droughtparams(2)   (extended drought struct)
+%   severityScales  = 1 x n_units vector (ex: [1.0 0.7 0.5 0.3])
+%
 
-    nTot = T + lag;
+    n_units = numel(severityScales);
+    nTot    = T + lag;
 
-    % pull parameters from baseDrought
+    % Extract drought parameters 
+    amp1    = baseDrought.amp1;
+    nEvents = baseDrought.nEvents;
     daysPerEvent = baseDrought.daysPerEvent;
     tauHours     = baseDrought.tauHours;
 
-    % assume 1 step = 1 hour
-    eventLen = max(1, round(daysPerEvent * 24)); % steps per event
-    tauSteps = max(1, round(tauHours));         % exponential time constant (steps)
+    % Convert to steps (1 step = 1 hour)
+    eventLen = round(daysPerEvent * 24);
+    tauSteps = round(tauHours);
+    gapLen   = round((daysPerEvent/2) * 24);   % same gap as simulator
 
-    % time axis
-    t = (0:nTot-1)';  % 0-based for convenience
+    % Time axis
+    t = (1:nTot)';
 
-    % Preallocate factors: each column = one unit
+    % Preallocate drought factors (initially all 1)
     factors = ones(nTot, n_units);
 
-    % For now, assume event starts at t=0 and lasts eventLen steps
-    startIdx   = 1;
-    fullEndIdx = min(eventLen, nTot);
+    for e = 1:nEvents
 
-    tInEvent = (0:(fullEndIdx-startIdx))';  % 0..eventLen-1
+        % event start
+        startIdx = (e-1)*(eventLen + gapLen) + 1;
+        if startIdx > nTot
+            break;
+        end
 
-    for i = 1:n_units
-        amp1_i = baseDrought.amp1 * severityScales(i);
+        % event end
+        endIdx = min(startIdx + eventLen - 1, nTot);
 
-        % exponential shape: 1 -> 1 - amp1_i over time
+        % time inside the event: 0 .. (eventLen-1)
+        tInEvent = (0:(endIdx - startIdx))';
+
+        % exponential decay: 0 → 1 over the event
         decayShape = 1 - exp(- double(tInEvent) / double(tauSteps));
-        factors(startIdx:fullEndIdx, i) = 1 - amp1_i * decayShape;
+
+        % apply drought to each unit
+        for u = 1:n_units
+            amp_u = amp1 * severityScales(u);
+            factors(startIdx:endIdx, u) = 1 - amp_u * decayShape;
+        end
     end
 
-    % ---- Plot ----
-    figure('Name', 'Extended Drought Profiles per Unit', 'NumberTitle', 'off');
-    tiledlayout(1, n_units, 'Padding', 'compact', 'TileSpacing', 'compact');
+    figure('Name','Drought Profiles','NumberTitle','off');
+    tiledlayout(1, n_units, 'TileSpacing','compact','Padding','compact');
 
-    for i = 1:n_units
+    ymin = min(factors(:)) - 0.05;
+
+    for u = 1:n_units
         nexttile;
-        plot(t, factors(:,i), 'LineWidth', 1.5);
-        ylim([min(1 - baseDrought.amp1 * severityScales) - 0.05, 1.05]);
-        xlim([0, eventLen]);
-        xlabel('Time step');
-        ylabel('q_{drought} / q_{base}');
-        title(sprintf('Unit %02d (amp1=%.2f)', i, baseDrought.amp1 * severityScales(i)));
+        plot(t, factors(:,u), 'LineWidth', 1.8);
+        ylim([ymin 1.05]);
+        xlabel('Hour');
+        ylabel('q_{drought}/q_{base}');
+        title(sprintf('Unit %d (scale=%.2f)', u, severityScales(u)));
         grid on;
     end
 end

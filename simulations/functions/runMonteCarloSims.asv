@@ -1,4 +1,4 @@
-function [V_sim, u_sim, p_sim, viol_frac, prob_run_violation] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot, policyLabel)
+function [V_sim, u_sim, p_sim, viol_frac, prob_run_violation] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot)
 
     % Set random seed
     rng(0, 'twister');
@@ -120,7 +120,7 @@ function [V_sim, u_sim, p_sim, viol_frac, prob_run_violation] = runMonteCarloSim
     % Plot MC volume trajectories for each reservoir
     if printplot
         plotReservoirMCGrid(tt, V_opt, V_sim, Vmin, Vmax, ...
-                            bLabel, policyLabel, savePath, bounds, printplot);
+                            bLabel, savePath, bounds, printplot);
     end
 end
 
@@ -169,8 +169,7 @@ function plotReservoirMCGrid(tt, V_opt, V_sim, Vmin, Vmax, ...
         end
     end
 
-    sgtitle(sprintf('Monte Carlo Storage Trajectories — %s — %s', ...
-            policyLabel, bLabel));
+    sgtitle(sprintf('Monte Carlo Storage Trajectories — %s', bLabel));
 
     if printplot
         fname = sprintf('mc_grid_%s_%s.png', bLabel, char(bounds));

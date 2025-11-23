@@ -179,7 +179,7 @@ function [model, obj, X, std_hat, V_eff] = genOptimization(T, N, c, q, lag, scal
             error('Solver issue at t=%d: %s', t, yalmiperror(model.problem));
         end
 
-        % Store results for time t
+        %% Store results for time t
         for i = 1:n
             idxV = 5*(i-1)+1;
             idxP = 5*(i-1)+2;
@@ -193,9 +193,10 @@ function [model, obj, X, std_hat, V_eff] = genOptimization(T, N, c, q, lag, scal
             X(t,idxS) = value(sp(i));
             X(t,idxQ) = q_t(i);   % predicted inflow
         end
+
     end 
 
-    % Objective: Total power production over all units
+    %% Objective: Total power production over all units
     obj = 0;
     for i = 1:n
         idxP = 5*(i-1)+2;
@@ -254,7 +255,6 @@ end
 
 function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, params, s)
     
-    % Extract number of units
     n = numel(s);
 
     q_t        = zeros(1,n);
@@ -263,11 +263,10 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
 
     % Compute previous outflows (t-lag) for each unit
     outflow_prev = zeros(1,n);
-    
     if t <= lag
         % Fallback: minimum turbine release, zero spill
         for i = 1:n
-            outflow_prev(i) = s(i).min_ut;  % approximate
+            outflow_prev(i) = s(i).min_ut;
         end
     else
         row = t - lag;
@@ -278,71 +277,65 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
         end
     end
 
-    switch framework
-        case "det"
-     
-            % DET: Each unit uses its local inflow series, no uncertainty
-            for i = 1:n
-                
-                % std_hat/std_safety remain 0 for DET
-                [q_t(i), ~] = forecast_inflow_diu(q(t, i), params);
-            end
+    % Calculate inflow for each unit
+    for i = 1:n
+        
+        q_loc_prev = q(t, i);           % local flow predictor for unit i
+        up_out_prev = [];               % upstream outflow, if needed
+        
+        if i > 1
+            up_out_prev = outflow_prev(i-1);
+        end
 
-        case "diu"
-
-            % DIU: Each unit uses its local inflow series, constant std
-            for i = 1:n
- 
-                % Apply regression and estimate variance 
-                [q_t(i), std_hat(i)] = forecast_inflow_diu(q(t, i), params);
+        switch framework
+            case "det"
                 
-                % Same DIU std used for safety
+                % Deterministic: use local inflow series, ignore std
+                [q_t(i), ~] = forecast_inflow_diu(q_loc_prev, params);
+
+
+            case "diu"
+
+                % DIU: each unit gets DIU forecast with constant std
+                [q_t(i), std_hat(i)] = forecast_inflow_diu(q_loc_prev, params);
                 std_safety(i) = std_hat(i);
 
-            end
-        
-        case "ddu"
-
-            % DDU (i > 1): GARCH-X / OLS using local flow & upstream outflow.
-
-            % Upstream Unit (01) uses DIU model
-            [q_t(1), std_hat(1)] = forecast_inflow_diu(q(t, 1), params);
-            std_safety(1) = std_hat(1);
-
-            % Downstream units 
-            for i = 2:n
-
-                up_out_prev = outflow_prev(i-1); % upstream outflow
-
-                if t <= lag
-
-                    % Initialization: Use DIU model
-                    [q_t(i), std_hat(i)] = forecast_inflow_diu(q(t, i), params);
-                    std_safety(i) = std_hat(i);
+            case "ddu"
+                
+                if i == 1
+                    % Upstream unit uses DIU model
+                    [q_t(1), std_hat(1)] = forecast_inflow_diu(q_loc_prev, params);
+                    std_safety(1) = std_hat(1);
 
                 else
+                    % Downstream units
+                    if t <= lag
+                        
+                        % GARCH initialization 
+                        q_pred_prev_norm       = q_loc_prev;
 
-                    % Full DDU with local flow & upstream outflow as predictors
-                    idxQ = 5*(i-1)+5;                % previous predicted inflow for unit i
-                    q_pred_prev = X(t-lag, idxQ);    % from stored X
+                    else
+                        
+                        % Full DDU with local flow & upstream outflow as predictors
+                        idxQ          = 5*(i-1)+5;          % previous predicted inflow
+                        q_pred_prev   = X(t-lag, idxQ);
 
-                    % (TEMP) Add back in normalization for river data
-                    q_prev_norm       = q(t, i);
-                    q_pred_prev_norm  = q_pred_prev;
-                    outflow_prev_norm = up_out_prev;
+                        % (TEMP) add back in normalization placeholders
+                        q_pred_prev_norm  = q_pred_prev;
+                    end
 
-                    [q_hat_i, std_est_i, std_safety_i] = ...
-                        forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, ...
-                                            outflow_prev_norm, params);
+                        q_prev_norm       = q_loc_prev;
+                        outflow_prev_norm = up_out_prev; % set to min_ut for t <= lag
 
-                    q_t(i)        = q_hat_i;
-                    std_hat(i)    = std_est_i;
-                    std_safety(i) = std_safety_i;
+                        [q_hat_i, std_est_i, std_safety_i] = ...
+                            forecast_inflow_ddu(q_prev_norm, q_pred_prev_norm, outflow_prev_norm, params);
+
+                        q_t(i)        = q_hat_i;
+                        std_hat(i)    = std_est_i;
+                        std_safety(i) = std_safety_i;
+                    end
                 end
-            end
-
-        otherwise
-            error('Unknown framework: %s', framework);
+        end
     end
 end
 

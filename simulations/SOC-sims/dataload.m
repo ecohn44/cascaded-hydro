@@ -46,7 +46,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'RR_dn',  -0.015, ...
         'RR_up',  0.01, ...
         'F',      1, ...
-        'SOC',    0.5);       % will be set per unit (0.5 or 0.05)
+        'SOC',    0.35);       % will be set per unit (0.5 or 0.05)
 
 
     %% Build sysparams for n units
@@ -58,15 +58,6 @@ function [params, sysparams, droughtparams] = dataload(n, N)
 
         % String name
         sysparams(i).name = sprintf('Unit %02d', i);
-
-        % SoC rule:
-        %   Units 1..n-1 -> SOC = 0.5
-        %   Unit n       -> SOC = 0.05
-        if i < n
-            sysparams(i).SOC = 0.5;
-        else
-            sysparams(i).SOC = 0.45;
-        end
     end
 
 
@@ -115,11 +106,10 @@ function [params, sysparams, droughtparams] = dataload(n, N)
 
     % Extended drought (single-decay events)
     droughtparams(2).mode         = 'extended';
-    droughtparams(2).amp1         = 0.35;   % Maginitude of drought event
-    droughtparams(2).nEvents      = 1;      % ONE main event (less whiplash)
-    droughtparams(2).daysPerEvent = 4;      % longer, sustained drought
-    droughtparams(2).tauHours     = 48;     % smoother, slower decay
-
+    droughtparams(2).amp1         = 0.32;   % Maginitude of drought event
+    droughtparams(2).nEvents      = 2;      % ONE main event (less whiplash)
+    droughtparams(2).daysPerEvent = 2.5;      % longer, sustained drought
+    droughtparams(2).tauHours     = 36;     % smoother, slower decay
 
     droughtparams(3).mode         = 'constant';
 
