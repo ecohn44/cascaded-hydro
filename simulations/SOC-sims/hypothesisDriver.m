@@ -122,7 +122,7 @@ for i = 1:n
 end
 fprintf('\n');
 
-fprintf('Run-Level Violation Probability (Metric A):\n');
+fprintf('Run-Level Violation Probability:\n');
 fprintf('(Probability a run violates at least once)\n');
 for i = 1:n
     fprintf('  Unit %d:\n', i);

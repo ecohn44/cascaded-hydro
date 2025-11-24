@@ -43,7 +43,7 @@ droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought))
 % Date range settings 
 D = 7;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
-lag = 1;                      % Travel tim ebetween units (hrs)
+lag = 3;                      % Travel time between units (hrs)
 
 fprintf('Data loading complete.\n');
 

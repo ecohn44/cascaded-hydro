@@ -16,8 +16,8 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     params(1) = struct( ...
         'season',   'dry', ...    % Hydrology season
         'constant', -0.001, ...   % DDU Params
-        'coef1',    0.25,  ...    % DDU inflow_lag1 [m3/hr] (.83)
-        'coef2',    0.75,  ...    % DDU outflow_lag [m3/hr] (0.17)
+        'coef1',    0.5,  ...    % DDU inflow_lag1 [m3/hr] (.83)
+        'coef2',    0.5,  ...    % DDU outflow_lag [m3/hr] (0.17)
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
         'AR_std',   0.00375, ...  % Updated to be 5% of flow (0.075)
@@ -46,7 +46,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'RR_dn',  -0.015, ...
         'RR_up',  0.01, ...
         'F',      1, ...
-        'SOC',    0.5);       % will be set per unit (0.5 or 0.05)
+        'SOC',    0.35);       % will be set per unit (0.5 or 0.05)
 
 
     %% Build sysparams for n units
@@ -58,15 +58,6 @@ function [params, sysparams, droughtparams] = dataload(n, N)
 
         % String name
         sysparams(i).name = sprintf('Unit %02d', i);
-
-        % SoC rule:
-        %   Units 1..n-1 -> SOC = 0.5
-        %   Unit n       -> SOC = 0.05
-        if i < n
-            sysparams(i).SOC = 0.5;
-        else
-            sysparams(i).SOC = 0.45;
-        end
     end
 
 
@@ -90,7 +81,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     %% Drought scenario parameters
     droughtTemplate = struct( ...
         'mode',         '',  ...
-        'q0',           [],  ...
+        'q0',           0.045, ...
         'amp1',         [],  ...
         'amp2',         [],  ...
         'w1',           [],  ...
@@ -112,14 +103,13 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     droughtparams(1).w1           = 8;        % first drought pulse lasts 8 hours
     droughtparams(1).w2           = 4;        % second drought pulse lasts 4 hours
     droughtparams(1).t0           = [0.3, 0.8];  % pulses at 30% and 80% of horizon
-    droughtparams(1).q0 = 0.045;
 
     % Extended drought (single-decay events)
     droughtparams(2).mode         = 'extended';
-    droughtparams(2).amp1         = 0.2;      % magnitude of drought event relative to base flow
-    droughtparams(2).nEvents      = 2;        % number of drought events over total horizon
-    droughtparams(2).daysPerEvent = 3;        % number of days drought event lasts
-    droughtparams(2).tauHours     = 36;       % decay coefficient 
+    droughtparams(2).amp1         = 0.32;   % Maginitude of drought event
+    droughtparams(2).nEvents      = 2;      % ONE main event (less whiplash)
+    droughtparams(2).daysPerEvent = 2.5;    % longer, sustained drought
+    droughtparams(2).tauHours     = 36;     % smoother, slower decay
 
     droughtparams(3).mode         = 'constant';
 

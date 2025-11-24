@@ -53,9 +53,9 @@ function comparePlots(path, tag1, tag2, tag3, printplot)
 
         % u_t
         subplot(2,3,1)
-        h1 = plot(u1,'-k','LineWidth',2); hold on;
-        h2 = plot(u2,'-b','LineWidth',2);
-        h3 = plot(u3,'-r','LineWidth',2);
+        plot(u1,'-k','LineWidth',2); hold on;
+        plot(u2,'-b','LineWidth',2);
+        plot(u3,'-r','LineWidth',2);
         yline(sp.max_ut,'--k'); yline(sp.min_ut,'--k');
         title('Generation Outflow'); xlabel('Hour'); ylabel('Flow (m^3/hr)');
         % legend(labels{:},'Location','best');
@@ -105,14 +105,10 @@ function comparePlots(path, tag1, tag2, tag3, printplot)
         xlim([1, T]);
 
         % global legend
-        labels = {upper(tag1), upper(tag2), upper(tag3)};  % or 2 tags if only 2
-        lg = legend([h1(1) h2(1) h3(1)], labels{:}, ...
-                    'Orientation', 'horizontal', ...
-                    'FontSize', 10, ...
-                    'Box', 'on');
-
-        % [left bottom width height] in normalized figure units
-        lg.Position = [0.415 0.005 0.17 0.04];
+        lg = legend(labels{:}, 'Orientation','horizontal', ...
+                    'FontSize', 10, 'Box','on');
+        new_axes = axes('Position',[0 0 1 1],'Visible','off');
+        lg.Position = [0.33 0.02 0.35 0.05];
 
         % Save figure if requested
         if printplot

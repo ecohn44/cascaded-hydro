@@ -16,8 +16,8 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     params(1) = struct( ...
         'season',   'dry', ...    % Hydrology season
         'constant', -0.001, ...   % DDU Params
-        'coef1',    0.25,  ...    % DDU inflow_lag1 [m3/hr] (.83)
-        'coef2',    0.75,  ...    % DDU outflow_lag [m3/hr] (0.17)
+        'coef1',    0.5,  ...    % DDU inflow_lag1 [m3/hr] (.83)
+        'coef2',    0.5,  ...    % DDU outflow_lag [m3/hr] (0.17)
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
         'AR_std',   0.00375, ...  % Updated to be 5% of flow (0.075)
@@ -108,7 +108,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     droughtparams(2).mode         = 'extended';
     droughtparams(2).amp1         = 0.32;   % Maginitude of drought event
     droughtparams(2).nEvents      = 2;      % ONE main event (less whiplash)
-    droughtparams(2).daysPerEvent = 2.5;      % longer, sustained drought
+    droughtparams(2).daysPerEvent = 2.5;    % longer, sustained drought
     droughtparams(2).tauHours     = 36;     % smoother, slower decay
 
     droughtparams(3).mode         = 'constant';
