@@ -17,7 +17,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 mode = 2; % Toggle between testing hypothesis 1 or 2
 
 simSettings.bounds = "jcc-bon";
-printplot = true;
+printplot = false;
 path      = "";
 
 n = 4;

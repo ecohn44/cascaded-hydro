@@ -1,129 +1,184 @@
-%% Plot Driver for DIU vs DIU Comparison
+%% Plot Driver for DIU vs DDU Comparison (All Units)
 % ========================================================================
 % Author: Eliza Cohn
 % Description: Overlays policy behavior derived during optimization sims
-% Inputs: For uncertainty framework
-%       X: Trajectory of optimal deicision variables 
-%       std_hat: Standard deviation of inflow 
-%       V_eff: Effective volume boundaries 
-%       sysparams: System parameters
+%              for all units. For each unit k, loads that unit's DET, DIU,
+%              and DDU optimization results separately and produces:
+%                 1) Inflow std dev (M2 vs M3)
+%                 2) SoC trajectory + effective bounds (M1, M2, M3)
+%                 3) Power dispatch (M1, M2, M3)
+%
+% Assumptions:
+%   - X layout per unit: [V, p, u, s, q]
+%   - V_eff layout: [V1_max V1_min V2_max V2_min ...]
 % ========================================================================
 
 clc; clear; close all;
 
-% Load optimal trajectories for each policy (for units n > 1)
-M1 = load('./results/results_unit2_det.mat');
-M2 = load('./results/results_unit2_diu.mat');
-M3 = load('./results/results_unit2_ddu.mat');
-
-% Plot settings
-season = M1.season;
-s = M1.sysparams;
-opts = struct('titleTag',season);
-T  = M1.T;
-tt = (1:T)';
-Vmin  = s(2).min_V;
-Vmax  = s(2).max_V;
-
-savePath = './results/';
-if ~exist(savePath,'dir')
-    mkdir(savePath);
+resultsPath = './results/';
+if ~exist(resultsPath,'dir')
+    error('results folder not found: %s', resultsPath);
 end
 
+% Figure / font settings
+fontAxes   = 14;
+fontLegend = 13;
+fontTitle  = 16;
 
-% =====================================================
-% FIGURE 1: Standard Deviation Comparison for M2 and M3
-% =====================================================
+detFiles = dir(fullfile(resultsPath, 'results_unit*_det.mat'));
+if isempty(detFiles)
+    error('No results_unit*_det.mat files found in %s', resultsPath);
+end
 
-f1 = figure('Position',[100 100 850 350]); hold on; grid on;
-plot(tt, M2.std_hat(:,2), 'LineWidth',3, 'DisplayName','M2 \sigma_t');
-plot(tt, M3.std_hat(:,2), 'LineWidth',3, 'DisplayName','M3 \sigma_t');
-ylabel('Standard Deviation');
-xlabel('Time (h)')
-title('Unit 02 Inflow Uncertainty');
-legend('Location','northeast');
+% Parse unit indices from filenames
+unitIdx = zeros(numel(detFiles),1);
+for k = 1:numel(detFiles)
+    fname = detFiles(k).name;               % e.g. 'results_unit3_det.mat'
+    tokens = regexp(fname, 'results_unit(\d+)_det\.mat', 'tokens', 'once');
+    unitIdx(k) = str2double(tokens{1});
+end
+unitIdx = sort(unitIdx);
+n_units = numel(unitIdx);
 
-saveas(f1, fullfile(savePath, 'u2_sigma_diu_vs_ddu.png'));
+fprintf('Found %d units: %s\n', n_units, mat2str(unitIdx));
 
-% =====================================================
-% FIGURE 2: Effective Volume Boundaries
-% =====================================================
-% V_eff format is: [V1_max V1_min V2_max V2_min]
 
-% Extract Volume Bounds/Trajectories for Unit 2
-V2max_M1 = M1.V_eff(:,3);
-V2min_M1 = M1.V_eff(:,4);
-V2_M1 = M1.X(:,6);
+% Loop over each unit
+for uu = unitIdx(:)'
+    
+    fprintf('\n Processing Unit %d \n', uu);
 
-V2max_M2 = M2.V_eff(:,3);
-V2min_M2 = M2.V_eff(:,4);
-V2_M2 = M2.X(:,6);
+    % Load optimal trajectories for this unit (separate files)
+    detFile = fullfile(resultsPath, sprintf('results_unit%d_det.mat', uu));
+    diuFile = fullfile(resultsPath, sprintf('results_unit%d_diu.mat', uu));
+    dduFile = fullfile(resultsPath, sprintf('results_unit%d_ddu.mat', uu));
 
-V2max_M3 = M3.V_eff(:,3);
-V2min_M3 = M3.V_eff(:,4);
-V2_M3 = M3.X(:,6);
+    M1 = load(detFile);   % Deterministic
+    M2 = load(diuFile);   % DIU
+    M3 = load(dduFile);   % DDU
 
-% Base MATLAB default colors
-blueBound  = [0 0 1];         % blue
-greenBound = [0 1 0];         % green
-redBound   = [1 0 0];         % red
+    % Basic time/index info
+    season = M1.season;
+    s      = M1.sysparams;
+    T      = M1.T;
+    tt     = (1:T)';
 
-% Trajectory Colors
-blueTraj  = 0.6 * blueBound;
-greenTraj = 0.6 * greenBound;
-redTraj   = 0.6 * redBound;
+    % Indices for this unit in X and V_eff
+    % X columns: [V, p, u, s, q] per unit
+    baseX   = (uu-1)*5;           % offset for this unit
+    colV    = baseX + 1;          % volume column
+    colP    = baseX + 2;          % power column
 
-f2 = figure('Position',[100 480 1100 480]); hold on; grid on;
+    % V_eff columns: [V1_max V1_min V2_max V2_min ...]
+    colVmax = 2*uu - 1;
+    colVmin = 2*uu;
 
-% M1: Deterministic bounds and policy
-plot(tt, V2min_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound, 'DisplayName','M1^{Bounds}');
-plot(tt, V2max_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound, 'HandleVisibility','off');
-plot(tt, V2_M1,    'LineWidth',2, 'Color',blueTraj, 'DisplayName','M1^{Trajectory}');
+    % --------------------------------------------------------------------
+    % FIGURE 1: Standard Deviation Comparison for M2 and M3
+    % --------------------------------------------------------------------
+    f1 = figure('Position',[100 100 850 350]); hold on; grid on;
+    plot(tt, M2.std_hat(:,uu), 'LineWidth',3, 'DisplayName','M2 \sigma_t');
+    plot(tt, M3.std_hat(:,uu), 'LineWidth',3, 'DisplayName','M3 \sigma_t');
+    ylabel('Standard Deviation');
+    xlabel('Time (h)')
+    title(sprintf('Unit %02d Inflow Uncertainty (%s)', uu, season));
+    legend('Location','northeast');
+    set(gca, 'FontSize', fontAxes);
+    set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
 
-% M2: DIU bounds and policy
-plot(tt, V2min_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, 'DisplayName','M2^{Bounds}');
-plot(tt, V2max_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, 'HandleVisibility','off');
-plot(tt, V2_M2,    'LineWidth',2, 'Color',greenTraj, 'DisplayName','M2^{Trajectory}');
+    saveas(f1, fullfile(resultsPath, sprintf('u%d_sigma_diu_vs_ddu.png', uu)));
 
-% M3: DDU bounds and policy
-plot(tt, V2min_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound, 'DisplayName','M3^{Bounds}');
-plot(tt, V2max_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound, 'HandleVisibility','off');
-plot(tt, V2_M3,    'LineWidth',2, 'Color',redTraj, 'DisplayName','M3^{Trajectory}');
+    % --------------------------------------------------------------------
+    % FIGURE 2: Effective Volume Boundaries + Trajectories
+    % --------------------------------------------------------------------
+    % Extract bounds & trajectories for this unit
+    Vmax_M1 = M1.V_eff(:,colVmax);
+    Vmin_M1 = M1.V_eff(:,colVmin);
+    V_M1    = M1.X(:,colV);
 
-% ylim([0,0.06]);
-ylabel('SoC Bounds');
-xlabel('Time (h)')
-set(gca, 'FontSize', 14);        % axes labels, ticks
-set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
-legend('Location','best', 'FontSize', 13);
-title('SoC Trajectory and Effective Bounds', 'FontSize', 16);
+    Vmax_M2 = M2.V_eff(:,colVmax);
+    Vmin_M2 = M2.V_eff(:,colVmin);
+    V_M2    = M2.X(:,colV);
 
-saveas(f2, fullfile(savePath, 'u2_soc_diu_vs_ddu.png'));
+    Vmax_M3 = M3.V_eff(:,colVmax);
+    Vmin_M3 = M3.V_eff(:,colVmin);
+    V_M3    = M3.X(:,colV);
 
-% =====================================================
-% FIGURE 3: Power Production (Normalized)
-% =====================================================
+    % Base MATLAB default-ish colors
+    blueBound  = [0 0 1];
+    greenBound = [0 1 0];
+    redBound   = [1 0 0];
 
-% Extract power dispatch for each policy
-p2_M1 = M1.X(:,7);
-p2_M2 = M2.X(:,7);
-p2_M3 = M3.X(:,7);
+    blueTraj   = 0.6 * blueBound;
+    greenTraj  = 0.6 * greenBound;
+    redTraj    = 0.6 * redBound;
 
-P_all = [p2_M1, p2_M2, p2_M3];
+    f2 = figure('Position',[100 480 1100 480]); hold on; grid on;
 
-f3 = figure('Position',[100 480 1100 480]); hold on; grid on;
+    % M1: Deterministic bounds and policy
+    plot(tt, Vmin_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound,  ...
+        'DisplayName','M1^{Bounds}');
+    plot(tt, Vmax_M1, 'LineWidth',3, 'LineStyle','-.', 'Color',blueBound,  ...
+        'HandleVisibility','off');
+    plot(tt, V_M1,    'LineWidth',2, 'Color',blueTraj, ...
+        'DisplayName','M1^{Trajectory}');
 
-% Plot power dispatch 
-b = bar(tt, P_all, 'grouped');
+    % M2: DIU bounds and policy
+    plot(tt, Vmin_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, ...
+        'DisplayName','M2^{Bounds}');
+    plot(tt, Vmax_M2, 'LineWidth',3, 'LineStyle','-.', 'Color',greenBound, ...
+        'HandleVisibility','off');
+    plot(tt, V_M2,    'LineWidth',2, 'Color',greenTraj, ...
+        'DisplayName','M2^{Trajectory}');
 
-% Apply MATLAB default colors
-b(1).FaceColor = [0 0 1];    % blue
-b(2).FaceColor = [0 1 0];    % green
-b(3).FaceColor = [1 0 0];    % red
+    % M3: DDU bounds and policy
+    plot(tt, Vmin_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound,   ...
+        'DisplayName','M3^{Bounds}');
+    plot(tt, Vmax_M3, 'LineWidth',3, 'LineStyle','-.', 'Color',redBound,   ...
+        'HandleVisibility','off');
+    plot(tt, V_M3,    'LineWidth',2, 'Color',redTraj, ...
+        'DisplayName','M3^{Trajectory}');
 
-ylabel('Normalized Power (p.u.)');
-xlabel('Time (h)')
-set(gca, 'FontSize', 14);        % axes labels, ticks
-set(findall(gcf,'Type','text'), 'FontSize', 14);  % all text objects
-legend({'M1', 'M2', 'M3'}, 'Location', 'best', 'FontSize', 13);
-title('Unit 02 Normalized Power Dispatch', 'FontSize', 16);
+    ylabel('SoC Bounds');
+    xlabel('Time (h)')
+    set(gca, 'FontSize', fontAxes);
+    set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
+    legend('Location','best', 'FontSize', fontLegend);
+    title(sprintf('Unit %02d SoC Trajectory and Effective Bounds', uu), ...
+          'FontSize', fontTitle);
+    ylim([0 0.5]);
+
+    saveas(f2, fullfile(resultsPath, sprintf('u%d_soc_diu_vs_ddu.png', uu)));
+
+    % --------------------------------------------------------------------
+    % FIGURE 3: Power Production (Normalized)
+    % --------------------------------------------------------------------
+    p_M1 = M1.X(:,colP);
+    p_M2 = M2.X(:,colP);
+    p_M3 = M3.X(:,colP);
+
+    P_all = [p_M1, p_M2, p_M3];
+
+    f3 = figure('Position',[100 480 1100 480]); hold on; grid on;
+
+    b = bar(tt, P_all, 'grouped');
+
+    b(1).FaceColor = blueBound;
+    b(2).FaceColor = greenBound;
+    b(3).FaceColor = redBound;
+
+    ylabel('Normalized Power (p.u.)');
+    xlabel('Time (h)')
+    set(gca, 'FontSize', fontAxes);
+    set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
+    legend({'M1', 'M2', 'M3'}, 'Location', 'best', 'FontSize', fontLegend);
+    title(sprintf('Unit %02d Normalized Power Dispatch', uu), ...
+          'FontSize', fontTitle);
+
+    saveas(f3, fullfile(resultsPath, sprintf('u%d_power_diu_vs_ddu.png', uu)));
+
+    % (Optional) close figures to avoid clutter
+    % close([f1 f2 f3]);
+
+end
+

@@ -94,6 +94,7 @@ function comparePlots(path, tag1, tag2, tag3, printplot)
         plot(q3,'-r','LineWidth',2);
         title('Inflow'); xlabel('Hour'); ylabel('Flow (m^3/hr)');
         xlim([1, T]);
+        % ylim([0, .1])
 
         % head_t
         subplot(2,3,6)

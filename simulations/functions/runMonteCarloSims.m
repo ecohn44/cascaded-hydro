@@ -1,4 +1,4 @@
-function [V_sim, u_sim, p_sim, viol_frac, prob_run_violation] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot, policyLabel)
+function [V_sim, u_sim, p_sim, MFV, RLR] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot, policyLabel)
 
     % Set random seed
     rng(0, 'twister');
@@ -88,13 +88,13 @@ function [V_sim, u_sim, p_sim, viol_frac, prob_run_violation] = runMonteCarloSim
     end
 
     %% Simulation Metrics
-    % Metric #1: Per-time-step violation fraction
+    % Metric #1 (MFV): Per-time-step violation fraction
     viol_frac = squeeze(mean(violation_count, 2));
-    overall_avg = mean(viol_frac, 1);                
+    MFV = mean(viol_frac, 1);                
     
-    % Metric #2: Run-level violation probability
+    % Metric #2 (RLR): Run-level violation probability
     run_violation = squeeze(any(violation_count, 1));  
-    prob_run_violation = mean(run_violation, 1);     
+    RLR = mean(run_violation, 1);     
     
     fprintf('\n  Monte Carlo Violation Report\n');
     
@@ -102,11 +102,11 @@ function [V_sim, u_sim, p_sim, viol_frac, prob_run_violation] = runMonteCarloSim
         
         fprintf('Reservoir %d:\n', i);
         
-        fprintf('   Mean per-time-step violation rate: %.2f%%\n', ...
-                100 * overall_avg(i));
+        fprintf('   Mean Frequency of Violations (MFV): %.2f%%\n', ...
+                100 * MFV(i));
 
-        fprintf('   Probability of any violation in a run: %.2f%%\n', ...
-                100 * prob_run_violation(i));
+        fprintf('   Run-Level Risk (RLR): %.2f%%\n', ...
+                100 * RLR(i));
     end
 
 

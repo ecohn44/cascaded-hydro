@@ -15,9 +15,9 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     %% Seasonal Forecasting Parameters
     params(1) = struct( ...
         'season',   'dry', ...    % Hydrology season
-        'constant', -0.001, ...   % DDU Params
-        'coef1',    0.5,  ...    % DDU inflow_lag1 [m3/hr] (.83)
-        'coef2',    0.5,  ...    % DDU outflow_lag [m3/hr] (0.17)
+        'constant', 0.0020, ...    % DDU Params (-0.001)
+        'coef1',    0.950,  ...       % DDU inflow_lag1 [m3/hr] (.83)
+        'coef2',    0,  ...       % DDU outflow_lag [m3/hr] (0.17)
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
         'AR_std',   0.00375, ...  % Updated to be 5% of flow (0.075)

@@ -176,7 +176,11 @@ function [model, obj, X, std_hat, V_eff] = genOptimization(T, N, c, q, lag, scal
 
         % Abort early on infeasible/numerical issues
         if model.problem ~= 0
-            error('Solver issue at t=%d: %s', t, yalmiperror(model.problem));
+            fprintf('\n*** Solver issue at t = %d ***\n', t);
+            fprintf('  problem code : %d\n', model.problem);
+            fprintf('  yalmiperror  : %s\n', yalmiperror(model.problem));
+            fprintf('  model.info   : %s\n', model.info);
+            error('Stopping after first solver error at t=%d.', t);
         end
 
         %% Store results for time t
