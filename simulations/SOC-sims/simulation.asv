@@ -71,13 +71,27 @@ for i = 1:n
     q(:,i) = droughtSimulator(T, lag, simSettings.season, dp.mode, dp);
 end
 
-% Offline DIU covariance and std devs
-Sigma_diu                 = cov(q);                  % n×n covariance (DIU)
-modelparams.Sigma_diu     = Sigma_diu;               % store full covariance
-modelparams.sigma_diu     = sqrt(diag(Sigma_diu));   % n×1 std devs
+%% ========================================================================
+% SECTION 3B: STREAMFLOW COVARIANCE
+% ========================================================================
 
-% Offline correlation matrix (for DDU CCC structure)
-modelparams.Rcorr         = corr(q);                 % n×n correlation
+% Overload "R" matrix for all uncertainty settings 
+switch simSettings.framework 
+    case {"det"}
+        R = zeros(n,n);
+    case {"diu"}
+        R = cov(q);  % covariance matrix
+    case {"ddu"}
+        R = corr(q); % correlation matrix
+end 
+
+% Offline DIU std devs 
+Sigma_diu           = cov(q);                 % (T+lag) x n → n×n covariance
+sigma_diu           = sqrt(diag(Sigma_diu));  % n×1 std devs
+modelparams.sigma_diu = sigma_diu;            % stash in params struct
+
+% Offline covariance matrix 
+modelparams.R = corr(q)l
 
 %% ========================================================================
 % SECTION 4: OPTIMIZATION FRAMEWORK
@@ -86,7 +100,7 @@ modelparams.Rcorr         = corr(q);                 % n×n correlation
 scale = 1; % Scale safety bounds 
 % scale_ddu = 25; % Scale gamma 
 
-[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, lag, scale, ...
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, R, lag, scale, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 

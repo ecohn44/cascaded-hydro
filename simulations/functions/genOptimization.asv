@@ -278,6 +278,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                             break;
                         end
                     end
+                    % ---- End SSH loop ----
         
                     % Store result into X(t,:)
                     for i = 1:n
