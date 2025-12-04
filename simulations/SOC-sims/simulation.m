@@ -32,7 +32,7 @@ n = 4;              % number of units in cascaded network
 % ========================================================================
 
 % Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-bon");
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -41,7 +41,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
 
 % Date range settings 
-D = 7;                       % Simulation duration in days
+D = 2.5;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
 
@@ -68,6 +68,8 @@ for i = 1:n
         dp.amp1 = baseDrought.amp1 * scale;
     end
 
+    dp.shiftMult = i - 1;
+
     q(:,i) = droughtSimulator(T, lag, simSettings.season, dp.mode, dp);
 end
 
@@ -78,6 +80,13 @@ modelparams.sigma_diu     = sqrt(diag(Sigma_diu));   % n×1 std devs
 
 % Offline correlation matrix (for DDU CCC structure)
 modelparams.Rcorr         = corr(q);                 % n×n correlation
+
+% Check PD-ness
+if isPD(Sigma_diu)
+    disp('Σ is PD');
+else
+    disp('Σ is NOT PD');
+end 
 
 %% ========================================================================
 % SECTION 4: OPTIMIZATION FRAMEWORK
@@ -214,4 +223,12 @@ function severityScales = makeSeverityScales(N)
     
     % Combine
     severityScales = [firstHalf secondHalf];
+end
+
+
+function tf = isPD(A)
+    % Symmetrize first
+    A = (A + A')/2;      
+    [~,p] = chol(A);
+    tf = (p == 0);        % true if PD
 end

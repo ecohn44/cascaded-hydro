@@ -19,8 +19,9 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     n_units = numel(vars.V);
     dim_x   = 4 * n_units;
 
-    %% STEP 1: Solve the LP (no volume bounds/JCC )
+    %% STEP 1: Solve the LP 
     optimize(cons, -Objective, options);
+    obj_val = value(Objective);
 
     % Build current solution vector xk from YALMIP values
     xk = zeros(dim_x, 1);
@@ -34,6 +35,9 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
 
     % Evaluate reliability (CDF of joint normals for inflow)
     phi_k = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
+
+    fprintf('   SSH base solve: obj=%.4e, φ=%.4f, target=%.4f\n', ...
+            obj_val, phi_k, p_target);
 
     % Check if unconstrained solution is feasible already (phi(x) ≥ p)
     if phi_k >= p_target
@@ -135,8 +139,12 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     fprintf('%.2f ', alpha_vals);
     fprintf('(sum=%.2f)\n', sum(alpha_vals));
 
+    % Norm of gradient
+    grad_norm = norm(g);
+    fprintf('   Gradient norm ||∇φ||=%.3e\n', grad_norm);
+
     % Add cut if gradient is non-trivial 
-    if norm(g) < 1e-9
+    if grad_norm < 1e-9
         fprintf('   Gradient ≈ 0 (flat φ region) → skipping cut\n');
     else
         % Build linear form ∇φ(x*)ᵀ (x - x*) ≤ 0  →  ∑ g_i x_i ≥ g^T x*
@@ -159,6 +167,7 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
 
     %% STEP 4: Re-solve LP with the new cut
     optimize(cons, -Objective, options);
+    obj_val2 = value(Objective);
 
     % Updated solution
     xk = zeros(dim_x, 1);
@@ -172,7 +181,8 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
 
     phi_k = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
 
-    fprintf('   After cut: φ(x)=%.4f\n', phi_k);
+    fprintf('   After cut: obj=%.4e, φ(x)=%.4f (Δφ=%.3e)\n', ...
+            obj_val2, phi_k, phi_k - phi_star);
 
     % Return outputs
     cons_out  = cons; 
@@ -205,6 +215,16 @@ function phi = compute_phi_from_x(x, q_mean_vec, Sigma_q, X_prev, s)
         q_high(i) = s(i).max_V - V_prev + u_i + s_i;
     end
 
+    % disp(Sigma_q)
+
+    % Deterministic special case 
+    if all(abs(Sigma_q(:)) < 1e-12)
+        % Probability is 1 if mu in [q_low, q_high], else 0
+        in_band = all(q_mean_vec >= q_low' & q_mean_vec <= q_high');
+        phi = double(in_band);
+        return;
+    end
+
     % Multivariate normal probability that q lies in [q_low, q_high]
-    phi = mvncdf(q_low, q_high, q_mean_vec, Sigma_q);
+    phi = mvncdf(q_low', q_high', q_mean_vec, Sigma_q);
 end

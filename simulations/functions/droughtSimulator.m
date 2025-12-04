@@ -1,43 +1,75 @@
 function q = droughtSimulator(T, lag, season, mode, droughtParams)
-% droughtSimulator  Generate inflow under different drought scenarios.
+% droughtSimulator  Generate inflow under different drought scenarios,
+%                   with optional *spatial lag* of the drought anomaly.
 %
 % INPUTS
-%   q0            baseline inflow (scalar or vector length T+lag)
-%   T, lag        horizon and lag
-%   season        'wet' → positive pulses, 'dry' → negative pulses
-%   mode          'pulse'    -> localized drought (or flood) pulses
-%                 'extended' -> extended drought regime
-%   droughtParams struct containing parameters for the chosen mode
-%
+%   T, lag        : horizon and AR lag (same as before)
+%   season        : 'wet' / 'dry'
+%   mode          : 'constant' / 'pulse' / 'extended'
+%   droughtParams : struct with at least
+%                     .q0        baseline inflow (scalar)
+%                   optionally:
+%                     .shiftMult integer (0,1,2,...) = how many *lag*-blocks
+%                                to delay the drought anomaly
 %
 % OUTPUT
-%   q  : (T+lag) × 1 inflow time series (nonnegative)
+%   q  : (T+lag) × 1 inflow time series
 %
-% -------------------------------------------------------------------------
+%   For example, if you set in the caller
+%       dp.shiftMult = i-1;
+%   then reservoir i sees the same drought shape, but delayed by
+%       (i-1)*lag  time steps.
 
     n = T + lag;
     q0 = droughtParams.q0;
 
-    % Build baseline q
-    q = q0 * ones(n,1);
+    % Baseline (no drought) is the same for all units
+    base = q0 * ones(n,1);
 
+    % Start from baseline
+    q = base;
 
-    % Dispatch based on mode
+    % Shape the drought on top of baseline 
     switch lower(mode)
         case 'constant'
-            % Do nothing: q stays equal to the baseline q0
+            % Do nothing: stays at baseline q0
+
         case 'pulse'
             q = applyPulseDrought(q, T, lag, season, droughtParams);
 
         case 'extended'
             q = applyExtendedDrought(q, T, lag, season, droughtParams);
+
+        otherwise
+            error('Unknown drought mode: %s', mode);
     end
 
-    % Enforce nonnegativity
+    % Apply spatial lag to the drought
+    deltaq = q - base;   % length n
+
+    % Optional field: how many lag-blocks to delay this unit
+    shiftMult = 0;
+    if isfield(droughtParams, 'shiftMult')
+        shiftMult = droughtParams.shiftMult;
+    end
+
+    % Number of time steps to shift anomaly
+    shiftSteps = round(shiftMult * lag);
+
+    if shiftSteps > 0
+        % (Downstream) fill early part with no anomaly, shift anomaly forward
+        deltaq = [zeros(shiftSteps,1); deltaq(1:end-shiftSteps)];
+    elseif shiftSteps < 0
+        % (Upstream) drought arrives earlier
+        s = -shiftSteps;
+        deltaq = [deltaq(1+s:end); zeros(s,1)];
+    end
+
+    % Reconstruct inflow and enforce nonnegativity
+    q = base + deltaq;
     q = max(q, 0);
 
 end
-
 
 function q = applyPulseDrought(q, T, lag, season, droughtParams)
 
