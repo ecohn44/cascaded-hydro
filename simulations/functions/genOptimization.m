@@ -254,7 +254,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
                     % Find Slater Point
                     q_mean = q_t;
-                    x_slater = findSlater(X(t-1,:), q_mean, s, c);
+                    x_slater = findSlater(X(t-1,:), q_mean, s, c, V_eff(t,:));
             
                     % SSH loop with global stopping criteria
                     maxSSH  = 5;        % max number of SSH cuts at this time t
