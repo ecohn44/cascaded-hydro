@@ -68,7 +68,7 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
 
         % Find max release
         if u_upper >= u_lower
-            u_try = u_upper;
+            u_try = 0.5*(u_upper + u_lower);
         else
             % infeasible intersection –> use ummin or umax
             u_try = min(max(Uprev, umin), umax);
@@ -76,7 +76,7 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
 
         % Calculate spill if volume is above upper bounds
         s_try = 0;
-        V_after = V_try - u_try;
+        V_after = V_pre - u_try;
 
         if V_after > maxV
             s_try = maxV - V_after;

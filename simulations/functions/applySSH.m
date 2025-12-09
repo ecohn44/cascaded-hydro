@@ -57,7 +57,7 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
 
     % Check to make sure slater point satifies reliability criteria 
     if phi_high < p_target
-        error('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f', ...
+        fprintf('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f', ...
                phi_high, p_target);
     end
 

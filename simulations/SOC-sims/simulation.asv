@@ -22,7 +22,7 @@ g = 9.8;           % acceleration due to gravity [m/s^2]
 % c = eta*rho_w*g/3.6e9; % power prod coefficient
 c = 1;
 N = 40;             % number of sub-intervals for piecewise linear approx
-n = 3;              % number of units in cascaded network 
+n = 2;              % number of units in cascaded network 
 
 % Load inflow data 
 [modelparams, sysparams, droughtparams] = dataload(n, N);
