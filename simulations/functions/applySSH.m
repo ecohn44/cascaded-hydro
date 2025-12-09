@@ -36,8 +36,7 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     % Evaluate reliability (CDF of joint normals for inflow)
     phi_k = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
 
-    fprintf('   SSH base solve: obj=%.4e, φ=%.4f, target=%.4f\n', ...
-            obj_val, phi_k, p_target);
+    % fprintf('   SSH base solve: obj=%.4e, φ=%.4f, target=%.4f\n', obj_val, phi_k, p_target);
 
     % Check if unconstrained solution is feasible already (phi(x) ≥ p)
     if phi_k >= p_target
@@ -52,12 +51,16 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     %% STEP 2: Interpolation 
     % lower bound: phi(xk) from unconstrained LP
     phi_low  = phi_k;  
+    
     % upper bound: phi(xs) from slater point (feasible not optimal)
     phi_high = compute_phi_from_x(x_slater, q_mean, Sigma_q, X_prev, s);
-
+    
     % Check to make sure slater point satifies reliability criteria 
     if phi_high < p_target
-        fprintf('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f', ...
+        warning('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f', ...
+               phi_high, p_target);
+    else 
+        fprintf('Slater point feasible: φ(x_slater)=%.4f >= p_target=%.4f', ...
                phi_high, p_target);
     end
 
@@ -141,7 +144,7 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
 
     % Norm of gradient
     grad_norm = norm(g);
-    fprintf('   Gradient norm ||∇φ||=%.3e\n', grad_norm);
+    % fprintf('   Gradient norm ||∇φ||=%.3e\n', grad_norm);
 
     % Add cut if gradient is non-trivial 
     if grad_norm < 1e-9

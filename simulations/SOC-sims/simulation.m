@@ -41,7 +41,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
 
 % Date range settings 
-D = 2.5;                       % Simulation duration in days
+D = 2;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
 
@@ -121,7 +121,7 @@ end
 simPlots(path, X, sysparams, T, c, printplot);
 
 % Store simulation results 
-if simSettings.framework == "ssh"
+if simSettings.bounds == "ssh"
     results_dir = "./resultsSSH/";
 else
     results_dir = "./resultsBonferroni/";

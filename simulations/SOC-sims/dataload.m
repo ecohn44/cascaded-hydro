@@ -37,7 +37,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'name',   'Unit 01', ... % will be overwritten per unit
         'a',      5.0, ...    % Hydraulic head coef (max effective voltage)
         'b',      0.45, ...   % Hydraulic head coef (concavity)
-        'min_ut', 0.01, ...
+        'min_ut', 0.00, ...   % 0.01
         'max_ut', 0.05, ...
         'min_h',  0, ...
         'max_h',  5.0, ...
@@ -96,7 +96,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     droughtparams(2) = droughtTemplate;
     droughtparams(3) = droughtTemplate;
 
-    % Pulse-type drought (uses t0 as FRACTIONS of horizon; T+lag handled later)
+    % Pulse-type drought (uses t0 as FRACTIONS of horizon)
     droughtparams(1).mode         = 'pulse';
     droughtparams(1).amp1         = 0.4;      % 40% drop in inflow (dry) or +40% (wet)
     droughtparams(1).amp2         = 0.3;      % 30% drop / bump for second pulse
@@ -107,9 +107,9 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     % Extended drought (single-decay events)
     droughtparams(2).mode         = 'extended';
     droughtparams(2).amp1         = 0.32;   % Maginitude of drought event
-    droughtparams(2).nEvents      = 2;      % ONE main event (less whiplash)
-    droughtparams(2).daysPerEvent = 2.5;    % longer, sustained drought
-    droughtparams(2).tauHours     = 36;     % smoother, slower decay
+    droughtparams(2).nEvents      = 2;      % number of events
+    droughtparams(2).daysPerEvent = .5;     % longer, sustained drought
+    droughtparams(2).tauHours     = 12;     % smoother, slower decay
 
     droughtparams(3).mode         = 'constant';
 
