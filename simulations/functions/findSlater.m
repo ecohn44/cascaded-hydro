@@ -68,10 +68,10 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
 
         % Find max release
         if u_upper >= u_lower
-            u_try = 0.5*(u_upper + u_lower);
+            u_try = u_lower; % most conservative  guess
         else
-            % infeasible intersection –> use previous value
-            u_try = Uprev;
+            % infeasible intersection –> start curtailing release 
+            u_try = Uprev + RRdn;
         end
 
         % Calculate spill if volume is above upper bounds
