@@ -50,7 +50,7 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
     % Optional field: how many lag-blocks to delay this unit
     shiftMult = 0;
     if isfield(droughtParams, 'shiftMult')
-        shiftMult = droughtParams.shiftMult;
+        shiftMult = 2*droughtParams.shiftMult;
     end
 
     % Number of time steps to shift anomaly

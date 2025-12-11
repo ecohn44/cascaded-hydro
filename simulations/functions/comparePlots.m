@@ -1,17 +1,17 @@
 function comparePlots(path, tag1, tag2, tag3, printplot)
 % Summary: Overlay three simulation frameworks (e.g. DET/DIU/DDU)
-% for all units in the results files.
+% for all units in a single figure.
 %
 % Example call:
 %   comparePlots('./results', 'det','diu','ddu', true);
 %
 % Inputs:
 %   path       - folder where results are saved 
-%   tags       - policy names 
-%   printplot  - true/false to save figures
+%   tag1,tag2,tag3 - policy names 
+%   printplot  - true/false to save figure
 
     if nargin < 5, printplot = false; end
-    font  = 10;
+    font  = 16;
 
     % Load files for Unit 1 just to get sysparams / n_units
     D1 = load(fullfile(path, sprintf('results_unit1_%s.mat', lower(tag1))));
@@ -20,7 +20,17 @@ function comparePlots(path, tag1, tag2, tag3, printplot)
 
     n_units = numel(D1.sysparams);
     T       = D1.T;
-    tt      = (1:T)';
+
+    % Create one big figure for all units
+    fig = figure('Position',[100 100 1600 300*n_units]);
+
+    sgtitle('Optimal Policy Trajectories', ...
+        'FontSize', font+6, 'FontWeight','bold');
+
+    labels = {upper(tag1), upper(tag2), upper(tag3)};
+
+    % For legend: store handles from the first unit's u-plot
+    h1_leg = []; h2_leg = []; h3_leg = [];
 
     for i = 1:n_units
         sp   = D1.sysparams(i);
@@ -30,7 +40,7 @@ function comparePlots(path, tag1, tag2, tag3, printplot)
         V1 = D1.X(:, base+1);  p1 = D1.X(:, base+2);
         u1 = D1.X(:, base+3);  s1 = D1.X(:, base+4);  q1 = D1.X(:, base+5);
 
-        % Extract trajectory from Policy 3
+        % Extract trajectory from Policy 2
         V2 = D2.X(:, base+1);  p2 = D2.X(:, base+2);
         u2 = D2.X(:, base+3);  s2 = D2.X(:, base+4);  q2 = D2.X(:, base+5);
 
@@ -38,88 +48,117 @@ function comparePlots(path, tag1, tag2, tag3, printplot)
         V3 = D3.X(:, base+1);  p3 = D3.X(:, base+2);
         u3 = D3.X(:, base+3);  s3 = D3.X(:, base+4);  q3 = D3.X(:, base+5);
 
-        % Calcculate hydraulic head
+        % Calculate hydraulic head
         head1 = sp.a .* (V1.^sp.b);
         head2 = sp.a .* (V2.^sp.b);
         head3 = sp.a .* (V3.^sp.b);
 
-        labels = {upper(tag1), upper(tag2), upper(tag3)};
-
-        % Plot overlays
-        fig = figure('Position',[100 100 1200 600]);
-        sgtitle(sprintf('%s vs %s vs %s – Unit %d', ...
-            upper(tag1), upper(tag2), upper(tag3), sp.unit), ...
-            'FontSize', font+2, 'FontWeight','bold');
+        % Row index for subplots (1..n_units)
+        row = i - 1;
+        % Column mapping:
+        % 1: u_t, 2: p_t, 3: s_t, 4: V_t, 5: q_t, 6: head_t
 
         % u_t
-        subplot(2,3,1)
+        ax = subplot(n_units, 6, row*6 + 1);
         h1 = plot(u1,'-k','LineWidth',2); hold on;
         h2 = plot(u2,'-b','LineWidth',2);
         h3 = plot(u3,'-r','LineWidth',2);
         yline(sp.max_ut,'--k'); yline(sp.min_ut,'--k');
-        title('Generation Outflow'); xlabel('Hour'); ylabel('Flow (m^3/hr)');
-        % legend(labels{:},'Location','best');
+        title('u_t','FontSize',font);
+        if i == n_units
+            xlabel('Hour');
+        end
+        ylabel(sprintf('Unit %d', sp.unit));
         xlim([1, T]);
+        set(ax,'FontSize',font);
 
-        % p_t
-        subplot(2,3,2)
+        % store legend handles from first unit only
+        if i == 1
+            h1_leg = h1; h2_leg = h2; h3_leg = h3;
+        end
+
+        % p_t 
+        ax = subplot(n_units, 6, row*6 + 2);
         plot(p1,'-k','LineWidth',2); hold on;
         plot(p2,'-b','LineWidth',2);
         plot(p3,'-r','LineWidth',2);
         yline(sp.F,'--k');
-        title('Hydropower Generation'); xlabel('Hour'); ylabel('MWh');
+        title('p_t','FontSize',font);
+        if i == n_units
+            xlabel('Hour');
+        end
         xlim([1, T]);
+        set(ax,'FontSize',font);
 
-        % s_t
-        subplot(2,3,3)
+        % s_t 
+        ax = subplot(n_units, 6, row*6 + 3);
         plot(s1,'-k','LineWidth',2); hold on;
         plot(s2,'-b','LineWidth',2);
         plot(s3,'-r','LineWidth',2);
-        title('Spill Outflow'); xlabel('Hour'); ylabel('Flow (m^3/hr)');
+        title('s_t','FontSize',font);
+        if i == n_units
+            xlabel('Hour');
+        end
         xlim([1, T]);
+        set(ax,'FontSize',font);
 
-        % V_t
-        subplot(2,3,4)
+        % v_t
+        ax = subplot(n_units, 6, row*6 + 4);
         plot(V1,'-k','LineWidth',2); hold on;
         plot(V2,'-b','LineWidth',2);
         plot(V3,'-r','LineWidth',2);
         yline(sp.max_V,'--k'); yline(sp.min_V,'--k');
-        title('Reservoir Volume'); xlabel('Hour'); ylabel('m^3');
+        title('v_t','FontSize',font);
+        if i == n_units
+            xlabel('Hour');
+        end
         xlim([1, T]);
+        set(ax,'FontSize',font);
 
-        % q_t
-        subplot(2,3,5)
+        % q_t 
+        ax = subplot(n_units, 6, row*6 + 5);
         plot(q1,'-k','LineWidth',2); hold on;
         plot(q2,'-b','LineWidth',2);
         plot(q3,'-r','LineWidth',2);
-        title('Inflow'); xlabel('Hour'); ylabel('Flow (m^3/hr)');
+        title('q_t','FontSize',font);
+        if i == n_units
+            xlabel('Hour');
+        end
         xlim([1, T]);
-        % ylim([0, .1])
+        ylim([0, 0.05])
+        set(ax,'FontSize',font);
 
-        % head_t
-        subplot(2,3,6)
+        % h_t 
+        ax = subplot(n_units, 6, row*6 + 6);
         plot(head1,'-k','LineWidth',2); hold on;
         plot(head2,'-b','LineWidth',2);
         plot(head3,'-r','LineWidth',2);
         yline(sp.max_h,'--k'); yline(sp.min_h,'--k');
-        title('Forebay Elevation'); xlabel('Hour'); ylabel('Elevation (m)');
+        title('h_t','FontSize',font);
+        if i == n_units
+            xlabel('Hour');
+        end
         xlim([1, T]);
+        set(ax,'FontSize',font);
+    end
 
-        % global legend
-        labels = {upper(tag1), upper(tag2), upper(tag3)};  % or 2 tags if only 2
-        lg = legend([h1(1) h2(1) h3(1)], labels{:}, ...
+    % Global legend 
+    if ~isempty(h1_leg)
+        lg = legend([h1_leg h2_leg h3_leg], labels{:}, ...
                     'Orientation', 'horizontal', ...
                     'FontSize', 10, ...
                     'Box', 'on');
+        % Center the legend dynamically
+        drawnow;  % force legend to compute its size
+        legendPos = lg.Position;
+        legendWidth = legendPos(3);
+        lg.Position = [0.5 - legendWidth/2, 0.01, legendWidth, legendPos(4)];
+    end
 
-        % [left bottom width height] in normalized figure units
-        lg.Position = [0.415 0.005 0.17 0.04];
-
-        % Save figure if requested
-        if printplot
-            outFile = fullfile("./plots", ...
-                sprintf('Unit%d_%s_%s_%s.png', sp.unit, lower(tag1), lower(tag2), lower(tag3)));
-            saveas(fig, outFile);
-        end
+    % Save figure if requested
+    if printplot
+        outFile = fullfile("./plots", ...
+            sprintf('AllUnits_%s_%s_%s.png', lower(tag1), lower(tag2), lower(tag3)));
+        saveas(fig, outFile);
     end
 end

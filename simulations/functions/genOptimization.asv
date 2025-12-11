@@ -81,9 +81,10 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
         V_min_shift = zeros(1, n);
         V_max_shift = zeros(1, n);
 
+
         %% Determine Volume Bounds (chance constraints)
         switch bounds
-            case {"det"}
+            case {"det", "jcc-ssh"}
                 % Deterministic / SSH: no shifts
 
             case {"jcc-bon"}
@@ -94,21 +95,15 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                 V_min_shift =  z .* std_safety(t,:);
                 V_max_shift = -z .* std_safety(t,:);
 
-                % Store effective bounds and apply shift in constraints
-                for i = 1:n
-                    V_eff(t,2*i-1) = s(i).max_V + V_max_shift(i);
-                    V_eff(t,2*i)   = s(i).min_V + V_min_shift(i);
-                end
+            case {j}
+                error('Unknown bounds type: %s', bounds);
+        end
 
-            case {"jcc-ssh"}
-                % SSH z-score
-                z = scale * norminv(1 - (eps_t));
-                
-                % Store effective vounds but don't apply shift directly
-                for i = 1:n
-                    V_eff(t,2*i-1) = s(i).max_V - z*std_safety(t,i);
-                    V_eff(t,2*i)   = s(i).min_V + z*std_safety(t,i);
-                end
+        % Store effective volume bounds
+        % V_eff(t,2*i-1) = max_V_eff(i), V_eff(t,2*i) = min_V_eff(i)
+        for i = 1:n
+            V_eff(t,2*i-1) = s(i).max_V + V_max_shift(i);
+            V_eff(t,2*i)   = s(i).min_V + V_min_shift(i);
         end
 
         %% Define Decision Variables (for this time step)
@@ -258,11 +253,11 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                     );
 
                     % Find Slater Point
-                    fprintf('\n@t=%d Slater Point Initialization: \n', t)
-                    x_slater = findSlater(X(t-1,:), q_t, s, c, V_eff(t,:));
+                    q_mean = q_t;
+                    x_slater = findSlater(X(t-1,:), q_mean, s, c, V_eff(t,:));
             
                     % SSH loop with global stopping criteria
-                    maxSSH  = 1;        % max number of SSH cuts at this time t
+                    maxSSH  = 5;        % max number of SSH cuts at this time t
                     tol_phi = 1e-3;     % tolerance on reliability
                     ssh_reason = '';    % track why we stopped
                     x_prev_ssh = [];
@@ -272,7 +267,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                         
                         % SSH iteration 
                         [cons, x_sol, phi_k, alpha_k] = applySSH( ...
-                            cons, vars, t, X(t-1,:), q_t, Sigma_q, ...
+                            cons, vars, t, X(t-1,:), q_mean, Sigma_q, ...
                             x_slater, target_phi, s, Objective, options);
                 
                         % Store latest values for this time step

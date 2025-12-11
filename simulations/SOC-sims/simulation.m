@@ -22,7 +22,7 @@ g = 9.8;           % acceleration due to gravity [m/s^2]
 % c = eta*rho_w*g/3.6e9; % power prod coefficient
 c = 1;
 N = 40;             % number of sub-intervals for piecewise linear approx
-n = 3;              % number of units in cascaded network 
+n = 4;              % number of units in cascaded network 
 
 % Load inflow data 
 [modelparams, sysparams, droughtparams] = dataload(n, N);
@@ -32,7 +32,7 @@ n = 3;              % number of units in cascaded network
 % ========================================================================
 
 % Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -41,7 +41,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
 
 % Date range settings 
-D = 2.5;                       % Simulation duration in days
+D = 3;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
 
@@ -57,7 +57,6 @@ q = zeros(T+lag, n);
 % Cascaded drought parameters
 baseDrought = droughtparams;
 severityScales = makeSeverityScales(n);    
-plotDroughtProfiles(baseDrought, severityScales, T, lag)
 
 % Simulate drought event 
 for i = 1:n
@@ -72,6 +71,9 @@ for i = 1:n
 
     q(:,i) = droughtSimulator(T, lag, simSettings.season, dp.mode, dp);
 end
+
+% Plot streamflow profiles
+plotStreamflows(q)
 
 % Offline DIU covariance and std devs
 Sigma_diu                 = cov(q);                  % n×n covariance (DIU)
@@ -121,7 +123,7 @@ end
 simPlots(path, X, sysparams, T, c, printplot);
 
 % Store simulation results 
-if simSettings.framework == "ssh"
+if simSettings.bounds == "ssh"
     results_dir = "./resultsSSH/";
 else
     results_dir = "./resultsBonferroni/";
@@ -144,71 +146,30 @@ fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
 
 
-function plotDroughtProfiles(baseDrought, severityScales, T, lag)
-% plotDroughtProfiles
-%   Visualize drought multiplicative factors applied to each unit.
-%   This matches the EXTENDED drought logic used in applyExtendedDrought.
-%
-%   baseDrought     = droughtparams(2)   (extended drought struct)
-%   severityScales  = 1 x n_units vector (ex: [1.0 0.7 0.5 0.3])
-%
+function plotStreamflows(q)
+    % q: T x n matrix, each column is a streamflow time series
 
-    n_units = numel(severityScales);
-    nTot    = T + lag;
+    [T, n] = size(q);
+    t = (1:T)';              % simple time index; replace with real time if you have it
 
-    % Extract drought parameters 
-    amp1    = baseDrought.amp1;
-    nEvents = baseDrought.nEvents;
-    daysPerEvent = baseDrought.daysPerEvent;
-    tauHours     = baseDrought.tauHours;
+    figure;
+    for i = 1:n
+        subplot(n, 1, i);
+        plot(t, q(:, i), 'LineWidth', 1.8);
+        ylim([0 0.05]); 
+        
+        ylabel(sprintf('q_%d', i), 'FontSize', 12);
+        set(gca, 'FontSize', 12); 
 
-    % Convert to steps (1 step = 1 hour)
-    eventLen = round(daysPerEvent * 24);
-    tauSteps = round(tauHours);
-    gapLen   = round((daysPerEvent/2) * 24);   % same gap as simulator
-
-    % Time axis
-    t = (1:nTot)';
-
-    % Preallocate drought factors (initially all 1)
-    factors = ones(nTot, n_units);
-
-    for e = 1:nEvents
-
-        % event start
-        startIdx = (e-1)*(eventLen + gapLen) + 1;
-        if startIdx > nTot
-            break;
+        if i == 1
+            title('Streamflow Time Series', 'FontSize', 16);
+        end
+        if i == n
+            xlabel('Time (hour)', 'FontSize', 12);
+        else
+            set(gca, 'XTickLabel', []);  % hide x labels for middle plots
         end
 
-        % event end
-        endIdx = min(startIdx + eventLen - 1, nTot);
-
-        % time inside the event: 0 .. (eventLen-1)
-        tInEvent = (0:(endIdx - startIdx))';
-
-        % exponential decay: 0 → 1 over the event
-        decayShape = 1 - exp(- double(tInEvent) / double(tauSteps));
-
-        % apply drought to each unit
-        for u = 1:n_units
-            amp_u = amp1 * severityScales(u);
-            factors(startIdx:endIdx, u) = 1 - amp_u * decayShape;
-        end
-    end
-
-    figure('Name','Drought Profiles','NumberTitle','off');
-    tiledlayout(1, n_units, 'TileSpacing','compact','Padding','compact');
-
-    ymin = min(factors(:)) - 0.05;
-
-    for u = 1:n_units
-        nexttile;
-        plot(t, factors(:,u), 'LineWidth', 1.8);
-        ylim([ymin 1.05]);
-        xlabel('Hour');
-        ylabel('q_{drought}/q_{base}');
-        title(sprintf('Unit %d (scale=%.2f)', u, severityScales(u)));
         grid on;
     end
 end
@@ -227,7 +188,7 @@ function severityScales = makeSeverityScales(N)
     secondHalf = 0.1*(1:rest);
     
     % Combine
-    severityScales = [firstHalf secondHalf];
+    severityScales = [firstHalf flip(secondHalf)];
 end
 
 

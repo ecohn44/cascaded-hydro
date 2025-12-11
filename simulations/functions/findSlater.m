@@ -16,7 +16,7 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
     
     n_units  = numel(sys);
     x_slater = zeros(4*n_units, 1);
-
+    
     for i = 1:n_units
         
         %% Step 1: Set up Variables 
@@ -68,10 +68,10 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
 
         % Find max release
         if u_upper >= u_lower
-            u_try = 0.5*(u_upper + u_lower);
+            u_try = u_lower; % most conservative  guess
         else
-            % infeasible intersection –> use ummin or umax
-            u_try = min(max(Uprev, umin), umax);
+            % infeasible intersection –> start curtailing release 
+            u_try = Uprev + RRdn;
         end
 
         % Calculate spill if volume is above upper bounds
@@ -79,18 +79,16 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
         V_after = V_pre - u_try;
 
         if V_after > maxV
-            s_try = maxV - V_after;
+            s_try = V_after - maxV;
             V_after = maxV;
         end 
 
     
         %% Step 4: Final Checks
-        % Ensure V_try strictly inside bounds 
-        eps_margin = 1e-6 * (abs(maxV - minV) + 1);
-        V_try = min(max(V_after, minV + eps_margin), maxV - eps_margin);
 
         % Compute head and power; clamp p to feeder capacity 
-        h_try = a * (V_try^b);            % or use your rating-curve helper
+        V_try = V_after;
+        h_try = a * (V_after^b);          
         p_try = c * u_try * h_try;
         p_try = min(max(p_try, 0), Fcap);
 
@@ -100,5 +98,23 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
         x_slater(baseXsl + 2) = p_try;
         x_slater(baseXsl + 3) = u_try;
         x_slater(baseXsl + 4) = s_try;
+
+        %% Feasibility Check
+        % Bounds and interior
+        isVok = (V_try >= minV) && (V_try <= maxV);
+        isUok = (u_try >= umin) && (u_try <= umax);
+        isPok = (p_try >= 0)    && (p_try <= Fcap);
+        
+        % Ramp-rate feasibility
+        isRUok = (u_try <= Uprev + RRup);
+        isRDok = (u_try >= Uprev + RRdn);
+        
+        % Mass balance: V_try ≈ Vprev + mu - u_try - s_try
+        mb = Vprev + mu - u_try - s_try;
+        isMBok = (abs(V_after - mb) <= 1e-5);
+        
+        fprintf('    Unit %d: V:%d u:%d p:%d RU:%d RD:%d MB:%d\n', ...
+            i, isVok, isUok, isPok, isRUok, isRDok, isMBok);
+        fprintf('       V_try=%.4f, u_try=%.4f, minV=%.4f, maxV=%.4f\n', V_try, u_try, minV, maxV);
     end
 end
