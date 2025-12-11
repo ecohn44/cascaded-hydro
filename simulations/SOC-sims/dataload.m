@@ -106,7 +106,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
 
     % Extended drought (single-decay events)
     droughtparams(2).mode         = 'extended';
-    droughtparams(2).amp1         = 0.32;   % Maginitude of drought event
+    droughtparams(2).amp1         = 0.5;   % Maginitude of drought event
     droughtparams(2).nEvents      = 2;      % number of events
     droughtparams(2).daysPerEvent = .5;     % longer, sustained drought
     droughtparams(2).tauHours     = 12;     % smoother, slower decay
