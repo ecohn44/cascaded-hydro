@@ -7,15 +7,12 @@
 %                 1) Inflow std dev (M2 vs M3)
 %                 2) SoC trajectory + effective bounds (M1, M2, M3)
 %                 3) Power dispatch (M1, M2, M3)
-%
-% Assumptions:
-%   - X layout per unit: [V, p, u, s, q]
-%   - V_eff layout: [V1_max V1_min V2_max V2_min ...]
+%              At the end, aggregates energy across all units.
 % ========================================================================
 
 clc; clear; close all;
 
-resultsPath = './results/';
+resultsPath = './resultsBonferroni/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end
@@ -24,6 +21,11 @@ end
 fontAxes   = 14;
 fontLegend = 13;
 fontTitle  = 16;
+
+% ---- Colors (define once so we can reuse for the final figure) ----
+blueBound  = [0 0 1];
+greenBound = [0 1 0];
+redBound   = [1 0 0];
 
 detFiles = dir(fullfile(resultsPath, 'results_unit*_det.mat'));
 if isempty(detFiles)
@@ -42,6 +44,10 @@ n_units = numel(unitIdx);
 
 fprintf('Found %d units: %s\n', n_units, mat2str(unitIdx));
 
+% -------- NEW: accumulators for total power over all units -----------
+P_M1_allUnits = [];   % will size after first unit
+P_M2_allUnits = [];
+P_M3_allUnits = [];
 
 % Loop over each unit
 for uu = unitIdx(:)'
@@ -62,6 +68,13 @@ for uu = unitIdx(:)'
     s      = M1.sysparams;
     T      = M1.T;
     tt     = (1:T)';
+
+    % If first unit, initialize the total-power arrays
+    if isempty(P_M1_allUnits)
+        P_M1_allUnits = zeros(T,1);
+        P_M2_allUnits = zeros(T,1);
+        P_M3_allUnits = zeros(T,1);
+    end
 
     % Indices for this unit in X and V_eff
     % X columns: [V, p, u, s, q] per unit
@@ -103,11 +116,6 @@ for uu = unitIdx(:)'
     Vmax_M3 = M3.V_eff(:,colVmax);
     Vmin_M3 = M3.V_eff(:,colVmin);
     V_M3    = M3.X(:,colV);
-
-    % Base MATLAB default-ish colors
-    blueBound  = [0 0 1];
-    greenBound = [0 1 0];
-    redBound   = [1 0 0];
 
     blueTraj   = 0.6 * blueBound;
     greenTraj  = 0.6 * greenBound;
@@ -151,11 +159,16 @@ for uu = unitIdx(:)'
     saveas(f2, fullfile(resultsPath, sprintf('u%d_soc_diu_vs_ddu.png', uu)));
 
     % --------------------------------------------------------------------
-    % FIGURE 3: Power Production (Normalized)
+    % FIGURE 3: Power Production (Normalized) - per unit
     % --------------------------------------------------------------------
     p_M1 = M1.X(:,colP);
     p_M2 = M2.X(:,colP);
     p_M3 = M3.X(:,colP);
+
+    % ---- accumulate total power across units for each method ----
+    P_M1_allUnits = P_M1_allUnits + p_M1;
+    P_M2_allUnits = P_M2_allUnits + p_M2;
+    P_M3_allUnits = P_M3_allUnits + p_M3;
 
     P_all = [p_M1, p_M2, p_M3];
 
@@ -179,6 +192,34 @@ for uu = unitIdx(:)'
 
     % (Optional) close figures to avoid clutter
     % close([f1 f2 f3]);
-
 end
 
+% =======================================================================
+% Figure 4: Accumulated Energy Over Time 
+% =======================================================================
+
+dt = 1;  % hours per time step (adjust if different)
+T_all = length(P_M1_allUnits);
+tt_all = (1:T_all)';
+
+E_M1 = cumsum(P_M1_allUnits) * dt;
+E_M2 = cumsum(P_M2_allUnits) * dt;
+E_M3 = cumsum(P_M3_allUnits) * dt;
+
+E_all = [E_M1, E_M2, E_M3];
+
+f4 = figure('Position',[150 300 1100 480]); hold on; grid on;
+
+bE = bar(tt_all, E_all, 'grouped');
+bE(1).FaceColor = blueBound;
+bE(2).FaceColor = greenBound;
+bE(3).FaceColor = redBound;
+
+ylabel('Accumulated Energy (p.u.·h)');
+xlabel('Time (h)');
+set(gca, 'FontSize', fontAxes);
+set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
+legend({'M1', 'M2', 'M3'}, 'Location', 'best', 'FontSize', fontLegend);
+title('Accumulated Energy Dispatch', 'FontSize', fontTitle);
+
+saveas(f4, fullfile(resultsPath, 'allUnits_accumulated_energy.png'));

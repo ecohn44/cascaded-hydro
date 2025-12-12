@@ -32,7 +32,7 @@ n = 4;              % number of units in cascaded network
 % ========================================================================
 
 % Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -123,7 +123,7 @@ end
 simPlots(path, X, sysparams, T, c, printplot);
 
 % Store simulation results 
-if simSettings.bounds == "ssh"
+if simSettings.bounds == "jcc-ssh"
     results_dir = "./resultsSSH/";
 else
     results_dir = "./resultsBonferroni/";

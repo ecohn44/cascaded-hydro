@@ -31,7 +31,7 @@ polCodes = {'det','diu','ddu'};   % DET, DIU, DDU
 polNames = {'M1','M2','M3'};      % labels for results
 n_pols = length(polNames);
 
-baseFolder = './results';
+baseFolder = './resultsBonferroni';
 
 % Struct to hold MC outputs for each policy
 MC = struct();
