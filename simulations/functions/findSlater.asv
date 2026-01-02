@@ -61,24 +61,19 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
 
         %% Step 3: Calculate Lower Bounds & Optimal Release
         % Lower bound from ramp rate down constraint 
-        u_ramp_dn = Uprev + RRdn;
+        u_ramp_dn = Uprev - RRdn;
 
         % Compare lower bounds to find the most restrictive 
         u_lower = max([umin, u_ramp_dn]);
 
-        
         % Find max release
         if u_upper >= u_lower
             u_try = u_lower; % most conservative  guess
         else
             % infeasible intersection –> start curtailing release 
-            fprintf('Infeasible Release Region\n')
-            u_try = max(umin, Uprev + RRdn);
+            print
+            u_try = Uprev + RRdn;
         end
-        
-        
-        u_try = max(umin, Uprev + RRdn);
-        %u_try =umin;
 
         % Calculate spill if volume is above upper bounds
         s_try = 0;

@@ -250,7 +250,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
                         fprintf('    Unit %d: \n', i);
                         fprintf('       V_t=%.4f, u_t=%.4f, p_t=%.4f, s_t=%.4f,  q_t=%.4f\n', ...
-                            X(t,idxV), X(t,idxP), X(t,idxU), X(t,idxS), q_t(i));
+                            X(t,idxV), X(t,idxU), X(t,idxP), X(t,idxS), q_t(i));
                     end
                     
                 else 
@@ -337,7 +337,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
                         fprintf('    Unit %d: \n', i);
                         fprintf('       V_t=%.4f, u_t=%.4f, p_t=%.4f, s_t=%.4f,  q_t=%.4f\n', ...
-                            x_sol(base+1), x_sol(base+2), x_sol(base+3), x_sol(base+4), q_t(i));
+                            X(t,idxV), X(t,idxU), X(t,idxP), X(t,idxS), q_t(i));
                     end
                 end 
         end 

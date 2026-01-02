@@ -39,7 +39,9 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     % fprintf('   SSH base solve: obj=%.4e, φ=%.4f, target=%.4f\n', obj_val, phi_k, p_target);
 
     % Check if unconstrained solution is feasible already (phi(x) ≥ p)
-    if phi_k >= p_target
+    if phi_k < p_target
+        fprintf('Solution xk doesnt meet reliability criteria (φ=%.4f)\n', phi_k);
+    else % phi_k >= p_target
         fprintf('Solution xk meets reliability criteria (φ=%.4f ≥ %.4f)\n', phi_k, p_target);
         cons_out = cons; 
         x_sol    = xk; 
@@ -57,10 +59,10 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     
     % Check to make sure slater point satifies reliability criteria 
     if phi_high < p_target
-        warning('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f', ...
+        warning('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f\n', ...
                phi_high, p_target);
     else 
-        fprintf('Slater point feasible: φ(x_slater)=%.4f >= p_target=%.4f', ...
+        fprintf('Slater point feasible: φ(x_slater)=%.4f >= p_target=%.4f\n', ...
                phi_high, p_target);
     end
 
@@ -183,6 +185,10 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     end
 
     phi_k = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
+    if phi_k < p_target
+        warning('Solution point infeasible: φ(x_k)=%.4f < p_target=%.4f\n', ...
+               phi_k, p_target);
+    end
 
     fprintf('   After cut: obj=%.4e, φ(x)=%.4f (Δφ=%.3e)\n', ...
             obj_val2, phi_k, phi_k - phi_star);

@@ -234,6 +234,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                     model = optimize(cons, -Objective, options);
         
                     % Store results for time t
+                    fprintf('@t=%d \n', t);
                     for i = 1:n
                         idxV = 5*(i-1)+1;
                         idxP = 5*(i-1)+2;
@@ -247,10 +248,9 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                         X(t,idxS) = value(sp(i));
                         X(t,idxQ) = q_t(i);   % predicted inflow
 
-                        fprintf('@t=%d \n', t);
                         fprintf('    Unit %d: \n', i);
                         fprintf('       V_t=%.4f, u_t=%.4f, p_t=%.4f, s_t=%.4f,  q_t=%.4f\n', ...
-                            x_sol(base+1), x_sol(base+2), x_sol(base+3), x_sol(base+4), q_t(i));
+                            X(t,idxV), X(t,idxU), X(t,idxP), X(t,idxS), q_t(i));
                     end
                     
                 else 
