@@ -1,11 +1,12 @@
 %% Author: Eliza Cohn
-% Date: November 2025
+% Date: January 2026
 % Description: Main driver for cascaded hydropower simulations 
 % Paper: Optimization of Cascaded Hydroelectric Systems under DDU
 
 tic; 
 clear; clc; close all;
 addpath('/Library/gurobi1202/macos_universal2/matlab');
+addpath(genpath('/Users/elizacohn/Documents/YALMIP-master'))
 
 % Add shared functions to file path 
 thisFilePath = fileparts(mfilename('fullpath'));
@@ -32,7 +33,7 @@ n = 4;              % number of units in cascaded network
 % ========================================================================
 
 % Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh");
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -41,7 +42,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
 
 % Date range settings 
-D = 3;                       % Simulation duration in days
+D = 2;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
 
