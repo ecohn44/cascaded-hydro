@@ -85,7 +85,7 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
             phi_high = phi_star;
         end
 
-        if abs(phi_star - p_target) < 1e-4 % solution tol
+        if phi_star > p_target % abs(phi_star - p_target) < 1e-4 % solution tol
             break;
         end
     end
@@ -123,7 +123,6 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     alpha_vals = zeros(n_units,1);
     weights    = zeros(n_units,1);
 
-
     % Calculate gradient weights from u_i and s_i
     for i = 1:n_units
         base = 4*(i-1);
@@ -146,8 +145,7 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
 
     % Norm of gradient
     grad_norm = norm(g);
-    % fprintf('   Gradient norm ||∇φ||=%.3e\n', grad_norm);
-
+    
     % Add cut if gradient is non-trivial 
     if grad_norm < 1e-9
         fprintf('   Gradient ≈ 0 (flat φ region) → skipping cut\n');
@@ -169,6 +167,8 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
         fprintf('   Added SSH cut: ||∇φ||=%.3e, φ*=%.4f, target=%.4f\n', ...
                  norm(g), phi_star, p_target);
     end
+
+    disp(g)
 
     %% STEP 4: Re-solve LP with the new cut
     optimize(cons, -Objective, options);

@@ -266,59 +266,17 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                     fprintf('\n@t=%d Slater Point Initialization: \n', t)
                     x_slater = findSlater(X(t-1,:), q_t, s, c, V_eff(t,:));
             
-                    % SSH loop with global stopping criteria
-                    maxSSH  = 1;        % max number of SSH cuts at this time t
-                    tol_phi = 1e-3;     % tolerance on reliability
-                    ssh_reason = '';    % track why we stopped
-                    x_prev_ssh = [];
                     target_phi = (1 - eps_t);
                 
-                    for k = 1:maxSSH
-                        
-                        % SSH iteration 
-                        [cons, x_sol, phi_k, alpha_k] = applySSH( ...
-                            cons, vars, t, X(t-1,:), q_t, Sigma_q, ...
-                            x_slater, target_phi, s, Objective, options);
+                    % Apply SSH  
+                    [cons, x_sol, phi_k, alpha_k] = applySSH(cons, vars, t, ...
+                        X(t-1,:), q_t, Sigma_q, x_slater, target_phi, s, ...
+                        Objective, options);
                 
-                        % Store latest values for this time step
-                        phi_vals(t)      = phi_k;
-                        alpha_vals(t, :) = alpha_k;
-                        viol       = max(0, target_phi - phi_k);
-
-                        % Norm of change in x across SSH iterations
-                        if isempty(x_prev_ssh)
-                            norm_dx = NaN;  
-                        else
-                            norm_dx = norm(x_sol - x_prev_ssh, Inf);
-                        end
-
-                        % Stopping diagnostics
-                        fprintf(['SSH @t=%d, iter=%d: φ=%.4f, target=%.4f, ', ...
-                                 'viol=%.3e, ||Δx||_∞=%8.3e\n'], ...
-                                t, k, phi_k, target_phi, viol, norm_dx);
-
-                        % Update previous solution for next iter
-                        x_prev_ssh = x_sol;
-                
-                        % Global stopping criterion
-                        if phi_k >= target_phi - tol_phi
-                            ssh_reason = 'phi_tol';
-                            fprintf(['SSH STOP @t=%d after %d iterations: ', ...
-                                     'reason=%s (φ=%.4f ≥ %.4f - tol_phi=%.1e)\n'], ...
-                                     t, k, ssh_reason, phi_k, target_phi, tol_phi);
-                            break;
-                        end
-                    end
-
-                    % If we exhausted maxSSH without meeting phi_tol, log that
-                    if isempty(ssh_reason)
-                        ssh_reason = 'maxIter';
-                        target_phi = (1 - eps_t);
-                        viol       = max(0, target_phi - phi_k);
-                        fprintf(['SSH STOP @t=%d: reason=%s ', ...
-                                 '(hit maxSSH=%d, φ=%.4f, target=%.4f, viol=%.3e)\n'], ...
-                                 t, ssh_reason, maxSSH, phi_k, target_phi, viol);
-                    end
+                    % Store latest values for this time step
+                    phi_vals(t)      = phi_k;
+                    alpha_vals(t, :) = alpha_k;
+                    viol       = max(0, target_phi - phi_k);    
         
                     % Store result into X(t,:)
                     for i = 1:n
