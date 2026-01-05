@@ -33,7 +33,7 @@ n = 4;              % number of units in cascaded network
 % ========================================================================
 
 % Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh");
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-bon");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));

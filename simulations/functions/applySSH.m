@@ -1,204 +1,131 @@
 function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev, q_mean, Sigma_q, ...
         x_slater, p_target, s, Objective, options)
 
-    % Sequential Supporting Hyperplane (SSH) step for n units
-    %
-    % Inputs:
-    %   vars       : struct of decision variables for all units at time t
-    %   X_prev     : array of solutions derived at previous time step
-    %   s          : struct of system parameters
-    %   q_mean     : array of inflows into each unit
-    %   Sigma_q    : covariance matrix of inflows
-    %
-    % Decision stacking for x:
-    %   x = [V1,p1,u1,s1, V2,p2,u2,s2, ..., Vn,pn,un,sn]'
-
-    fprintf('SSH (t=%d)\n', t);
-
-    % Number of units
+    fprintf('SSH (t=%d) START\n', t);
     n_units = numel(vars.V);
     dim_x   = 4 * n_units;
-
-    %% STEP 1: Solve the LP 
-    optimize(cons, -Objective, options);
-    obj_val = value(Objective);
-
-    % Build current solution vector xk from YALMIP values
-    xk = zeros(dim_x, 1);
-    for i = 1:n_units
-        base = 4*(i-1);
-        xk(base+1) = value(vars.V(i));
-        xk(base+2) = value(vars.p(i));
-        xk(base+3) = value(vars.u(i));
-        xk(base+4) = value(vars.s(i));
-    end
-
-    % Evaluate reliability (CDF of joint normals for inflow)
-    phi_k = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
-
-    % fprintf('   SSH base solve: obj=%.4e, φ=%.4f, target=%.4f\n', obj_val, phi_k, p_target);
-
-    % Check if unconstrained solution is feasible already (phi(x) ≥ p)
-    if phi_k < p_target
-        fprintf('Solution xk doesnt meet reliability criteria (φ=%.4f)\n', phi_k);
-    else % phi_k >= p_target
-        fprintf('Solution xk meets reliability criteria (φ=%.4f ≥ %.4f)\n', phi_k, p_target);
-        cons_out = cons; 
-        x_sol    = xk; 
-        phi_val  = phi_k;
-        alpha_vals = zeros(n_units,1);  % no reallocation needed
-        return;
-    end
-
-    %% STEP 2: Interpolation 
-    % lower bound: phi(xk) from unconstrained LP
-    phi_low  = phi_k;  
     
-    % upper bound: phi(xs) from slater point (feasible not optimal)
-    phi_high = compute_phi_from_x(x_slater, q_mean, Sigma_q, X_prev, s);
+    % Initialize from Solving LP
+    optimize(cons, -Objective, options); 
     
-    % Check to make sure slater point satifies reliability criteria 
-    if phi_high < p_target
-        warning('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f\n', ...
-               phi_high, p_target);
-    else 
-        fprintf('Slater point feasible: φ(x_slater)=%.4f >= p_target=%.4f\n', ...
-               phi_high, p_target);
-    end
+    % Extract starting values from YALMIP objects
+    xk = get_current_x(vars, n_units);
 
-    % Boundaries for lambda 
-    lam_low = 0; lam_high = 1;
-    lam      = 0.5;     % init lambda_0
-    phi_star = phi_low; % init phi(xk*)
-
-    % Bisection search algorithm 
-    for bis = 1:25
-        lam = 0.5 * (lam_low + lam_high);
-        x_star  = (1 - lam) * xk + lam * x_slater;
-        phi_star = compute_phi_from_x(x_star, q_mean, Sigma_q, X_prev, s);
-
-        if phi_star < p_target
-            lam_low  = lam; 
-            phi_low  = phi_star;
-        else
-            lam_high = lam; 
-            phi_high = phi_star;
+    w = zeros(n_units, 1);
+    
+    ssh_converged = false;
+    iter_count = 0;
+    max_iter = 15; % Safety break (usually converges in 2-5 cuts)
+    
+    while ~ssh_converged && iter_count < max_iter
+        iter_count = iter_count + 1;
+        
+        % Check Reliability of current xk
+        phi_k = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
+        
+        % Tolerance check (e.g., 0.9499 is acceptable for 0.95)
+        if phi_k >= (p_target - 1e-4)
+            fprintf('   Converged at iter %d: φ=%.4f\n', iter_count, phi_k);
+            ssh_converged = true;
+            break; % EXIT LOOP
+        end
+        
+        fprintf('   Iter %d: Unsafe (φ=%.4f). Generating cut...\n', iter_count, phi_k);
+        
+        % Step 1: Bisection Search 
+        lam_low = 0; lam_high = 1;
+        
+        phi_slater = compute_phi_from_x(x_slater, q_mean, Sigma_q, X_prev, s);
+        if phi_slater < p_target
+            lam_low = 0.5; 
         end
 
-        if phi_star > p_target % abs(phi_star - p_target) < 1e-4 % solution tol
-            break;
+        for bis = 1:50
+            lam = 0.5 * (lam_low + lam_high);
+            x_star  = (1 - lam) * xk + lam * x_slater;
+            phi_star = compute_phi_from_x(x_star, q_mean, Sigma_q, X_prev, s);
+            
+            % STOP when we are ON the boundary, not just inside it
+            if abs(phi_star - p_target) < 1e-4
+                break; % Found boundary
+            end
+            
+            if phi_star < p_target
+                lam_low = lam; % Too risky, move toward slater
+            else
+                lam_high = lam; % Too safe, move toward xk
+            end
         end
-    end
+        
+        % Step 2a: Calculate Gradient 
+        g = zeros(dim_x, 1);
 
-    fprintf('   Found boundary point: λ*=%.3f, φ*=%.4f\n', lam, phi_star);
-
-    
-    %% STEP 3: Add supporting hyperplane at x_star
-    
-    % Gradient vector init
-    g   = zeros(dim_x,1);
-
-    % Get indices of u_i and s_i 
-    idx = zeros(1, 2*n_units);
-    k   = 1;
-    for i = 1:n_units
-        base    = 4*(i-1);
-        idx(k)   = base + 3;  % u_i
-        idx(k+1) = base + 4;  % s_i
-        k = k + 2;
-    end
-
-    % Calculate gradient via finite differences 
-    for j = idx
-        eps_j = 1e-6 * max(1, abs(x_star(j)));  % adaptive gradient diff
-        e     = zeros(dim_x,1); 
-        e(j)  = eps_j;
-
-        f1 = compute_phi_from_x(x_star + e, q_mean, Sigma_q, X_prev, s);
-        f2 = compute_phi_from_x(x_star - e, q_mean, Sigma_q, X_prev, s);
-        g(j) = (f1 - f2) / (2 * eps_j);
-    end
-
-    % Slack allocation analysis 
-    alpha_vals = zeros(n_units,1);
-    weights    = zeros(n_units,1);
-
-    % Calculate gradient weights from u_i and s_i
-    for i = 1:n_units
-        base = 4*(i-1);
-        w_i = abs(g(base+3)) + abs(g(base+4));
-        weights(i) = w_i;
-    end
-
-    % Normalize and store gradient weights 
-    total_w = sum(weights);
-    if total_w > 0
-        alpha_vals = weights / total_w;
-    else
-        % Use uniform allocation when grad is 0
-        alpha_vals(:) = 1.0 / n_units;
-    end
-
-    fprintf('   Slack allocation (α_i): ');
-    fprintf('%.2f ', alpha_vals);
-    fprintf('(sum=%.2f)\n', sum(alpha_vals));
-
-    % Norm of gradient
-    grad_norm = norm(g);
-    
-    % Add cut if gradient is non-trivial 
-    if grad_norm < 1e-9
-        fprintf('   Gradient ≈ 0 (flat φ region) → skipping cut\n');
-    else
-        % Build linear form ∇φ(x*)ᵀ (x - x*) ≤ 0  →  ∑ g_i x_i ≥ g^T x*
-        lhs = 0;
         for i = 1:n_units
             base = 4*(i-1);
-            lhs = lhs ...
-                + g(base+1) * vars.V(i) ...
-                + g(base+2) * vars.p(i) ...
-                + g(base+3) * vars.u(i) ...
-                + g(base+4) * vars.s(i);
+            
+            % Calculate release index
+            j = base + 3; 
+            
+            % Perturbation size
+            eps_j = 1e-6 * max(1, abs(x_star(j)));
+            
+            % Finite Difference
+            e = zeros(dim_x, 1); e(j) = eps_j;
+            f1 = compute_phi_from_x(x_star + e, q_mean, Sigma_q, X_prev, s);
+            f2 = compute_phi_from_x(x_star - e, q_mean, Sigma_q, X_prev, s);
+            
+            g(j) = (f1 - f2) / (2 * eps_j);
+            
+            w(i) = abs(g(j));
         end
-        rhs = g.' * x_star;
+        
+        % Step 2b: Add the Linear Cut (∇φ'x >= ∇φ'x*)
+        
+        lhs = 0;
+        rhs = 0;
+        
+        for i = 1:n_units
+            base = 4*(i-1);
 
+            lhs = lhs + g(base+3) * vars.u(i); 
+            rhs = rhs + g(base+3) * x_star(base+3);
+        end
+        
+        % Append the new cut
         cons = [cons, lhs >= rhs];
-
-        fprintf('   Added SSH cut: ||∇φ||=%.3e, φ*=%.4f, target=%.4f\n', ...
-                 norm(g), phi_star, p_target);
+        
+        % Step 3: Resolve the LP with the new cut
+        optimize(cons, -Objective, options);
+        
+        % Update xk for the next loop iteration
+        xk = get_current_x(vars, n_units);
+        
     end
-
-    disp(g)
-
-    %% STEP 4: Re-solve LP with the new cut
-    optimize(cons, -Objective, options);
-    obj_val2 = value(Objective);
-
-    % Updated solution
-    xk = zeros(dim_x, 1);
-    for i = 1:n_units
-        base = 4*(i-1);
-        xk(base+1) = value(vars.V(i));
-        xk(base+2) = value(vars.p(i));
-        xk(base+3) = value(vars.u(i));
-        xk(base+4) = value(vars.s(i));
+    
+    % Final outputs
+    cons_out = cons;
+    x_sol = xk;
+    phi_val = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
+    
+    if sum(w) > 0
+        alpha_vals = w / sum(w);
+    else
+        alpha_vals = zeros(n_units, 1);
     end
-
-    phi_k = compute_phi_from_x(xk, q_mean, Sigma_q, X_prev, s);
-    if phi_k < p_target
-        warning('Solution point infeasible: φ(x_k)=%.4f < p_target=%.4f\n', ...
-               phi_k, p_target);
-    end
-
-    fprintf('   After cut: obj=%.4e, φ(x)=%.4f (Δφ=%.3e)\n', ...
-            obj_val2, phi_k, phi_k - phi_star);
-
-    % Return outputs
-    cons_out  = cons; 
-    x_sol     = xk; 
-    phi_val   = phi_k;
 end
 
+
+% Helper to extract current numeric values from YALMIP vars
+function x_val = get_current_x(vars, n)
+    x_val = zeros(4*n, 1);
+    for i=1:n
+        base = 4*(i-1);
+        x_val(base+1) = value(vars.V(i));
+        x_val(base+2) = value(vars.p(i));
+        x_val(base+3) = value(vars.u(i));
+        x_val(base+4) = value(vars.s(i));
+    end
+end
 
 function phi = compute_phi_from_x(x, q_mean_vec, Sigma_q, X_prev, s)
 
