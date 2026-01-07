@@ -19,7 +19,6 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
     
     for i = 1:n_units
         
-        %% Step 1: Set up Variables 
         % Unpack per-unit parameters
         minV = V_eff(2*i); 
         maxV = V_eff(2*i - 1);
@@ -43,42 +42,9 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
 
         % Calculate current volume before release
         V_pre = Vprev + mu;
-        V_safe = max(Vprev, 1e-6);
-
-        %% Step 2: Calculate Upper Bound 
-        % Upper bound from generation capacity 
-        u_hat = Fcap/(c * a * (V_safe^b));
-
-        % Upper bound from ramp rate up constraint 
-        u_ramp_up = Uprev + RRup;
-
-        % Upper bound from available volume
-        u_vol = max(V_pre - minV, 0); 
-
-        % Compare upper bounds to find most restrictive
-        u_upper = min([u_hat, u_ramp_up, umax, u_vol]);
-
-
-        %% Step 3: Calculate Lower Bounds & Optimal Release
-        % Lower bound from ramp rate down constraint 
-        u_ramp_dn = Uprev + RRdn;
-
-        % Compare lower bounds to find the most restrictive 
-        u_lower = max([umin, u_ramp_dn]);
-
-        
-        % Find max release
-        if u_upper >= u_lower
-            u_try = u_lower; % most conservative  guess
-        else
-            % infeasible intersection –> start curtailing release 
-            fprintf('Infeasible Release Region\n')
-            u_try = max(umin, Uprev + RRdn);
-        end
-        
-        
+     
+        % Conservative release is full curtailment 
         u_try = max(umin, Uprev + RRdn);
-        %u_try =umin;
 
         % Calculate spill if volume is above upper bounds
         s_try = 0;
@@ -88,10 +54,7 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
             s_try = V_after - maxV;
             V_after = maxV;
         end 
-
-    
-        %% Step 4: Final Checks
-
+   
         % Compute head and power; clamp p to feeder capacity 
         V_try = V_after;
         h_try = a * (V_after^b);          
@@ -106,6 +69,7 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
         x_slater(baseXsl + 4) = s_try;
 
         %% Feasibility Check
+        %{
         % Bounds and interior
         isVok = (V_try >= minV) && (V_try <= maxV);
         isUok = (u_try >= umin) && (u_try <= umax);
@@ -117,10 +81,13 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
         
         % Mass balance: V_try ≈ Vprev + mu - u_try - s_try
         mb = Vprev + mu - u_try - s_try;
+          
         isMBok = (abs(V_after - mb) <= 1e-5);
         
         fprintf('    Unit %d: V:%d u:%d p:%d RU:%d RD:%d MB:%d\n', ...
             i, isVok, isUok, isPok, isRUok, isRDok, isMBok);
         fprintf('       V_try=%.4f, u_try=%.4f, minV=%.4f, maxV=%.4f\n', V_try, u_try, minV, maxV);
+        %}
+
     end
 end

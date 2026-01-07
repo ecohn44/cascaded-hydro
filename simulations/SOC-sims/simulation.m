@@ -33,7 +33,7 @@ n = 4;              % number of units in cascaded network
 % ========================================================================
 
 % Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-bon");
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -74,7 +74,7 @@ for i = 1:n
 end
 
 % Plot streamflow profiles
-plotStreamflows(q)
+% plotStreamflows(q)
 
 % Offline DIU covariance and std devs
 Sigma_diu                 = cov(q);                  % n×n covariance (DIU)
