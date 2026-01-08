@@ -40,7 +40,7 @@
 % -------------------------------------------------------------------------
 
 
-function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, lag, scale, framework, bounds, params, s)
+function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, lag, scale, framework, bounds, params, s, eps)
 
 
     % Number of units
@@ -62,31 +62,25 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
     std_safety = zeros(T, n);
     V_eff      = zeros(T, 2*n);  % [max_V_eff(i), min_V_eff(i)]
 
-    % Risk level
-    eps_t = 0.05;
-
     % YALMIP reset
     yalmip('clear');
 
-    
+    %{
     lambda = zeros(n,1);
     for i = 1:n
         % Use V0 as the reference point for the marginal value of head
-        v_target = 0.05 * s(i).max_V;
+        v_target = 0.5 * s(i).max_V;
         
         % Gradient: dh/dV
         dh_dV = s(i).a * s(i).b * (v_target ^ (s(i).b - 1));
         
-        % Price: c * Expected_Release * Gradient
+        % Expected Release: maximum flow 
         u_expected = s(i).max_ut; 
-
-        tie_breaker = 1.0 + (0.1 * (n - i + 1));
         
-        % Scale down slightly to ensure Power >> Head Value (prioritize generation)
-        lambda(i) = (c * u_expected * dh_dV)*tie_breaker ; 
+        % Price: c * Expected_Release * Gradient
+        lambda(i) = c * u_expected * dh_dV  ; 
     end
-    
-
+    %}
 
     %% Non-Anticipatory Optimization Framework 
     for t = 1:T
@@ -108,7 +102,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
             case {"jcc-bon"}
                 % Bonferroni z-score
-                z = scale * norminv(1 - (eps_t/n));
+                z = scale * norminv(1 - (eps/n));
 
                 % Use safety-scaled std for all units
                 V_min_shift =  z .* std_safety(t,:);
@@ -122,7 +116,11 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
             case {"jcc-ssh"}
                 % SSH z-score
-                z = scale * norminv(1 - (eps_t));
+                z = scale * norminv(1 - (eps/n));
+
+                % Use safety-scaled std for all units
+                % V_min_shift =  z .* std_safety(t,:);
+                % V_max_shift = -z .* std_safety(t,:);
 
                 % Store effective vounds but don't apply shift directly
                 for i = 1:n
@@ -139,9 +137,8 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
         cons = [];
 
-        %{
         lambda = zeros(n,1);
-
+        %{
         % Calculate marginal cost of volume 
         for i = 1:n
             
@@ -157,10 +154,11 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
             dh_dV = s(i).a * s(i).b * (v_current ^ (s(i).b - 1));
             
             % Calculate price of head
-            u_expected = s(i).max_ut * 0.5; 
+            u_expected = s(i).max_ut; 
             lambda(i)  = c * u_expected * dh_dV;
         end
         %}
+        
 
         % Maximizing (Power - Spill) + (Value of Stored Head)
         Objective = sum(p) - sum(sp) + sum(lambda .* V);  
@@ -312,7 +310,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                     fprintf('\n@t=%d SSH Initialization: \n', t)
                     x_slater = findSlater(X(t-1,:), q_t, s, c, V_eff(t,:));
             
-                    target_phi = (1 - eps_t);
+                    target_phi = (1 - eps);
                 
                     % Apply SSH  
                     [cons, x_sol, phi_k, alpha_k] = applySSH(cons, vars, t, ...

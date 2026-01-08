@@ -1,0 +1,40 @@
+function plotSSH(phi_vals, alpha_vals, eps)
+
+    T = size(alpha_vals, 1);
+    tt = 1:1:T;
+    n = size(alpha_vals, 2);
+
+    % Create a new figure
+    figure;
+    
+    % Figure 1: Pr(V in [Vmin, Vmax]) 
+    subplot(2, 1, 1); %
+    plot(tt, phi_vals, 'LineWidth', 1.5, 'DisplayName', 'System Reliability');
+    yline(1-eps, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Reliability Bound');
+    title('Phi Values');
+    ylabel('\phi'); 
+    xlabel('Time (hr)');
+    xlim([1, T]);
+    legend('Location', 'west');
+    grid on;
+    
+    % Figure 2: Slack Allocation 
+    subplot(2, 1, 2); 
+    
+    plot(tt, alpha_vals, 'LineWidth', 1.5);
+    title('Risk Allocation per Unit');
+    xlabel('Time (hr)');
+    ylabel('\alpha_i'); 
+    xlim([1, T])
+    grid on;
+    
+    % Create a cell array of strings for the legend labels
+    legendLabels = cell(1, n);
+    for i = 1:n
+        legendLabels{i} = sprintf('Unit %d', i);
+    end
+    
+    % Apply the legend
+    legend(legendLabels, 'Location', 'west');
+
+end

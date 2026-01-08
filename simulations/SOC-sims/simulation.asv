@@ -24,7 +24,6 @@ g = 9.8;           % acceleration due to gravity [m/s^2]
 c = 1;
 N = 40;             % number of sub-intervals for piecewise linear approx
 n = 4;              % number of units in cascaded network 
-eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
 [modelparams, sysparams, droughtparams] = dataload(n, N);
@@ -100,7 +99,7 @@ scale = 1; % Scale safety bounds
 % scale_ddu = 25; % Scale gamma 
 
 [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, lag, scale, ...
-    simSettings.framework, simSettings.bounds, modelparams, sysparams, eps);
+    simSettings.framework, simSettings.bounds, modelparams, sysparams);
 
 
 %% ========================================================================
@@ -124,10 +123,8 @@ end
 % Plot simulation behavior for all units
 simPlots(path, X, sysparams, T, c, printplot);
 
-% Plot SSH algorithm behavior 
-if simSettings.bounds == "jcc-ssh"
-    plotSSH(phi_vals, alpha_vals, eps);
-end 
+% Plot SSH a
+plotSSH(T_vec, phi, alpha);
 
 % Store simulation results 
 if simSettings.bounds == "jcc-ssh"
