@@ -134,9 +134,8 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
     eventLen = max(1, round(daysPerEvent * 24));  % steps per event
     tauSteps = max(1, round(tauHours));           % exponential time constant in steps
 
-    % --- NEW: gap between events = floor(daysPerEvent/2) days ---
-    % in time steps, this is roughly half the event length
-    gapLen = floor(eventLen / 2);   % = floor(daysPerEvent/2 * 24)
+    % Gap between events = floor(daysPerEvent/2) days 
+    gapLen = floor(eventLen);   % = floor(daysPerEvent/2)
 
     % Season sign: dry → negative amplitude (drop), wet → increase
     if strcmpi(season, 'dry')
