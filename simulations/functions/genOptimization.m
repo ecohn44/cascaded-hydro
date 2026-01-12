@@ -32,6 +32,9 @@
 %
 %   std_hat     : (T × n) matrix of predicted inflow standard deviations
 %                 per unit under DIU/DDU frameworks.
+%   std_safety  : (T × n) matrix of safety scaled standard deviations 
+%
+%   q_t         : (T × n) predicted mean inflow 
 %
 %   V_eff       : (T × 2n) matrix of effective volume bounds with chance shifts:
 %                     For each unit i:
@@ -40,21 +43,13 @@
 % -------------------------------------------------------------------------
 
 
-function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, lag, scale, framework, bounds, params, s, eps)
+function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, framework, bounds, params, s, eps, volPrice)
 
 
     % Number of units
     n = numel(s);
     phi_vals   = zeros(T,1);
     alpha_vals = zeros(T,n);
-
-    % Indexing scheme:
-    % For unit i, columns in X are:
-    %   idxV = 5*(i-1)+1   -> V_i
-    %   idxP = 5*(i-1)+2   -> p_i
-    %   idxU = 5*(i-1)+3   -> u_i
-    %   idxS = 5*(i-1)+4   -> s_i (spill)
-    %   idxQ = 5*(i-1)+5   -> q_i (predicted inflow)
 
     % Initialize storage
     X          = zeros(T, 5*n);
@@ -65,37 +60,36 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
     % YALMIP reset
     yalmip('clear');
 
-    %{
+    % Initialize shadow price of volume 
     lambda = zeros(n,1);
-    for i = 1:n
-        % Use V0 as the reference point for the marginal value of head
-        v_target = 0.5 * s(i).max_V;
-        
-        % Gradient: dh/dV
-        dh_dV = s(i).a * s(i).b * (v_target ^ (s(i).b - 1));
-        
-        % Expected Release: maximum flow 
-        u_expected = s(i).max_ut; 
-        
-        % Price: c * Expected_Release * Gradient
-        lambda(i) = c * u_expected * dh_dV  ; 
+
+    if volPrice == "static"
+        for i = 1:n
+            % Use V0 as the reference point for the marginal value of head
+            v_target = 0.5 * s(i).max_V;
+            
+            % Gradient: dh/dV
+            dh_dV = s(i).a * s(i).b * (v_target ^ (s(i).b - 1));
+            
+            % Expected Release: maximum flow 
+            u_expected = s(i).max_ut; 
+            
+            % Price: c * Expected_Release * Gradient
+            lambda(i) = c * u_expected * dh_dV  ; 
+        end
     end
-    %}
 
     %% Non-Anticipatory Optimization Framework 
     for t = 1:T
         
-        %% Forecast Inflow for all units
-        % q_t(i) = predicted mean inflow into unit i
-        % std_hat(t,i) = std dev estimate
-        % std_safety(t,i) = safety-scaled std (for bounds)
+        % Forecast Inflow for all units
         [q_t, std_hat(t,:), std_safety(t,:)] = ...
             forecast_inflow(X, t, q, lag, framework, params, s);
 
         V_min_shift = zeros(1, n);
         V_max_shift = zeros(1, n);
 
-        %% Determine Volume Bounds (chance constraints)
+        % Determine Volume Bounds (chance constraints)
         switch bounds
             case {"det"}
                 % Deterministic / SSH: no shifts
@@ -118,10 +112,6 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                 % SSH z-score
                 z = scale * norminv(1 - (eps/n));
 
-                % Use safety-scaled std for all units
-                % V_min_shift =  z .* std_safety(t,:);
-                % V_max_shift = -z .* std_safety(t,:);
-
                 % Store effective vounds but don't apply shift directly
                 for i = 1:n
                     V_eff(t,2*i-1) = s(i).max_V - z*std_safety(t,i);
@@ -137,31 +127,29 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
         cons = [];
 
-        lambda = zeros(n,1);
-        %{
-        % Calculate marginal cost of volume 
-        for i = 1:n
-            
-            % Retrieve previous volume 
-            if t == 1
-                v_current = s(i).V0;
-            else
-                idxV = 5*(i-1)+1;
-                v_current = max(X(t-1, idxV), 0.01); 
+        if volPrice == "dynamic"
+            for i = 1:n
+                
+                % Retrieve previous volume 
+                if t == 1
+                    v_current = s(i).V0;
+                else
+                    idxV = 5*(i-1)+1;
+                    v_current = max(X(t-1, idxV), 0.01); 
+                end
+                
+                % Calculate gradient dh/dV = a * b * V^(b-1)
+                dh_dV = s(i).a * s(i).b * (v_current ^ (s(i).b - 1));
+                
+                % Calculate price of head
+                u_expected = s(i).max_ut; 
+                lambda(i)  = c * u_expected * dh_dV;
             end
-            
-            % Calculate gradient dh/dV = a * b * V^(b-1)
-            dh_dV = s(i).a * s(i).b * (v_current ^ (s(i).b - 1));
-            
-            % Calculate price of head
-            u_expected = s(i).max_ut; 
-            lambda(i)  = c * u_expected * dh_dV;
-        end
-        %}
+        end 
         
 
         % Maximizing (Power - Spill) + (Value of Stored Head)
-        Objective = sum(p) - sum(sp) + sum(lambda .* V);  
+        Objective = sum(LMP(t, :) * p) - sum(sp) + sum(lambda .* V);  
 
         %% Static Constraints
         for i = 1:n
@@ -223,7 +211,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
         end
 
         %% Solve optimization at time t
-        options = sdpsettings('solver','gurobi','verbose',0, 'gurobi.Seed', 1, 'gurobi.Threads', 1);
+        options = sdpsettings('solver','gurobi','verbose',0 , 'gurobi.Seed', 1, 'gurobi.Threads', 1);
         
         % Use Gurobi for standard solve 
         switch bounds
@@ -313,7 +301,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                     target_phi = (1 - eps);
                 
                     % Apply SSH  
-                    [cons, x_sol, phi_k, alpha_k] = applySSH(cons, vars, t, ...
+                    [~, x_sol, phi_k, alpha_k] = applySSH(cons, vars, t, ...
                         X(t-1,:), q_t, Sigma_q, x_slater, target_phi, s, ...
                         Objective, options);
                 
@@ -355,19 +343,21 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
     fprintf('Optimization complete.\n');
 
     % Simulation Report
-    variable_report(framework, params.season, obj, X, N, s)
+    variable_report(framework, params.season, obj, X, N, s, LMP)
 
 end
 
 
-function variable_report(framework, season, obj, X, N, s)
+function variable_report(framework, season, obj, X, N, s, LMP)
     sd = 4;
     n  = numel(s);
 
     total_gen = 0;
+    total_profit = 0;
     for i = 1:n
         idxP = 5*(i-1)+2;
         total_gen = total_gen + sum(X(:,idxP));
+        total_profit = total_profit + sum(LMP(:,i) .* X(:,idxP));
     end
 
     fprintf('\n');
@@ -377,6 +367,7 @@ function variable_report(framework, season, obj, X, N, s)
     fprintf('Season: %s\n', season);
     fprintf('\n');
     fprintf('Total Generation [MWh]: %g\n', round(total_gen, sd+1, 'significant'));
+    fprintf('Total Profit [$]: %g\n', round(total_profit, sd+1, 'significant'));
 
     for i = 1:n
         idxP = 5*(i-1)+2;

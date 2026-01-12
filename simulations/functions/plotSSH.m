@@ -5,10 +5,10 @@ function plotSSH(phi_vals, alpha_vals, eps)
     n = size(alpha_vals, 2);
 
     % Create a new figure
-    figure;
+    f = figure('Name','SSH Diagnostics','NumberTitle','off');
     
     % Figure 1: Pr(V in [Vmin, Vmax]) 
-    subplot(2, 1, 1); %
+    subplot(2, 1, 1, 'Parent', f); 
     plot(tt, phi_vals, 'LineWidth', 1.5, 'DisplayName', 'System Reliability');
     yline(1-eps, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Reliability Bound');
     title('Phi Values');
@@ -19,7 +19,7 @@ function plotSSH(phi_vals, alpha_vals, eps)
     grid on;
     
     % Figure 2: Slack Allocation 
-    subplot(2, 1, 2); 
+    subplot(2, 1, 2, 'Parent', f);  
     
     plot(tt, alpha_vals, 'LineWidth', 1.5);
     title('Risk Allocation per Unit');

@@ -24,6 +24,7 @@ g = 9.8;           % acceleration due to gravity [m/s^2]
 c = 1;
 N = 40;             % number of sub-intervals for piecewise linear approx
 n = 4;              % number of units in cascaded network 
+eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
 [modelparams, sysparams, droughtparams] = dataload(n, N);
@@ -32,8 +33,8 @@ n = 4;              % number of units in cascaded network
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh");
+% Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -45,6 +46,9 @@ droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought))
 D = 2;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
+
+% Load price data
+LMP = simulatePrice(T, n, true);
 
 fprintf('Data loading complete.\n');
 
@@ -98,8 +102,8 @@ end
 scale = 1; % Scale safety bounds 
 % scale_ddu = 25; % Scale gamma 
 
-[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, lag, scale, ...
-    simSettings.framework, simSettings.bounds, modelparams, sysparams);
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, ...
+    simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings);
 
 
 %% ========================================================================
@@ -123,8 +127,10 @@ end
 % Plot simulation behavior for all units
 simPlots(path, X, sysparams, T, c, printplot);
 
-% Plot SSH a
-plotSSH(T_vec, phi, alpha);
+% Plot SSH algorithm behavior 
+if simSettings.bounds == "jcc-ssh"
+    plotSSH(phi_vals, alpha_vals, eps);
+end 
 
 % Store simulation results 
 if simSettings.bounds == "jcc-ssh"

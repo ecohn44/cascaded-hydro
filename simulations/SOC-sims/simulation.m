@@ -33,8 +33,8 @@ eps = 0.05;         % risk tolerance
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, drought type, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh");
+% Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -46,6 +46,9 @@ droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought))
 D = 2;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
+
+% Load price data
+LMP = ones(T, n); % simulatePrice(T, n, true);
 
 fprintf('Data loading complete.\n');
 
@@ -99,8 +102,8 @@ end
 scale = 1; % Scale safety bounds 
 % scale_ddu = 25; % Scale gamma 
 
-[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, lag, scale, ...
-    simSettings.framework, simSettings.bounds, modelparams, sysparams, eps);
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, ...
+    simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
 
 
 %% ========================================================================
