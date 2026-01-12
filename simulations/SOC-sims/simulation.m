@@ -23,7 +23,7 @@ g = 9.8;           % acceleration due to gravity [m/s^2]
 % c = eta*rho_w*g/3.6e9; % power prod coefficient
 c = 1;
 N = 40;             % number of sub-intervals for piecewise linear approx
-n = 4;              % number of units in cascaded network 
+n = 3;              % number of units in cascaded network 
 eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
@@ -43,7 +43,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
 
 % Date range settings 
-D = 2;                       % Simulation duration in days
+D = 3;                       % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
 
@@ -66,7 +66,7 @@ severityScales = makeSeverityScales(n);
 % Simulate drought event 
 for i = 1:n
     dp    = baseDrought; 
-    scale = severityScales(i);
+    scale = 1; % severityScales(i);
 
     if strcmpi(dp.mode, 'extended')
         dp.amp1 = baseDrought.amp1 * scale;
@@ -78,7 +78,7 @@ for i = 1:n
 end
 
 % Plot streamflow profiles
-% plotStreamflows(q)
+plotStreamflows(q)
 
 % Offline DIU covariance and std devs
 Sigma_diu                 = cov(q);                  % n×n covariance (DIU)

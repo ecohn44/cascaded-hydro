@@ -14,11 +14,7 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
 %
 % OUTPUT
 %   q  : (T+lag) × 1 inflow time series
-%
-%   For example, if you set in the caller
-%       dp.shiftMult = i-1;
-%   then reservoir i sees the same drought shape, but delayed by
-%       (i-1)*lag  time steps.
+
 
     n = T + lag;
     q0 = droughtParams.q0;
@@ -47,27 +43,14 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
     % Apply spatial lag to the drought
     deltaq = q - base;   % length n
 
-    % Optional field: how many lag-blocks to delay this unit
-    shiftMult = 0;
-    if isfield(droughtParams, 'shiftMult')
-        shiftMult = 2*droughtParams.shiftMult;
-    end
-
-    % Number of time steps to shift anomaly
-    shiftSteps = round(shiftMult * lag);
-
-    if shiftSteps > 0
-        % (Downstream) fill early part with no anomaly, shift anomaly forward
-        deltaq = [zeros(shiftSteps,1); deltaq(1:end-shiftSteps)];
-    elseif shiftSteps < 0
-        % (Upstream) drought arrives earlier
-        s = -shiftSteps;
-        deltaq = [deltaq(1+s:end); zeros(s,1)];
-    end
+    % Number of time steps to shift drought events between units 
+    shiftSteps = round(droughtParams.shiftMult * droughtParams.unitDelay);
+    deltaq     = shift_with_zeros(deltaq, shiftSteps);
 
     % Reconstruct inflow and enforce nonnegativity
     q = base + deltaq;
     q = max(q, 0);
+
 
 end
 
@@ -122,22 +105,16 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
     nEvents      = droughtParams.nEvents;       % number of drought blocks
     daysPerEvent = droughtParams.daysPerEvent;  % length of each event in days
 
-    % Optional: exponential time constant (in hours).
-    % If not provided, use half the event length as a rough default.
-    if isfield(droughtParams, 'tauHours')
-        tauHours = droughtParams.tauHours;
-    else
-        tauHours = daysPerEvent * 24 / 2;  % decay mostly within event
-    end
+    % Exponential time constant 
+    tauSteps= droughtParams.tauHours;
 
-    % Convert to time steps (assume 1 step = 1 hour)
-    eventLen = max(1, round(daysPerEvent * 24));  % steps per event
-    tauSteps = max(1, round(tauHours));           % exponential time constant in steps
+    % Time steps per event (convert to hours)
+    eventLen = daysPerEvent * 24;  
 
-    % Gap between events = floor(daysPerEvent/2) days 
-    gapLen = floor(eventLen);   % = floor(daysPerEvent/2)
+    % Time step gap between events 
+    gapLen = floor(daysPerEvent/2);
 
-    % Season sign: dry → negative amplitude (drop), wet → increase
+    % Season sign: dry → negative; wet → positive
     if strcmpi(season, 'dry')
         sign_mult = -1;
     else
@@ -160,6 +137,7 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
 
         % Apply exponential drought shape over this event
         for tIdx = startIdx:fullEndIdx
+            
             % Position within this event (0-based)
             tInEvent = tIdx - startIdx;   % 0,1,...,eventLen-1
 
@@ -179,5 +157,33 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
         if curStart > nTot
             break;
         end
+    end
+end
+
+
+function y = shift_with_zeros(x, k)
+% Shift vector x by k steps, padding with zeros
+% k > 0 shifts forward (delays signal); k < 0 shifts backward (advances)
+
+    n = numel(x);
+    y = zeros(n,1);
+
+    if k == 0
+        y = x;
+        return;
+    end
+
+    if abs(k) >= n
+        % Shift bigger than horizon => all zeros (signal moved out of window)
+        return;
+    end
+
+    if k > 0
+        % y(k+1:n) = x(1:n-k)
+        y(k+1:end) = x(1:end-k);
+    else
+        s = -k;
+        % y(1:n-s) = x(s+1:n)
+        y(1:end-s) = x(s+1:end);
     end
 end
