@@ -463,7 +463,7 @@ function [q_t, std_hat, std_safety] = forecast_inflow(X, t, q, lag, framework, p
                     else
                         % Pull previous predicted inflow from X 
                         idxQ         = 5*(i-1) + 5;
-                        q_pred_prev  = X(t-lag, idxQ);   % t-lag for GARCH error
+                        q_pred_prev  = X(t-lag, idxQ);   % t-1, not t-lag, for GARCH error
                         q_pred_prev_norm = q_pred_prev;
                     end
 

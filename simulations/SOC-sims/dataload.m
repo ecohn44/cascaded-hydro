@@ -21,9 +21,9 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
         'AR_std',   0.00375, ...  % Updated to be 5% of flow (0.075)
-        'omega',    0.00001, ...  % GARCH-X params
+        'omega',    0.000015, ...  % GARCH-X params
         'alpha',    0.008,   ...  % GARCH-X params
-        'gamma',    0.0004);      % GARCH-X params
+        'gamma',    0.0006);      % GARCH-X params
 
     % Copy for Wet Season
     params(2) = params(1);

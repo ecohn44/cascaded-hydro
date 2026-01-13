@@ -12,7 +12,7 @@
 
 clc; clear; close all;
 
-resultsPath = './resultsBonferroni/';
+resultsPath = './resultsSSH/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end
@@ -99,7 +99,7 @@ for uu = unitIdx(:)'
     set(gca, 'FontSize', fontAxes);
     set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
 
-    saveas(f1, fullfile(resultsPath, sprintf('u%d_sigma_diu_vs_ddu.png', uu)));
+    % saveas(f1, fullfile(resultsPath, sprintf('u%d_sigma_diu_vs_ddu.png', uu)));
 
     % --------------------------------------------------------------------
     % FIGURE 2: Effective Volume Boundaries + Trajectories
@@ -156,7 +156,7 @@ for uu = unitIdx(:)'
           'FontSize', fontTitle);
     ylim([0 0.5]);
 
-    saveas(f2, fullfile(resultsPath, sprintf('u%d_soc_diu_vs_ddu.png', uu)));
+    % saveas(f2, fullfile(resultsPath, sprintf('u%d_soc_diu_vs_ddu.png', uu)));
 
     % --------------------------------------------------------------------
     % FIGURE 3: Power Production (Normalized) - per unit
@@ -188,7 +188,7 @@ for uu = unitIdx(:)'
     title(sprintf('Unit %02d Normalized Power Dispatch', uu), ...
           'FontSize', fontTitle);
 
-    saveas(f3, fullfile(resultsPath, sprintf('u%d_power_diu_vs_ddu.png', uu)));
+    % saveas(f3, fullfile(resultsPath, sprintf('u%d_power_diu_vs_ddu.png', uu)));
 
     % (Optional) close figures to avoid clutter
     % close([f1 f2 f3]);
@@ -222,4 +222,4 @@ set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
 legend({'M1', 'M2', 'M3'}, 'Location', 'best', 'FontSize', fontLegend);
 title('Accumulated Energy Dispatch', 'FontSize', fontTitle);
 
-saveas(f4, fullfile(resultsPath, 'allUnits_accumulated_energy.png'));
+% saveas(f4, fullfile(resultsPath, 'allUnits_accumulated_energy.png'));
