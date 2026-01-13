@@ -152,17 +152,20 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
         end
 
         % apply delayed recovery rate 
-        endFactor = 1 + amp_eff * (1 - exp(- double(eventLen-1) / double(tauSteps))); % factor at end
+        endFactor = 1 + amp_eff * (1 - exp(- double(eventLen-1) / double(tauSteps)));
         recStart  = fullEndIdx + 1;
         recEnd    = min(nTot, fullEndIdx + recLen);
 
+        H = recEnd - recStart;   % last tRec value (>=0)
+
         for tIdx = recStart:recEnd
-            tRec = tIdx - recStart;  % 0,1,...,recLen-1
-
-            % Ramp from endFactor -> 1 slowly (exponential approach)
-            recShape = exp(- double(tRec) / double(tauSteps));   % 1 -> 0
-            factor   = 1 + (endFactor - 1) * recShape;
-
+            tRec = tIdx - recStart;  % 0...H
+        
+            % normalized exponential: 1 at tRec=0, 0 at tRec=H exactly
+            recShape = (exp(-double(tRec)/double(tauSteps)) - exp(-double(H)/double(tauSteps))) ...
+                     / (1 - exp(-double(H)/double(tauSteps)));
+        
+            factor = 1 + (endFactor - 1) * recShape;   % endFactor -> 1 exactly
             q(tIdx) = q(tIdx) * factor;
         end
 
