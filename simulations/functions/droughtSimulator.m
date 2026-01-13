@@ -44,7 +44,7 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
     deltaq = q - base;   % length n
 
     % Number of time steps to shift drought events between units 
-    shiftSteps = round(droughtParams.shiftMult * droughtParams.unitDelay);
+    shiftSteps = round(droughtParams.startSteps + droughtParams.shiftMult * droughtParams.unitDelay);
     deltaq     = shift_with_zeros(deltaq, shiftSteps);
 
     % Reconstruct inflow and enforce nonnegativity
@@ -104,15 +104,17 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
     amp1         = droughtParams.amp1;          % fractional amplitude (e.g. 0.4)
     nEvents      = droughtParams.nEvents;       % number of drought blocks
     daysPerEvent = droughtParams.daysPerEvent;  % length of each event in days
+    recLen = droughtParams.recoverHours;        % recovery length 
+
 
     % Exponential time constant 
     tauSteps= droughtParams.tauHours;
 
     % Time steps per event (convert to hours)
-    eventLen = daysPerEvent * 24;  
+    eventLen = floor(daysPerEvent * 24);  
 
     % Time step gap between events 
-    gapLen = floor(daysPerEvent/2);
+    gapLen = floor(eventLen/4);
 
     % Season sign: dry → negative; wet → positive
     if strcmpi(season, 'dry')
@@ -141,9 +143,7 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
             % Position within this event (0-based)
             tInEvent = tIdx - startIdx;   % 0,1,...,eventLen-1
 
-            % Exponential decay factor:
-            %   tInEvent = 0         -> factor = 1
-            %   tInEvent >> tauSteps -> factor ~ 1 + amp_eff
+            % Exponential decay factor
             decayShape = 1 - exp(- double(tInEvent) / double(tauSteps));
             factor     = 1 + amp_eff * decayShape;
 
@@ -151,8 +151,22 @@ function q = applyExtendedDrought(q, T, lag, season, droughtParams)
             q(tIdx) = q(tIdx) * factor;
         end
 
-        % Move start pointer for the next event:
-        % end of this event + 1 step + gapLen steps
+        % apply delayed recovery rate 
+        endFactor = 1 + amp_eff * (1 - exp(- double(eventLen-1) / double(tauSteps))); % factor at end
+        recStart  = fullEndIdx + 1;
+        recEnd    = min(nTot, fullEndIdx + recLen);
+
+        for tIdx = recStart:recEnd
+            tRec = tIdx - recStart;  % 0,1,...,recLen-1
+
+            % Ramp from endFactor -> 1 slowly (exponential approach)
+            recShape = exp(- double(tRec) / double(tauSteps));   % 1 -> 0
+            factor   = 1 + (endFactor - 1) * recShape;
+
+            q(tIdx) = q(tIdx) * factor;
+        end
+
+        % Move start pointer for the next event
         curStart = fullEndIdx + gapLen + 1;
         if curStart > nTot
             break;
@@ -163,7 +177,8 @@ end
 
 function y = shift_with_zeros(x, k)
 % Shift vector x by k steps, padding with zeros
-% k > 0 shifts forward (delays signal); k < 0 shifts backward (advances)
+% k > 0 shifts forward (delays signal)
+% k < 0 shifts backward (advances)
 
     n = numel(x);
     y = zeros(n,1);
@@ -174,16 +189,14 @@ function y = shift_with_zeros(x, k)
     end
 
     if abs(k) >= n
-        % Shift bigger than horizon => all zeros (signal moved out of window)
+        % signal moved out of window
         return;
     end
 
     if k > 0
-        % y(k+1:n) = x(1:n-k)
         y(k+1:end) = x(1:end-k);
     else
         s = -k;
-        % y(1:n-s) = x(s+1:n)
         y(1:end-s) = x(s+1:end);
     end
 end

@@ -46,7 +46,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'RR_dn',  -0.015, ...
         'RR_up',  0.01, ...
         'F',      1, ...
-        'SOC',    0.20);       % will be set per unit (0.5 or 0.05)
+        'SOC',    0.15);       % will be set per unit (0.5 or 0.05)
 
 
     %% Build sysparams for n units
@@ -90,7 +90,9 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'nEvents',      [],  ...
         'daysPerEvent', [],  ...
         'tauHours',     [],  ...
-        'unitDelay',    []);
+        'unitDelay',    [],  ...
+        'startSteps',   [],  ...
+        'recoverHours', []);
 
     % Preallocate 1x2 struct array with same fields
     droughtparams(1) = droughtTemplate;
@@ -107,11 +109,13 @@ function [params, sysparams, droughtparams] = dataload(n, N)
 
     % Extended drought (single-decay events)
     droughtparams(2).mode         = 'extended';
-    droughtparams(2).amp1         = 0.6;    % Maginitude of drought event
+    droughtparams(2).amp1         = 0.55;   % Maginitude of drought event
     droughtparams(2).nEvents      = 1;      % number of events
-    droughtparams(2).daysPerEvent = .5;     % drought length 
-    droughtparams(2).tauHours     = 8;     % decay rate
+    droughtparams(2).daysPerEvent = 1.2;    % drought length 
+    droughtparams(2).tauHours     = 12;     % decay rate
     droughtparams(2).unitDelay    = 18;     % time units between drought events 
+    droughtparams(2).startSteps   = 5;      % time before initial drought event begins 
+    droughtparams(2).recoverHours = 10;      % recovery time from drought event to q0
 
     droughtparams(3).mode         = 'constant';
 
