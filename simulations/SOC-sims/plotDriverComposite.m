@@ -14,7 +14,7 @@
 %   - V_eff layout: [V1_max V1_min V2_max V2_min ...]
 % ========================================================================
 
-clc; clear; close all;
+%clc; clear; close all;
 
 %% Plot Settings
 
@@ -278,7 +278,7 @@ for i = 1:n_units
     xlabel('Time (h)');
     ylabel('\sigma_t');
     xlim([1, T])
-    ylim([-.001 0.01]);
+    ylim([-.001 0.03]);
     set(gca, 'FontSize', fontAxes);
 end
 

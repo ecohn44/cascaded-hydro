@@ -89,7 +89,7 @@ function simPlots(path, X, sysparams, T, c, printplot)
         end 
     end
 
-    if n_units == 4
+    if n_units == 4 || n_units == 3
         % adjust plots to screensize 
         scr = get(0, 'ScreenSize');
     
@@ -117,7 +117,7 @@ function simPlots(path, X, sysparams, T, c, printplot)
             left1  bottom1  w h;   % Unit 3 - bottom left
             left2  bottom1  w h];  % Unit 4 - bottom right
     
-        for i = 1:4
+        for i = 1:n_units
             if isgraphics(figs(i))
                 set(figs(i), 'Position', positions(i,:));
             end
