@@ -1,0 +1,163 @@
+%% Plot Driver for DET vs DIU vs DDU Comparison 
+% ========================================================================
+% Author: Eliza Cohn
+% Description: Overlays policy behavior derived during optimization sims
+%              for all units. For each unit k, loads that unit's DET, DIU,
+%              and DDU optimization results separately and produces:
+%                 1) Release
+%                 2) Volume
+% ========================================================================
+
+close all; clc;
+
+% Loading parameters 
+path = './resultsBonferroni';
+tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
+printplot = false;
+
+font  = 16;
+
+% Load files for Unit 1 just to get sysparams / n_units
+D1 = load(fullfile(path, sprintf('results_unit1_%s.mat', lower(tag1))));
+D2 = load(fullfile(path, sprintf('results_unit1_%s.mat', lower(tag2))));
+D3 = load(fullfile(path, sprintf('results_unit1_%s.mat', lower(tag3))));
+
+n_units = numel(D1.sysparams);
+T       = D1.T;
+
+% Create one big figure for all units
+fig = figure('Position',[100 100 1600 300*n_units]);
+
+subfig_n = 2;  % number of states to plot
+
+sgtitle('Optimal Policy Trajectories under Uncertainty Frameworks', ...
+    'FontSize', font+6, 'FontWeight','bold');
+
+labels = {upper(tag1), upper(tag2), upper(tag3)};
+
+% For legend: store handles from the first unit's u-plot
+h1_leg = []; h2_leg = []; h3_leg = [];
+
+for i = 1:n_units
+    sp   = D1.sysparams(i);
+    base = (i-1)*5;
+
+    % Extract trajectory from Policy 1
+    V1 = D1.X(:, base+1);  p1 = D1.X(:, base+2);
+    u1 = D1.X(:, base+3);  s1 = D1.X(:, base+4);  
+
+    % Extract trajectory from Policy 2
+    V2 = D2.X(:, base+1);  p2 = D2.X(:, base+2);
+    u2 = D2.X(:, base+3);  s2 = D2.X(:, base+4);  
+
+    % Extract trajectory from Policy 3
+    V3 = D3.X(:, base+1);  p3 = D3.X(:, base+2);
+    u3 = D3.X(:, base+3);  s3 = D3.X(:, base+4);  
+
+    % Calculate hydraulic head
+    head1 = sp.a .* (V1.^sp.b);
+    head2 = sp.a .* (V2.^sp.b);
+    head3 = sp.a .* (V3.^sp.b);
+
+    % Row index for subplots (1..n_units)
+    row = i - 1;
+    % Column mapping:
+    % 1: u_t, 2: p_t, 3: s_t, 4: V_t, 5: head_t
+
+    % u_t
+    ax = subplot(n_units, subfig_n, row*subfig_n + 1);
+    h1 = plot(u1,'-k','LineWidth',2); hold on;
+    h2 = plot(u2,'-b','LineWidth',2);
+    h3 = plot(u3,'-r','LineWidth',2);
+    yline(sp.max_ut,'--k'); yline(sp.min_ut,'--k');
+    if i == 1
+        title('Water Release [m^3]','FontSize',font);
+    end 
+    if i == n_units
+        xlabel('Time [hr]');
+    end
+    ylabel(sprintf('Unit %d', sp.unit),'FontWeight','bold');
+    xlim([1, T]);
+    set(ax,'FontSize',font);
+
+    % store legend handles from first unit only
+    if i == 1
+        h1_leg = h1; h2_leg = h2; h3_leg = h3;
+    end
+
+    % h_t 
+    ax = subplot(n_units, subfig_n, row*subfig_n + 2);
+    plot(head1,'-k','LineWidth',2); hold on;
+    plot(head2,'-b','LineWidth',2);
+    plot(head3,'-r','LineWidth',2);
+    yline(sp.max_h,'--k'); yline(sp.min_h,'--k');
+    if i == 1
+        title('Hydraulic Head [m]','FontSize',font);
+    end 
+    if i == n_units
+        xlabel('Time [hr]');
+    end
+    xlim([1, T]);
+    set(ax,'FontSize',font);
+
+    %{ 
+    % p_t 
+    ax = subplot(n_units, subfig_n, row*subfig_n + 3);
+    plot(p1,'-k','LineWidth',2); hold on;
+    plot(p2,'-b','LineWidth',2);
+    plot(p3,'-r','LineWidth',2);
+    yline(sp.F,'--k');
+    title('p_t','FontSize',font);
+    if i == n_units
+        xlabel('Hour');
+    end
+    xlim([1, T]);
+    set(ax,'FontSize',font);
+
+    % v_t
+    ax = subplot(n_units, 6, row*6 + 4);
+    plot(V1,'-k','LineWidth',2); hold on;
+    plot(V2,'-b','LineWidth',2);
+    plot(V3,'-r','LineWidth',2);
+    yline(sp.max_V,'--k'); yline(sp.min_V,'--k');
+    title('v_t','FontSize',font);
+    if i == n_units
+        xlabel('Hour');
+    end
+    xlim([1, T]);
+    set(ax,'FontSize',font);
+
+    % s_t 
+    ax = subplot(n_units, 6, row*6 + 5);
+    plot(s1,'-k','LineWidth',2); hold on;
+    plot(s2,'-b','LineWidth',2);
+    plot(s3,'-r','LineWidth',2);
+    title('s_t','FontSize',font);
+    if i == n_units
+        xlabel('Hour');
+    end
+    xlim([1, T]);
+    set(ax,'FontSize',font);
+    %}
+end
+
+% Global legend 
+if ~isempty(h1_leg)
+    lg = legend([h1_leg h2_leg h3_leg], labels{:}, ...
+                'Orientation', 'horizontal', ...
+                'FontSize', 10, ...
+                'Box', 'on');
+    % Center the legend dynamically
+    drawnow;  % force legend to compute its size
+    legendPos = lg.Position;
+    legendWidth = legendPos(3);
+    lg.Position = [0.5 - legendWidth/2, 0.01, legendWidth, legendPos(4)];
+end
+
+% Save figure if requested
+if printplot
+    outFile = fullfile("./plots", ...
+        sprintf('AllUnits_%s_%s_%s.png', lower(tag1), lower(tag2), lower(tag3)));
+    saveas(fig, outFile);
+end
+

@@ -1,8 +1,8 @@
-%% Plot Driver for DIU vs DDU Comparison (All Units)
+%% Plot Driver for SSH vs BON Comparison 
 % ========================================================================
 % Author: Eliza Cohn
-% Description: Overlays policy behavior derived during optimization sims
-%              for all units. For each unit k, loads that unit's DET, DIU,
+% Description: Overlays policy behavior derived under BON and SSH algs
+%              For each unit k, loads that unit's DET, DIU,
 %              and DDU optimization results separately and produces:
 %                 1) Inflow std dev (M2 vs M3)
 %                 2) SoC trajectory + effective bounds (M1, M2, M3)

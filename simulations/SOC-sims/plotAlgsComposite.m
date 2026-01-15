@@ -1,9 +1,7 @@
-%% Plot Driver for DIU vs DDU Comparison (All Units)
+%% Plot Driver for SSH vs BON Comparison 
 % ========================================================================
 % Author: Eliza Cohn
-% Description: Overlays policy behavior derived during optimization sims
-%              for all units. For each unit k, loads that unit's DET, DIU,
-%              and DDU optimization results and produces:
+% Description: Overlays policy behavior derived under BON and SSH algs
 %              - One combined 4x2 figure:
 %                  * Left column: SoC bounds + trajectories (M1, M2, M3)
 %                  * Right column: inflow std dev (M1=0, M2, M3)
@@ -14,11 +12,11 @@
 %   - V_eff layout: [V1_max V1_min V2_max V2_min ...]
 % ========================================================================
 
-clc; clear; close all;
+%clc; clear; close all;
 
 %% Plot Settings
 
-bounds_plot = "soc"; %options: "soc" "head"
+bounds_plot = "head"; %options: "soc" "head"
 
 resultsPath = './resultsSSH/';
 if ~exist(resultsPath,'dir')
@@ -202,15 +200,17 @@ for i = 1:n_units
         V3max = Vmax_M3_all(:,i);
         ylim_array = [-.01 0.045];
         vol_title = 'Unit %d SoC Lower Bounds';
+        vol_ylabel = 'SoC';
     else
-        V1min = a_M1*(Vmin_M1_all(:,i)^b_M1);
-        V1max = a_M1*(Vmax_M1_all(:,i)^b_M1);
-        V2min = a_M2*(Vmin_M2_all(:,i)^b_M2);
-        V2max = a_M2*(Vmax_M2_all(:,i)^b_M2);
-        V3min = a_M3*(Vmin_M3_all(:,i)^b_M3);
-        V3max = a_M3*(Vmax_M3_all(:,i)^b_M3);
-        ylim_array = [-.01 0.045];
-        vol_title = 'Unit %d SoC Lower Bounds';
+        V1min = a_M1*(Vmin_M1_all(:,i).^b_M1);
+        V1max = a_M1*(Vmax_M1_all(:,i).^b_M1);
+        V2min = a_M2*(Vmin_M2_all(:,i).^b_M2);
+        V2max = a_M2*(Vmax_M2_all(:,i).^b_M2);
+        V3min = a_M3*(Vmin_M3_all(:,i).^b_M3);
+        V3max = a_M3*(Vmax_M3_all(:,i).^b_M3);
+        ylim_array = [-.01 5];
+        vol_title = 'Unit %d Hydraulic Head Bounds';
+        vol_ylabel = 'Head Height';
     end 
 
     % Fig 1A (LEFT): SoC bounds + trajectories 
@@ -249,7 +249,7 @@ for i = 1:n_units
     ylim(ylim_array);
     title(sprintf(vol_title, unitIdx(i)), 'FontSize', fontTitle);
     xlabel('Time (h)');  
-    ylabel('SoC');
+    ylabel(vol_ylabel);
     set(gca, 'FontSize', fontAxes);
 
     % Fig 1B: (RIGHT): Std deviation (DET/DIU/DDU) 
@@ -276,7 +276,7 @@ for i = 1:n_units
     xlabel('Time (h)');
     ylabel('\sigma_t');
     xlim([1, T])
-    ylim([-.001 0.01]);
+    ylim([-.001 0.03]);
     set(gca, 'FontSize', fontAxes);
 end
 
