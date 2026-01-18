@@ -12,13 +12,13 @@
 %   - V_eff layout: [V1_max V1_min V2_max V2_min ...]
 % ========================================================================
 
-%clc; clear; close all;
+clc; clear; close all;
 
 %% Plot Settings
 
 bounds_plot = "head"; %options: "soc" "head"
 
-resultsPath = './resultsSSH/';
+resultsPath = './resultsBonferroni/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end
@@ -348,7 +348,7 @@ xlabel('Time (h)');
 xlim([1 T])
 set(gca, 'FontSize', fontAxes);
 set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
-legend([l1 l2 l3], {'M1', 'M2', 'M3'}, ...
+legend([l1 l2 l3], {'DET', 'DIU', 'DDU'}, ...
        'Location', 'best', 'FontSize', fontLegend);
 title('Accumulated Energy Dispatch', 'FontSize', fontTitle);
 

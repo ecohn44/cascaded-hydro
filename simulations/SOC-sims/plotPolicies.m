@@ -11,7 +11,7 @@
 close all; clc;
 
 % Loading parameters 
-path = './resultsBonferroni';
+path = "./resultsSSH";
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
@@ -25,6 +25,7 @@ D3 = load(fullfile(path, sprintf('results_unit1_%s.mat', lower(tag3))));
 n_units = numel(D1.sysparams);
 T       = D1.T;
 
+%% Figure 1: Comparing Uncertainty Frameworks 
 % Create one big figure for all units
 fig = figure('Position',[100 100 1600 300*n_units]);
 

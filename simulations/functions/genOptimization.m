@@ -353,10 +353,14 @@ function variable_report(framework, season, X, N, s, LMP)
 
     total_gen = 0;
     total_profit = 0;
+    total_release = 0; 
+
     for i = 1:n
         idxP = 5*(i-1)+2;
+        idxU = 5*(i-1)+3;
         total_gen = total_gen + sum(X(:,idxP));
         total_profit = total_profit + sum(LMP(:,i) .* X(:,idxP));
+        total_release = total_release + sum(X(:,idxU));
     end
 
     fprintf('\n');
@@ -366,6 +370,8 @@ function variable_report(framework, season, X, N, s, LMP)
     fprintf('Season: %s\n', season);
     fprintf('\n');
     fprintf('Total Generation [MWh]: %g\n', round(total_gen, sd+1, 'significant'));
+    fprintf('Total Release [m^3]: %g\n', round(total_release, sd+1, 'significant'));
+    fprintf('System Efficiency [MWh/m^3]: %g\n', round(total_gen/total_release, sd+1, 'significant'));
     fprintf('Total Profit [$]: %g\n', round(total_profit, sd+1, 'significant'));
 
     for i = 1:n
