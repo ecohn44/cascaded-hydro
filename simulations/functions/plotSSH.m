@@ -1,4 +1,4 @@
-function plotSSH(phi_vals, alpha_vals, eps)
+function plotSSH(phi_vals, alpha_vals, eps, label)
 
     T = size(alpha_vals, 1);
     tt = 1:1:T;
@@ -11,10 +11,10 @@ function plotSSH(phi_vals, alpha_vals, eps)
     phi_vals(1) = 1;
     
     % Figure 1: Pr(V in [Vmin, Vmax]) 
-    subplot(3, 1, 1, 'Parent', f); 
+    subplot(2, 1, 1, 'Parent', f); 
     plot(tt, phi_vals, 'LineWidth', 1.5, 'DisplayName', 'System Reliability');
     yline(1-eps, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Reliability Bound');
-    title('Total System Reliability');
+    title("Total System Reliability - " + label);
     ylabel('\phi'); 
     xlabel('Time (hr)');
     xlim([1, T]);
@@ -22,6 +22,7 @@ function plotSSH(phi_vals, alpha_vals, eps)
     legend('Location', 'west');
     grid on;
     
+    %{
     % Figure 2: Risk Attribution Weights 
     subplot(3, 1, 2, 'Parent', f);  
     plot(tt, alpha_vals, 'LineWidth', 1.5);
@@ -39,9 +40,10 @@ function plotSSH(phi_vals, alpha_vals, eps)
     
     % Apply the legend
     legend(legendLabels, 'Location', 'west');
+    %}
 
     % Figure 3: Effective Risk Budget
-    subplot(3, 1, 3, 'Parent', f);  
+    subplot(2, 1, 2, 'Parent', f);  
     plot(tt, alpha_vals*eps, 'LineWidth', 1.5);
     yline(eps/n, 'r--', 'LineWidth', 1.5);
     title('Effective Risk Budget');

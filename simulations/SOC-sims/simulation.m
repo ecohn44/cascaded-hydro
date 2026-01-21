@@ -34,7 +34,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "det", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -43,7 +43,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
 
 % Date range settings 
-D = 3;                      % Simulation duration in days
+D = 3.5;                      % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 3;                      % Travel time between units (hrs)
 
@@ -129,7 +129,7 @@ simPlots(path, X, sysparams, T, c, printplot);
 
 % Plot SSH algorithm behavior 
 if simSettings.bounds == "jcc-ssh"
-    plotSSH(phi_vals, alpha_vals, eps);
+    plotSSH(phi_vals, alpha_vals, eps, upper(simSettings.framework));
 end 
 
 % Store simulation results 
@@ -165,17 +165,18 @@ function plotStreamflows(q)
     figure;
     for i = 1:n
         subplot(n, 1, i);
-        plot(t, q(:, i), 'LineWidth', 1.8);
+        plot(t, q(:, i), 'LineWidth', 3);
         ylim([0 0.05]); 
+        xlim([1, T]);
         
-        ylabel(sprintf('q_%d', i), 'FontSize', 12);
-        set(gca, 'FontSize', 12); 
+        ylabel(sprintf('q_%d', i), 'FontSize', 16);
+        set(gca, 'FontSize', 16); 
 
         if i == 1
-            title('Streamflow Time Series', 'FontSize', 16);
+            title('Streamflow Time Series', 'FontSize', 20);
         end
         if i == n
-            xlabel('Time (hour)', 'FontSize', 12);
+            xlabel('Time (hour)', 'FontSize', 16);
         else
             set(gca, 'XTickLabel', []);  % hide x labels for middle plots
         end

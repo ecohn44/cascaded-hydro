@@ -328,22 +328,12 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                         sigma_i = std_safety(t, i);
                         z_i = norminv(1 - alpha_i);
 
-                        V_eff(t,2*i-1) = s(i).max_V - z_i * sigma_i;
-                        V_eff(t,2*i)   = s(i).min_V + z_i * sigma_i;
+                        V_eff(t,2*i-1) = max(s(i).max_V - z_i * sigma_i, 1);
+                        V_eff(t,2*i)   = max(s(i).min_V + z_i * sigma_i, 0);
 
                         fprintf('    Unit %d: ', i);
                         fprintf('       V_t=%.4f, u_t=%.4f, p_t=%.4f, s_t=%.4f,  q_t=%.4f\n', ...
                             X(t,idxV), X(t,idxU), X(t,idxP), X(t,idxS), q_t(i));
-
-                        % Upper bound (column 2*i-1)
-                        if isnan(V_eff(t,2*i-1)) || isinf(V_eff(t,2*i-1))
-                            V_eff(t,2*i-1) = s(i).max_V; 
-                        end
-                    
-                        % Lower bound (column 2*i)
-                        if isnan(V_eff(t,2*i)) || isinf(V_eff(t,2*i))
-                            V_eff(t,2*i) = s(i).min_V;    
-                        end
                     end
                 end 
         end 

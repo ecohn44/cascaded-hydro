@@ -1,4 +1,4 @@
-function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
+function x_slater = findSlater(X_prev, q_mean, sys, c)
     
     % findSlater:      Identify a feasible solution to the current LP
     %
@@ -20,14 +20,13 @@ function x_slater = findSlater(X_prev, q_mean, sys, c, V_eff)
     for i = 1:n_units
         
         % Unpack per-unit parameters
-        minV = V_eff(2*i); 
-        maxV = V_eff(2*i - 1);
+        minV = sys(i).min_V; 
+        maxV = sys(i).max_V;
         umin = sys(i).min_ut;
         umax = sys(i).max_ut;
         Fcap = sys(i).F;
         a    = sys(i).a;
         b    = sys(i).b;
-        RRup = sys(i).RR_up;
         RRdn = sys(i).RR_dn;
 
         % Previous volume for unit i (V_i at t-1)

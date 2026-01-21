@@ -12,7 +12,7 @@
 %   - V_eff layout: [V1_max V1_min V2_max V2_min ...]
 % ========================================================================
 
-clc; clear; close all;
+% clc; clear; close all;
 
 %% Plot Settings
 
@@ -310,6 +310,7 @@ E_M3 = cumsum(P_M3_allUnits) * dt;
 
 E_all = [E_M1, E_M2, E_M3];
 
+%{
 f4 = figure('Position',[150 300 1100 480]); hold on; grid on;
 
 % Fig 2A: ACCUMULATED ENERGY (Bar Plot)
@@ -319,6 +320,7 @@ bE(1).FaceColor = blackBound;
 bE(2).FaceColor = blueBound;
 bE(3).FaceColor = redBound;
 %}
+
 
 % Fig 2B: ACCUMULATED ENERGY (Shaded area line Plot)
 
@@ -353,3 +355,4 @@ legend([l1 l2 l3], {'DET', 'DIU', 'DDU'}, ...
 title('Accumulated Energy Dispatch', 'FontSize', fontTitle);
 
 % saveas(f4, fullfile(resultsPath, 'allUnits_accumulated_energy.png'));
+%}
