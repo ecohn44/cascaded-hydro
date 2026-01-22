@@ -1,4 +1,4 @@
-function [V_sim, u_sim, p_sim, MFV, RLR] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot, policyLabel)
+function [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot, policyLabel)
 
     % Set random seed
     rng(0, 'twister');
@@ -6,7 +6,7 @@ function [V_sim, u_sim, p_sim, MFV, RLR] = runMonteCarloSims(sysparams, bounds, 
     % Dimensions
     T     = size(X,1);              % number of time steps
     n     = numel(sysparams);       % number of units
-    nSim  = 5000;                   % number of Monte Carlo runs
+    nSim  = 500;                   % number of Monte Carlo runs
     tt    = (1:T)';
 
     % Extract deterministic (solved) policy for all units
@@ -46,6 +46,7 @@ function [V_sim, u_sim, p_sim, MFV, RLR] = runMonteCarloSims(sysparams, bounds, 
 
     % Violation indicators: T x nSim x n
     violation_count = false(T, nSim, n);
+    viol_mag = zeros(T, nSim, n);
 
     % MAIN MONTE CARLO LOOP
     for sIdx = 1:nSim
@@ -65,8 +66,12 @@ function [V_sim, u_sim, p_sim, MFV, RLR] = runMonteCarloSims(sysparams, bounds, 
                 % Next volume 
                 V_i = V_prev(i) + inflow_i - u_i - s_i;
 
-                % Record violation based on unclamped state
-                violation_count(t, sIdx, i) = (V_i < Vmin(i)) || (V_i > Vmax(i));
+                % Record violations
+                below = max(Vmin(i) - V_i, 0);
+                above = max(V_i - Vmax(i), 0);
+                
+                viol_mag(t, sIdx, i) = below + above;
+                violation_count(t, sIdx, i) = (viol_mag(t, sIdx, i) > 0);
 
                 if V_i <= 0
                     p_i = 0; 
@@ -95,6 +100,11 @@ function [V_sim, u_sim, p_sim, MFV, RLR] = runMonteCarloSims(sysparams, bounds, 
     % Metric #2 (RLR): Run-level violation probability
     run_violation = squeeze(any(violation_count, 1));  
     RLR = mean(run_violation, 1);     
+
+    % Metric #3 (IVI): Integrated (time-avg) violation magnitude
+    IVI_runs = squeeze(mean(viol_mag, 1));  % nSim x n  (avg over time)
+    IVI      = mean(IVI_runs, 1);          % 1 x n     (avg over runs)
+
     
     fprintf('\n  Monte Carlo Violation Report\n');
     
@@ -107,6 +117,8 @@ function [V_sim, u_sim, p_sim, MFV, RLR] = runMonteCarloSims(sysparams, bounds, 
 
         fprintf('   Run-Level Risk (RLR): %.2f%%\n', ...
                 100 * RLR(i));
+
+        fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
     end
 
 
@@ -171,9 +183,4 @@ function plotReservoirMCGrid(tt, V_opt, V_sim, Vmin, Vmax, ...
 
     sgtitle(sprintf('Monte Carlo Storage Trajectories — %s — %s', ...
             policyLabel, bLabel));
-
-    if printplot
-        fname = sprintf('mc_grid_%s_%s.png', bLabel, char(bounds));
-        saveas(gcf, fullfile(savePath, fname));
-    end
 end

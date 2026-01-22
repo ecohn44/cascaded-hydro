@@ -16,11 +16,12 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 
 mode = 2; % Toggle between testing hypothesis 1 or 2
 
-simSettings.bounds = "jcc-bon";
+baseFolder = './resultsSSH';
+simSettings.bounds = "jcc-ssh";
 printplot = true;
 path      = "";
 
-n = 4;
+n = 3;
 N = 40;
 
 % Load model + system parameters 
@@ -30,8 +31,6 @@ N = 40;
 polCodes = {'det','diu','ddu'};   % DET, DIU, DDU
 polNames = {'M1','M2','M3'};      % labels for results
 n_pols = length(polNames);
-
-baseFolder = './resultsBonferroni';
 
 % Struct to hold MC outputs for each policy
 MC = struct();
@@ -65,7 +64,7 @@ for k = 1:numel(polCodes)
     end 
 
     % Run Monte Carlo sims (general n-unit version)
-    [V_sim, u_sim, p_sim, MFV, RLR] = ...
+    [V_sim, u_sim, p_sim, MFV, RLR, IVI] = ...
         runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, path, printplot, policyLabel);
 
     % Mean power per unit over MC runs 
@@ -82,6 +81,7 @@ for k = 1:numel(polCodes)
     MC.(polName).P_mean  = p_mean;      % T x n_units
     MC.(polName).MFV     = MFV;         % 1 x n_units 
     MC.(polName).RLR     = RLR;         % 1 x n_units
+    MC.(polName).IVI     = IVI;  
     fprintf('%s complete.\n\n', polName);
 end
 
@@ -91,11 +91,13 @@ end
 %   2. Generation per unit
 %   3. Mean MFV over all units 
 %   4. Mean RLR over all units
+%   5. Mean IVI over all units 
 
 totalGen  = zeros(1, n_pols);
 unitGen   = zeros(n, n_pols);
 meanMFV   = zeros(1, n_pols);
 meanRLR   = zeros(1, n_pols);
+meanIVI   = zeros(1, n_pols);
 
 for k = 1:n_pols
     
@@ -103,6 +105,7 @@ for k = 1:n_pols
     P      = MC.(name).P_mean;   % T x n_units
     MFV    = MC.(name).MFV;      % 1 x n_units
     RLR    = MC.(name).RLR;      % 1 x n_units
+    IVI    = MC.(name).IVI;      % 1 x n_units
 
     % Total generation per policy
     totalGen(k)  = sum(P(:));
@@ -111,36 +114,29 @@ for k = 1:n_pols
     % Average metric per policy
     meanMFV(k)  = mean(MFV);
     meanRLR(k)  = mean(RLR);
+    meanIVI(k)  = mean(IVI);
 end
 
 
 %% Print summary for table
-fprintf('\nMonte Carlo Benchmark Summary (Hypothesis 01)\n\n');
-fprintf('Total Generation (p.u.):\n');
-for k = 1:n_pols
-    fprintf('  %s : %.4f\n', polNames{k}, totalGen(k));
-end
-fprintf('\n');
-
-fprintf('Generation per Unit (p.u.):\n');
-for i = 1:n
-    fprintf('  Unit %d:\n', i);
-    for k = 1:n_pols
-        fprintf('    %s : %.4f\n', polNames{k}, unitGen(i,k));
-    end
-end
-fprintf('\n');
+fprintf('\nMonte Carlo Benchmark Summary\n\n');
 
 fprintf('Mean Frequency of Violations (MFV):\n');
 for k = 1:n_pols
-    fprintf('    %s : %.2f%%%% of runs\n', ...
+    fprintf('  %s: %.2f%% of runs\n', ...
             polNames{k}, 100*meanMFV(k));
 end
 fprintf('\n');
 
-fprintf('Run-Level Risk (RLR):\n');
+fprintf('Mean Run-Level Risk (RLR):\n');
 for k = 1:n_pols
-    fprintf('  %s : %.4f\n', polNames{k}, 100*meanRLR(k));
+    fprintf('  %s: %.4f\n', polNames{k}, 100*meanRLR(k));
+end
+fprintf('\n');
+
+fprintf('Mean Integrated Violation Index (IVI):\n');
+for k = 1:n_pols
+    fprintf('  %s: %.4f\n', polNames{k}, 100*meanIVI(k));
 end
 fprintf('\n');
 
