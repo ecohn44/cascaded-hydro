@@ -34,7 +34,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -49,6 +49,15 @@ lag = 3;                      % Travel time between units (hrs)
 
 % Load price data
 LMP = ones(T, n); % simulatePrice(T, n, true);
+
+% Create path to store results  
+if simSettings.bounds == "jcc-ssh"
+    results_dir = "./resultsSSH/" + modelparams.season + "/";
+elseif simSettings.bounds == "jcc-bon"
+    results_dir = "./resultsBonferroni/" + modelparams.season + "/";
+else 
+    warning('Results directory does not exist');
+end 
 
 fprintf('Data loading complete.\n');
 
@@ -132,13 +141,7 @@ if simSettings.bounds == "jcc-ssh"
     plotSSH(phi_vals, alpha_vals, eps, upper(simSettings.framework));
 end 
 
-% Store simulation results 
-if simSettings.bounds == "jcc-ssh"
-    results_dir = "./resultsSSH/";
-else
-    results_dir = "./resultsBonferroni/";
-end 
-
+% Save results 
 for i = 1:numel(sysparams)
     sp = sysparams(i);
     fname = sprintf('results_unit%d_%s.mat', ...
