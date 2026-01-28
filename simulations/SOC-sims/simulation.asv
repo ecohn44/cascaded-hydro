@@ -33,7 +33,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -98,18 +98,13 @@ modelparams.Sigma_diu     = diag(sigma_diu.^2);             % n×n covariance (D
 % Offline correlation matrix
 modelparams.Rcorr         = estimateR(T, n, lag, q, modelparams); % n×n correlation
 
-% Check PD-ness for covariance matrix 
+% Check PD-ness
 if isPD(modelparams.Sigma_diu)
     disp('Σ is PD');
 else
-    warning('Σ is NOT PD');
-end 
-
-% Check PD-ness for correlation matrix 
-if isPD(modelparams.Rcorr)
-    disp('R is PD');
-else
-    warning('R is NOT PD');
+    % Overwrite standard deviations with offline estimate 
+    modelparams.sigma_diu = modelparams.AR_std*ones(n, 1);
+    disp('Σ is NOT PD');
 end 
 
 %% ========================================================================
@@ -234,14 +229,26 @@ function R = estimateR(T, n, lag, q, m)
     
     % AR(1) forecast (q already starts at lag)
     for t = 1:T
+        
         % Forecast streamflow based on lagged observation 
-        q_hat(t,:) = alpha0 + alpha1*q(t,:);
+        q_hat(t,:) = alpha0 + alpha1 * q(t,:);
 
         % Calculate forecast error based on actual observation 
         E(t,:)     = q(t+lag,:) - q_hat(t,:);
     end
 
+    % Drop first row (no forecast available)
+    E = E(2:end, :);
+
     % Compute correlation of forecast errors
     R = corr(E, 'Rows', 'complete');
 
+    % Numerical safety: symmetrize and enforce PD
+    R = (R + R') / 2;
+
+    [V, D] = eig(R);
+    d = diag(D);
+    d(d < 1e-6) = 1e-6;      % floor small eigenvalues
+    R = V * diag(d) * V';
+    R = (R + R') / 2;
 end

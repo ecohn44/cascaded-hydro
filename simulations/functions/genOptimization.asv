@@ -81,7 +81,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
     %% Non-Anticipatory Optimization Framework 
     for t = 1:T
         
-        % Forecast inflow for all units
+        % Forecast Inflow for all units
         [q_t, std_hat(t,:)] = forecast_inflow(X, t, q, lag, framework, params, s);
 
         V_min_shift = zeros(1, n);
@@ -320,7 +320,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
                         % Calculate effective bounds
                         alpha_i = eps*alpha_vals(t, i);
-                        sigma_i = std_hat(t, i);
+                        sigma_i = std_safety(t, i);
                         z_i = norminv(1 - alpha_i);
 
                         V_eff(t,2*i-1) = s(i).max_V - z_i * sigma_i;
@@ -456,35 +456,35 @@ function [q_t, std_hat] = forecast_inflow(X, t, q, lag, framework, params, s)
         switch framework
 
             case "det"
-                % Use the DIU mean with no std 
+                % Deterministic: Use the DIU mean with no std 
                 [q_t(i), ~] = forecast_inflow_diu(i, q_loc_prev, params);
 
             case "diu"
                 
-                % Each unit uses DIU forecast and static std
+                % DIU: Each unit uses DIU forecast and static std
                 [q_t(i), std_hat(i)] = forecast_inflow_diu(i, q_loc_prev, params);
 
             case "ddu"
                 if i == 1
                     
-                    % No upstream operator to condition on (DIU)
+                    % Unit 1: No upstream operator to condition on (DIU)
                     [q_t(i), std_hat(i)] = forecast_inflow_diu(i, q_loc_prev, params);
 
                 else
 
                     if t <= lag
-                        % Initialization period
+                        % GARCH initialization
                         q_pred_prev = q_loc_prev;
                     
                     else
-                        % Pull previous predicted inflow
+                        % Pull previous predicted inflow from X 
                         idxQ         = 5*(i-1) + 5;
                         q_pred_prev  = X(t-lag, idxQ);   % t-lag for GARCH error
                     end
 
-                    % Variance model 
+                    % DDU variance model 
                     [q_t(i), std_hat(i)] = forecast_inflow_ddu( ...
-                        q_loc_prev, q_pred_prev, up_out_prev, params, s(i));
+                        q_loc_prev, q_pred_prev, up_out_prev, params);
                 end
 
             otherwise
@@ -504,13 +504,13 @@ function [q_hat, std_hat] = forecast_inflow_diu(i, q_prev, params)
 end
 
 
-function [q_hat, std_hat] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params, s)
+function [q_hat, std_hat] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_prev, params)
 
     % Calculate previous error term
     error_prev = abs(q_prev - q_pred_prev);
     
     % Forecast conditional variance using GARCH-X
-    var_hat_norm = params.omega + params.alpha*(error_prev^2) + params.gamma*(outflow_prev - s.min_ut);
+    var_hat_norm     = params.omega + params.alpha*(error_prev^2) + params.gamma*outflow_prev;
     std_hat = sqrt(var_hat_norm);
     
     % Construct mean inflow forecast
