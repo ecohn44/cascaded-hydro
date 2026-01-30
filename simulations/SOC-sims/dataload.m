@@ -15,29 +15,41 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     %% Seasonal Forecasting Parameters
     params(1) = struct( ...
         'season',   'dry', ...    % Hydrology season
-        'constant', 0.0020, ...   % DDU Params (-0.001)
-        'coef1',    0.950,  ...   % DDU inflow_lag1 [m3/hr] (.83)
-        'coef2',    0,  ...       % DDU outflow_lag [m3/hr] (0.17)
+        'constant', 0.0020, ...   % DDU Params 
+        'coef1',    0.950,  ...   % DDU inflow_lag1 [m3/hr] 
+        'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
         'AR_std',   0.0028, ...   % DIU residual variance 
         'omega',    (0.0028^2), ... % GARCH-X params 
         'alpha',    0.8,   ...      % GARCH-X params 
-        'gamma',    5.88e-4);       % GARCH-X params 
+        'gamma',    6.6e-4);        % GARCH-X params 
 
     % Copy for Wet Season
     params(2) = params(1);
     params(2).season = 'wet';
     params(2).gamma  = 0.0008;
 
+    params(2) = struct( ...
+        'season',   'wet', ...    % Hydrology season
+        'constant', 0.00, ...     % DDU Params
+        'coef1',    0.995,  ...   % DDU inflow_lag1 [m3/hr]
+        'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
+        'AR_const', 0.00, ...     % DIU params
+        'AR_coef',  0.995, ...    % DIU inflow_lag1
+        'AR_std',   0.0035, ...   % DIU residual variance 
+        'omega',    (0.0035^2), ... % GARCH-X params 
+        'alpha',    0.8,   ...      % GARCH-X params 
+        'gamma',    0.001);        % GARCH-X params 
+
 
     %% Base Unit Template 
     base_unit = struct( ...
-        'unit',   1, ...      % will be overwritten per unit
-        'name',   'Unit 01', ... % will be overwritten per unit
+        'unit',   1, ...      
+        'name',   'Unit 01', ... 
         'a',      5.0, ...    % Hydraulic head coef (max effective voltage)
         'b',      0.45, ...   % Hydraulic head coef (concavity)
-        'min_ut', 0.01, ...   % (TEMP) 0.01
+        'min_ut', 0.01, ...   
         'max_ut', 0.05, ...
         'min_h',  0, ...
         'max_h',  5.0, ...
@@ -84,7 +96,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     %% Drought scenario parameters
     droughtTemplate = struct( ...
         'mode',         '',  ...
-        'q0',           (.75*0.05), ...
+        'q0',           (.9*0.05), ...
         'amp1',         [],  ...
         'amp2',         [],  ...
         'w1',           [],  ...

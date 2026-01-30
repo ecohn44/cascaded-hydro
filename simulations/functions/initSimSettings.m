@@ -1,9 +1,9 @@
-function settings = initSimSettings(season, drought, method, framework, bounds, volPrice)
+function settings = initSimSettings(season, scenario, method, framework, bounds, volPrice)
     validSeasons = ["dry", "wet"];
     validMethods = ["minlp", "pwl"];
     validFrameworks = ["det", "diu", "ddu"];
     validBounds = ["det", "icc", "jcc-bon", "jcc-ssh"];
-    validDroughts = ["constant", "pulse", "extended"];
+    validScenarios = ["constant", "pulse", "extended"];
     validVolumePrices = ["none", "static", "dynamic"];
 
     if ~ismember(season, validSeasons)
@@ -18,12 +18,12 @@ function settings = initSimSettings(season, drought, method, framework, bounds, 
     if ~ismember(bounds, validBounds)
         error('Invalid bounds framework".');
     end
-    if ~ismember(drought, validDroughts)
+    if ~ismember(scenario, validScenarios)
         error('Invalid drought framework".');
     end
     if ~ismember(volPrice, validVolumePrices)
         error('Invalid volume pricing framework".');
     end
 
-    settings = struct('season', season, 'drought', drought, 'method', method, 'framework', framework, 'bounds', bounds, 'volPrice', volPrice);
+    settings = struct('season', season, 'scenario', scenario, 'method', method, 'framework', framework, 'bounds', bounds, 'volPrice', volPrice);
 end

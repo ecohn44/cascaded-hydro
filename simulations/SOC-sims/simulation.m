@@ -26,7 +26,7 @@ n = 3;              % number of units in cascaded network
 eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
-[modelparams, sysparams, droughtparams] = dataload(n, N);
+[modelparams, sysparams, seasonparams] = dataload(n, N);
 
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
@@ -38,8 +38,8 @@ simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none"
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
-% Extract drought simulation mode
-droughtparams = droughtparams(strcmp({droughtparams.mode}, simSettings.drought));
+% Extract event scenario simulation mode
+seasonparams = seasonparams(strcmp({seasonparams.mode}, simSettings.scenario));
 
 % Date range settings 
 D = 3.5;                      % Simulation duration in days
@@ -68,18 +68,18 @@ fprintf('Data loading complete.\n');
 q = zeros(T+lag, n);
 
 % Cascaded drought parameters
-baseDrought = droughtparams;
+baseStreamflow = seasonparams;
 severityScales = makeSeverityScales(n);    
 
-% Simulate drought event 
+% Simulate scaled events 
 for i = 1:n
-    dp    = baseDrought; 
+    dp    = baseStreamflow; 
 
     % Apply scaling to each inflow profile 
     scale = 1; % severityScales(i);
 
     if strcmpi(dp.mode, 'extended')
-        dp.amp1 = baseDrought.amp1 * scale;
+        dp.amp1 = baseStreamflow.amp1 * scale;
     end
 
     dp.shiftMult = i - 1;

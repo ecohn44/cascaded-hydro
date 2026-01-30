@@ -68,38 +68,29 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
         end
         
         % Step 2a: Calculate Gradient 
-        g_u = zeros(n_units,1);
-        g_s = zeros(n_units,1);
-        g_r = zeros(n_units,1);   % = g_u + g_s
+        g = zeros(dim_x, 1);
 
         for i = 1:n_units
             base = 4*(i-1);
             
-            % Release index (u + s)
-            ju = base + 3;   % u index in x
-            js = base + 4;   % s index in x
+            % Release index (u)
+            j_u = base + 3; 
+
+            % Volume index (V)
+            j_v = base + 1;
             
-            % Calculate dF/du via finite difference 
-            eps_u = 1e-6 * max(1, abs(x_star(ju))); % perturbation size
-            e = zeros(dim_x, 1); e(ju) = eps_u;
+            % Perturbation size
+            eps_j = 1e-6 * max(1, abs(x_star(j)));
+            
+            % Finite Difference
+            e = zeros(dim_x, 1); e(j_u) = eps_j;
             f1 = compute_phi_from_x(x_star + e, q_mean, Sigma_q, X_prev, s);
             f2 = compute_phi_from_x(x_star - e, q_mean, Sigma_q, X_prev, s);
-            g_u(i) = (f1 - f2) / (2 * eps_u);
-
-            % Calculate dF/ds via finite difference 
-            eps_s = 1e-6 * (1 + abs(x_star(js)));
-            e = zeros(dim_x,1); e(js) = eps_s;
-            f1 = compute_phi_from_x(x_star + e, q_mean, Sigma_q, X_prev, s);
-            f2 = compute_phi_from_x(x_star - e, q_mean, Sigma_q, X_prev, s);
-            g_s(i) = (f1 - f2) / (2*eps_s);
-
-            % Total-outflow sensitivity (what phi actually depends on)
-            g_r(i) = g_u(i) + g_s(i);
-
+            
+            g(j) = (f1 - f2) / (2 * eps_j);
+            
+            w(i) = abs(g(j));
         end
-
-        % Risk attribution weights 
-        w = abs(g_r);
         
         % Step 2b: Add the Linear Cut (∇φ'x >= ∇φ'x*)
         
@@ -109,8 +100,8 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
         for i = 1:n_units
             base = 4*(i-1);
 
-            lhs = lhs + g_r(i) * (vars.u(i) + vars.s(i));
-            rhs = rhs + g_r(i) * (x_star(base+3) + x_star(base+4));
+            lhs = lhs + g(base+3) * vars.u(i); 
+            rhs = rhs + g(base+3) * x_star(base+3);
         end
         
         % Append the new cut

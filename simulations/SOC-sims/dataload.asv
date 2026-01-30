@@ -15,29 +15,41 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     %% Seasonal Forecasting Parameters
     params(1) = struct( ...
         'season',   'dry', ...    % Hydrology season
-        'constant', 0.0020, ...   % DDU Params (-0.001)
-        'coef1',    0.950,  ...   % DDU inflow_lag1 [m3/hr] (.83)
-        'coef2',    0,  ...       % DDU outflow_lag [m3/hr] (0.17)
+        'constant', 0.0020, ...   % DDU Params 
+        'coef1',    0.950,  ...   % DDU inflow_lag1 [m3/hr] 
+        'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
         'AR_std',   0.0028, ...   % DIU residual variance 
         'omega',    (0.0028^2), ... % GARCH-X params 
         'alpha',    0.8,   ...      % GARCH-X params 
-        'gamma',    5.88e-4);       % GARCH-X params 
+        'gamma',    6.6e-4);        % GARCH-X params 
 
     % Copy for Wet Season
     params(2) = params(1);
     params(2).season = 'wet';
     params(2).gamma  = 0.0008;
 
+    params(2) = struct( ...
+        'season',   'wet', ...    % Hydrology season
+        'constant', 0.00, ...     % DDU Params
+        'coef1',    0.995,  ...   % DDU inflow_lag1 [m3/hr]
+        'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
+        'AR_const', 0.00, ...     % DIU params
+        'AR_coef',  0.950, ...    % DIU inflow_lag1
+        'AR_std',   0.0028, ...   % DIU residual variance 
+        'omega',    (0.0028^2), ... % GARCH-X params 
+        'alpha',    0.8,   ...      % GARCH-X params 
+        'gamma',    6.6e-4);        % GARCH-X params 
+
 
     %% Base Unit Template 
     base_unit = struct( ...
-        'unit',   1, ...      % will be overwritten per unit
-        'name',   'Unit 01', ... % will be overwritten per unit
+        'unit',   1, ...      
+        'name',   'Unit 01', ... 
         'a',      5.0, ...    % Hydraulic head coef (max effective voltage)
         'b',      0.45, ...   % Hydraulic head coef (concavity)
-        'min_ut', 0.01, ...   % (TEMP) 0.01
+        'min_ut', 0.01, ...   
         'max_ut', 0.05, ...
         'min_h',  0, ...
         'max_h',  5.0, ...
@@ -46,7 +58,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'RR_dn',  -0.015, ...
         'RR_up',  0.01, ...
         'F',      1, ...
-        'SOC',    0.15);       % Initial start of charge
+        'SOC',    0);       % Initial start of charge
 
 
     %% Build sysparams for n units
@@ -58,6 +70,9 @@ function [params, sysparams, droughtparams] = dataload(n, N)
 
         % String name
         sysparams(i).name = sprintf('Unit %02d', i);
+
+        % Adjust SoC
+        sysparams(i).SOC = i/10; 
     end
 
 
@@ -81,7 +96,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     %% Drought scenario parameters
     droughtTemplate = struct( ...
         'mode',         '',  ...
-        'q0',           (.75*0.05), ...
+        'q0',           (.77*0.05), ...
         'amp1',         [],  ...
         'amp2',         [],  ...
         'w1',           [],  ...
@@ -109,12 +124,12 @@ function [params, sysparams, droughtparams] = dataload(n, N)
 
     % Extended drought (single-decay events)
     droughtparams(2).mode         = 'extended';
-    droughtparams(2).amp1         = 0.3;   % Maginitude of drought event
+    droughtparams(2).amp1         = 0.25;    % Maginitude of drought event
     droughtparams(2).nEvents      = 1;      % number of events
-    droughtparams(2).daysPerEvent = 1.2;    % drought length 
+    droughtparams(2).daysPerEvent = 1.5;    % drought length 
     droughtparams(2).tauHours     = 12;     % decay rate
-    droughtparams(2).unitDelay    = 18;     % time units between drought events 
-    droughtparams(2).startSteps   = 5;      % time before initial drought event begins 
+    droughtparams(2).unitDelay    = 30;     % time units between drought events 
+    droughtparams(2).startSteps   = 2;      % time before initial drought event begins 
     droughtparams(2).recoverHours = 10;     % recovery time from drought event to q0
 
     droughtparams(3).mode         = 'constant';
