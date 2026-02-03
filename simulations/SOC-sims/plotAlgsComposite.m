@@ -16,9 +16,9 @@
 
 %% Plot Settings
 
-bounds_plot = "head"; %options: "soc" "head"
+bounds_plot = "soc"; %options: "soc" "head"
 
-resultsPath = './resultsBonferroni/';
+resultsPath = './resultsBonferroni/wet/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end
@@ -198,7 +198,7 @@ for i = 1:n_units
         V2max = Vmax_M2_all(:,i);
         V3min = Vmin_M3_all(:,i);
         V3max = Vmax_M3_all(:,i);
-        ylim_array = [-.01 0.045];
+        ylim_array = [0.9 1.05];%[-.01 0.045];
         vol_title = 'Unit %d SoC Lower Bounds';
         vol_ylabel = 'SoC';
     else

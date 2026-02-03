@@ -19,7 +19,7 @@ function settings = initSimSettings(season, scenario, method, framework, bounds,
         error('Invalid bounds framework".');
     end
     if ~ismember(scenario, validScenarios)
-        error('Invalid drought framework".');
+        error('Invalid scenario framework".');
     end
     if ~ismember(volPrice, validVolumePrices)
         error('Invalid volume pricing framework".');

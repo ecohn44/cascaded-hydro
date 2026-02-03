@@ -1,6 +1,6 @@
-function q = droughtSimulator(T, lag, season, mode, droughtParams)
-% droughtSimulator  Generate inflow under different drought scenarios,
-%                   with optional *spatial lag* of the drought anomaly.
+function q = scenarioSimulator(T, lag, season, mode, scenarioParams)
+% droughtSimulator  Generate inflow under different scenarios,
+%                   with optional *spatial lag* of the scenario anomaly.
 %
 % INPUTS
 %   T, lag        : horizon and AR lag (same as before)
@@ -10,14 +10,14 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
 %                     .q0        baseline inflow (scalar)
 %                   optionally:
 %                     .shiftMult integer (0,1,2,...) = how many *lag*-blocks
-%                                to delay the drought anomaly
+%                                to delay the scenario anomaly
 %
 % OUTPUT
 %   q  : (T+lag) × 1 inflow time series
 
 
     n = T + lag;
-    q0 = droughtParams.q0;
+    q0 = scenarioParams.q0;
 
     % Baseline (no drought) is the same for all units
     base = q0 * ones(n,1);
@@ -31,10 +31,10 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
             % Do nothing: stays at baseline q0
 
         case 'pulse'
-            q = applyPulseDrought(q, T, lag, season, droughtParams);
+            q = applyPulse(q, T, lag, season, scenarioParams);
 
         case 'extended'
-            q = applyExtendedDrought(q, T, lag, season, droughtParams);
+            q = applyExtended(q, T, lag, season, scenarioParams);
 
         otherwise
             error('Unknown drought mode: %s', mode);
@@ -44,7 +44,7 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
     deltaq = q - base;   % length n
 
     % Number of time steps to shift drought events between units 
-    shiftSteps = round(droughtParams.startSteps + droughtParams.shiftMult * droughtParams.unitDelay);
+    shiftSteps = round(scenarioParams.startSteps + scenarioParams.shiftMult * scenarioParams.unitDelay);
     deltaq     = shift_with_zeros(deltaq, shiftSteps);
 
     % Reconstruct inflow and enforce nonnegativity
@@ -54,16 +54,16 @@ function q = droughtSimulator(T, lag, season, mode, droughtParams)
 
 end
 
-function q = applyPulseDrought(q, T, lag, season, droughtParams)
+function q = applyPulse(q, T, lag, season, scenarioParams)
 
     n = T + lag;
 
     % Unpack all params (we assume they exist)
-    t0  = droughtParams.t0(:)';  
-    amp1 = droughtParams.amp1;
-    amp2 = droughtParams.amp2;
-    w1   = droughtParams.w1;
-    w2   = droughtParams.w2;
+    t0  = scenarioParams.t0(:)';  
+    amp1 = scenarioParams.amp1;
+    amp2 = scenarioParams.amp2;
+    w1   = scenarioParams.w1;
+    w2   = scenarioParams.w2;
 
     % Map fractional or absolute t0 → valid indices
     idx = @(x) round((x < 1) .* (lag + x*T) + (x >= 1) .* x);
@@ -95,7 +95,7 @@ function q = applyPulseDrought(q, T, lag, season, droughtParams)
 end
 
 
-function q = applyExtendedDrought(q, T, lag, season, droughtParams)
+function q = applyExtended(q, T, lag, season, droughtParams)
     % q is baseline vector (length T+lag)
 
     nTot = T + lag;

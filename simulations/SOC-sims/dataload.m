@@ -2,7 +2,7 @@
 % DATALOAD FUNCTIONS
 % ========================================================================
 
-function [params, sysparams, droughtparams] = dataload(n, N)
+function [params, sysparams, scenarioparams] = dataload(n, N)
     % Inputs:
     %   n        - number of hydropower units
     %   N        - number of PWL segments for head approximation
@@ -20,15 +20,10 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
-        'AR_std',   0.0028, ...   % DIU residual variance 
-        'omega',    (0.0028^2), ... % GARCH-X params 
-        'alpha',    0.8,   ...      % GARCH-X params 
-        'gamma',    6.6e-4);        % GARCH-X params 
-
-    % Copy for Wet Season
-    params(2) = params(1);
-    params(2).season = 'wet';
-    params(2).gamma  = 0.0008;
+        'AR_std',   0.006, ...   % DIU residual variance % 0.0028
+        'omega',    (0.006^2), ... % GARCH-X params 
+        'alpha',    0.008,   ...      % GARCH-X params % 0.8
+        'gamma',    0.003);        % GARCH-X params %6.6e-4
 
     params(2) = struct( ...
         'season',   'wet', ...    % Hydrology season
@@ -58,7 +53,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'RR_dn',  -0.015, ...
         'RR_up',  0.01, ...
         'F',      1, ...
-        'SOC',    0);       % Initial start of charge
+        'SOC',    0.5);       % Initial start of charge
 
 
     %% Build sysparams for n units
@@ -69,10 +64,7 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         sysparams(i).unit = i;
 
         % String name
-        sysparams(i).name = sprintf('Unit %02d', i);
-
-        % Adjust SoC
-        sysparams(i).SOC = i/10; 
+        sysparams(i).name = sprintf('Unit %02d', i); 
     end
 
 
@@ -94,9 +86,9 @@ function [params, sysparams, droughtparams] = dataload(n, N)
     end
 
     %% Drought scenario parameters
-    droughtTemplate = struct( ...
+    scenarioTemplate = struct( ...
         'mode',         '',  ...
-        'q0',           (.9*0.05), ...
+        'q0',           [], ...  
         'amp1',         [],  ...
         'amp2',         [],  ...
         'w1',           [],  ...
@@ -110,29 +102,31 @@ function [params, sysparams, droughtparams] = dataload(n, N)
         'recoverHours', []);
 
     % Preallocate 1x2 struct array with same fields
-    droughtparams(1) = droughtTemplate;
-    droughtparams(2) = droughtTemplate;
-    droughtparams(3) = droughtTemplate;
+    scenarioparams(1) = scenarioTemplate;
+    scenarioparams(2) = scenarioTemplate;
+    scenarioparams(3) = scenarioTemplate;
 
-    % Pulse-type drought (uses t0 as FRACTIONS of horizon)
-    droughtparams(1).mode         = 'pulse';
-    droughtparams(1).amp1         = 0.4;      % 40% drop in inflow (dry) or +40% (wet)
-    droughtparams(1).amp2         = 0.3;      % 30% drop / bump for second pulse
-    droughtparams(1).w1           = 8;        % first drought pulse lasts 8 hours
-    droughtparams(1).w2           = 4;        % second drought pulse lasts 4 hours
-    droughtparams(1).t0           = [0.3, 0.8];  % pulses at 30% and 80% of horizon
+    % Pulse-type event (uses t0 as FRACTIONS of horizon)
+    scenarioparams(1).mode         = 'pulse';
+    scenarioparams(1).amp1         = 0.4;      % 40% drop in inflow (dry) or +40% (wet)
+    scenarioparams(1).amp2         = 0.3;      % 30% drop / bump for second pulse
+    scenarioparams(1).w1           = 8;        % first drought pulse lasts 8 hours
+    scenarioparams(1).w2           = 4;        % second drought pulse lasts 4 hours
+    scenarioparams(1).t0           = [0.3, 0.5];  % pulses at 30% and 80% of horizon
+    scenarioparams(1).unitDelay    = 12;       % time units between drought events 
+    scenarioparams(1).startSteps   = 2;        % time before initial drought event begins 
 
-    % Extended drought (single-decay events)
-    droughtparams(2).mode         = 'extended';
-    droughtparams(2).amp1         = 0.25;    % Maginitude of drought event
-    droughtparams(2).nEvents      = 1;      % number of events
-    droughtparams(2).daysPerEvent = 1.5;    % drought length 
-    droughtparams(2).tauHours     = 12;     % decay rate
-    droughtparams(2).unitDelay    = 30;     % time units between drought events 
-    droughtparams(2).startSteps   = 2;      % time before initial drought event begins 
-    droughtparams(2).recoverHours = 10;     % recovery time from drought event to q0
+    % Extended event (single-decay events)
+    scenarioparams(2).mode         = 'extended';
+    scenarioparams(2).amp1         = 0.4;    % Magnitude of drought event
+    scenarioparams(2).nEvents      = 1;      % number of events
+    scenarioparams(2).daysPerEvent = 1.2;    % drought length 
+    scenarioparams(2).tauHours     = 12;     % decay rate
+    scenarioparams(2).unitDelay    = 16;     % time units between drought events 
+    scenarioparams(2).startSteps   = 2;      % time before initial drought event begins 
+    scenarioparams(2).recoverHours = 10;     % recovery time from drought event to q0
 
-    droughtparams(3).mode         = 'constant';
+    scenarioparams(3).mode         = 'constant';
 
 end
 

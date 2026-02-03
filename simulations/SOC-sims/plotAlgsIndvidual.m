@@ -12,7 +12,7 @@
 
 clc; clear; close all;
 
-resultsPath = './resultsSSH/';
+resultsPath = './resultsBonferroni/wet/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end

@@ -5,6 +5,7 @@
 
 tic; 
 clear; clc; close all;
+
 addpath('/Library/gurobi1202/macos_universal2/matlab');
 addpath(genpath('/Users/elizacohn/Documents/YALMIP-master'))
 
@@ -15,6 +16,11 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 %% ========================================================================
 % SECTION 1: DATA LOADING AND PARAMETER DEFINITION
 % ========================================================================
+
+% Toggle for creating folder and plotting
+make_dir = false;
+printplot = false; 
+save_mat = true; 
 
 % Static parameters 
 eta = .9;           % efficiency of release-energy conversion
@@ -33,13 +39,26 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Extract event scenario simulation mode
 seasonparams = seasonparams(strcmp({seasonparams.mode}, simSettings.scenario));
+
+% Set baseline flow based on season
+if simSettings.season == "dry"
+    seasonparams.q0 = 0.9*sysparams(1).max_ut;
+    [sysparams.V0] = deal(0.1);
+
+elseif simSettings.season == "wet"
+    seasonparams.q0 = 1.2*sysparams(1).max_ut;
+    [sysparams.V0] = deal(0.8);
+
+else
+    seasonparams.q0 = sysparams(1).max_ut;
+end
 
 % Date range settings 
 D = 3.5;                      % Simulation duration in days
@@ -84,7 +103,7 @@ for i = 1:n
 
     dp.shiftMult = i - 1;
 
-    q(:,i) = droughtSimulator(T, lag, simSettings.season, dp.mode, dp);
+    q(:,i) = scenarioSimulator(T, lag, simSettings.season, dp.mode, dp);
 end
 
 % Plot streamflow profiles
@@ -126,11 +145,6 @@ scale = 1;
 %% ========================================================================
 % SECTION 5: PLOTTING
 % ========================================================================
-
-% Toggle for creating folder and plotting
-make_dir = false;
-printplot = false; 
-save_mat = false; 
 
 % Make plot directory for current simulation run 
 if make_dir
@@ -179,7 +193,7 @@ function plotStreamflows(q)
     for i = 1:n
         subplot(n, 1, i);
         plot(t, q(:, i), 'LineWidth', 3);
-        ylim([0 0.05]); 
+        ylim([0 1.1*max(q(:,i))]); 
         xlim([1, T]);
         
         ylabel(sprintf('q_%d', i), 'FontSize', 16);
