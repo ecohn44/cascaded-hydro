@@ -11,7 +11,7 @@
 close all; clc;
 
 % Loading parameters 
-path = "./resultsBonferroni";
+path = "./resultsSSH/dry";
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
@@ -34,7 +34,7 @@ T       = D1.T;
 % Create one big figure for all units
 fig = figure('Position',[100 100 400*n_units 300*n_units]);
 
-subfig_n = 3;  % number of states to plot
+subfig_n = 2;  % number of states to plot
 
 % 'Optimal Policy Trajectories under Uncertainty Frameworks'
 if path == "./resultsBonferroni"
@@ -108,6 +108,7 @@ for i = 1:n_units
         h1_leg = h1; h2_leg = h2; h3_leg = h3;
     end
 
+    %{
     % accumulated energy
     E1 = cumsum(p1);
     E2 = cumsum(p2);
@@ -125,9 +126,10 @@ for i = 1:n_units
     end
     xlim([1, T]);
     set(ax,'FontSize',font);
+    %}
 
     % h_t 
-    ax = subplot(n_units, subfig_n, row*subfig_n + 3);
+    ax = subplot(n_units, subfig_n, row*subfig_n + 2);
     % yyaxis left
     ax.YColor = 'k'; 
     plot(head1, 'LineStyle','-', 'Color', c1, 'LineWidth',2); hold on;

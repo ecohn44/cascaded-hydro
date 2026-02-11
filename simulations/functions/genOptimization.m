@@ -245,7 +245,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                 
                     case {"ddu"}
                         % DDU: time-varying covariance Sigma_t = D_t Rcorr D_t
-                        sigma_t = std_hat(t,:).';         % n×1 vector of sigma_i,t
+                        sigma_t = std_hat(t,:).';            % n×1 vector of sigma_i,t
                         D_t     = diag(sigma_t);             % n×n
                         Sigma_q = D_t * params.Rcorr * D_t;  % n×n time-varying Sigma_t
                 end
@@ -302,6 +302,12 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
                     % Store latest values for this time step
                     phi_vals(t)      = phi_k;
                     alpha_vals(t, :) = alpha_k;
+
+                    % Remove floating point error
+                    tol = 1e-10;
+                    row = alpha_vals(t, :);          % extract row
+                    row(abs(row) < tol) = 0;         % zero-out tiny values
+                    alpha_vals(t, :) = row;          % write back
 
                     % Store result into X(t,:)
                     for i = 1:n
@@ -510,7 +516,7 @@ function [q_hat, std_hat] = forecast_inflow_ddu(q_prev, q_pred_prev, outflow_pre
     error_prev = abs(q_prev - q_pred_prev);
     
     % Forecast conditional variance using GARCH-X
-    var_hat_norm = params.omega + params.alpha*(error_prev^2) + params.gamma*(outflow_prev - s.min_ut);
+    var_hat_norm = params.omega + params.alpha*(error_prev^2) + params.gamma*(outflow_prev); % - s.min_ut);
     std_hat = sqrt(var_hat_norm);
     
     % Construct mean inflow forecast

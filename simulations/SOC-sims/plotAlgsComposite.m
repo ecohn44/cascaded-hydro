@@ -18,7 +18,7 @@
 
 bounds_plot = "soc"; %options: "soc" "head"
 
-resultsPath = './resultsBonferroni/wet/';
+resultsPath = './resultsSSH/dry/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end
@@ -29,9 +29,9 @@ fontLegend = 13;
 fontTitle  = 16;
 
 % Base colors (used consistently across all figures)
-blueBound  = [0 0 1];
-greenBound = [0 1 0];
-redBound   = [1 0 0];
+blueBound  = [0.0000, 0.4470, 0.7410]; %[0 0 1];
+greenBound = [0.4660, 0.6740, 0.1880]; %[0 1 0];
+redBound   = [0.6350, 0.0780, 0.1840]; %[1 0 0];
 blackBound = [0 0 0];
 
 % Load files 
@@ -310,8 +310,8 @@ E_M3 = cumsum(P_M3_allUnits) * dt;
 
 E_all = [E_M1, E_M2, E_M3];
 
-%{
-f4 = figure('Position',[150 300 1100 480]); hold on; grid on;
+
+f4 = figure('Position',[100 100 400*n_units 300*n_units]); hold on; grid on;
 
 % Fig 2A: ACCUMULATED ENERGY (Bar Plot)
 %{
@@ -329,9 +329,9 @@ a1 = area(tt_all, E_M1);
 a2 = area(tt_all, E_M2);
 a3 = area(tt_all, E_M3);
 
-a1.FaceColor = blackBound;
-a2.FaceColor = blueBound;
-a3.FaceColor = redBound;
+a1.FaceColor = blueBound;
+a2.FaceColor = redBound;
+a3.FaceColor = greenBound;
 
 a1.FaceAlpha = 0.4;
 a2.FaceAlpha = 0.15;
@@ -341,9 +341,9 @@ a1.EdgeColor = 'none';
 a2.EdgeColor = 'none';
 a3.EdgeColor = 'none';
 
-l1 = plot(tt_all, E_M1, 'LineWidth', 2, 'Color', blackBound);
-l2 = plot(tt_all, E_M2, 'LineWidth', 2, 'Color', blueBound);
-l3 = plot(tt_all, E_M3, 'LineWidth', 2, 'Color', redBound);
+l1 = plot(tt_all, E_M1, 'LineWidth', 2, 'Color', blueBound);
+l2 = plot(tt_all, E_M2, 'LineWidth', 2, 'Color', redBound);
+l3 = plot(tt_all, E_M3, 'LineWidth', 2, 'Color', greenBound);
 
 ylabel('Accumulated Energy (p.u.·h)');
 xlabel('Time (h)');
@@ -352,7 +352,6 @@ set(gca, 'FontSize', fontAxes);
 set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
 legend([l1 l2 l3], {'DET', 'DIU', 'DDU'}, ...
        'Location', 'best', 'FontSize', fontLegend);
-title('Accumulated Energy Dispatch', 'FontSize', fontTitle);
+title('Accumulated Energy Dispatch', 'FontSize', 24);
 
 % saveas(f4, fullfile(resultsPath, 'allUnits_accumulated_energy.png'));
-%}

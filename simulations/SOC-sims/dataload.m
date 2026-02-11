@@ -21,7 +21,7 @@ function [params, sysparams, scenarioparams] = dataload(n, N)
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
         'AR_std',   0.006, ...   % DIU residual variance % 0.0028
-        'omega',    (0.006^2), ... % GARCH-X params 
+        'omega',    0.0001,  ... % GARCH-X params % (0.006^2),
         'alpha',    0.008,   ...      % GARCH-X params % 0.8
         'gamma',    0.003);        % GARCH-X params %6.6e-4
 
