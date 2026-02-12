@@ -20,7 +20,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % Toggle for creating folder and plotting
 make_dir = false;
 printplot = false; 
-save_mat = true; 
+save_mat = false; 
 
 % Static parameters 
 eta = .9;           % efficiency of release-energy conversion
@@ -39,7 +39,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
+simSettings = initSimSettings("wet", "pulse", "pwl", "diu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -55,7 +55,6 @@ if simSettings.season == "dry"
 elseif simSettings.season == "wet"
     seasonparams.q0 = 1.2*sysparams(1).max_ut;
     [sysparams.V0] = deal(0.8);
-
 else
     seasonparams.q0 = sysparams(1).max_ut;
 end

@@ -10,8 +10,10 @@
 
 close all; clc;
 
+season = "wet";
+
 % Loading parameters 
-path = "./resultsSSH/dry";
+path = "./resultsBonferroni/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
@@ -34,10 +36,14 @@ T       = D1.T;
 % Create one big figure for all units
 fig = figure('Position',[100 100 400*n_units 300*n_units]);
 
-subfig_n = 2;  % number of states to plot
+if season == "dry"
+    subfig_n = 2;  % number of states to plot
+else
+    subfig_n = 3; 
+end
 
 % 'Optimal Policy Trajectories under Uncertainty Frameworks'
-if path == "./resultsBonferroni"
+if path == "./resultsBonferroni/"+season
     alg = "Bonferroni";
     sgtitle('Bonferroni Trajectories', ...
         'FontSize', font+6, 'FontWeight','bold');
@@ -146,7 +152,7 @@ for i = 1:n_units
         xlabel('Time [hr]');
     end
     xlim([1, T]);
-    ylim([-0.1, 2.75]);
+    ylim([3, 5.1]);
     set(ax,'FontSize',font);
 
     %{
@@ -155,6 +161,23 @@ for i = 1:n_units
     ylim([0, 0.02])
     ylabel('Variance')
     %}
+
+    if season == "wet"
+        ax = subplot(n_units, subfig_n, row*subfig_n + 3);
+        plot(s1, 'Color', c1, 'LineWidth',2); hold on;
+        plot(s2, 'Color', c2, 'LineWidth',2);
+        plot(s3, 'Color', c3, 'LineWidth',2);
+        if i == 1
+            title('Spill Release [m^3]','FontSize',font);
+        end 
+        if i == n_units
+            xlabel('Time [hr]');
+        end
+        ylabel(sprintf('Unit %d', sp.unit),'FontWeight','bold');
+        xlim([1, T]);
+        set(ax,'FontSize',font);
+    end
+
 
   
 end

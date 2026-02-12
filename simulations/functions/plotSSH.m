@@ -38,7 +38,7 @@ function plotSSH(phi_vals, alpha_vals, eps, label)
         legendLabels{i} = sprintf('Unit %d', i);
     end
     
-    % Apply the legend
+    % Apply the legend 
     legend(legendLabels, 'Location', 'west');
     
 

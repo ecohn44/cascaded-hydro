@@ -18,7 +18,7 @@
 
 bounds_plot = "soc"; %options: "soc" "head"
 
-resultsPath = './resultsSSH/dry/';
+resultsPath = './resultsSSH/wet/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end
@@ -199,7 +199,7 @@ for i = 1:n_units
         V3min = Vmin_M3_all(:,i);
         V3max = Vmax_M3_all(:,i);
         ylim_array = [0.9 1.05];%[-.01 0.045];
-        vol_title = 'Unit %d SoC Lower Bounds';
+        vol_title = 'Unit %d SoC Bounds';
         vol_ylabel = 'SoC';
     else
         V1min = a_M1*(Vmin_M1_all(:,i).^b_M1);
