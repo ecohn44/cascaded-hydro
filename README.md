@@ -81,10 +81,10 @@ All run configuration lives near the top of `simulation.m`.
 
 ### Core Simulation Settings
 **The key settings to toggle between are** 
-    % season - to switch between wet and dry seasns 
-    % scenario - set as "pulse" for flood events and "extended" for drought events
-    % uncertainty framework - to run uncertainty under different assumptions 
-    % solution algorithm - switch between bonferroni "jcc-bon" and supporting hyperplane "jcc-ssh"
+- season: to switch between wet and dry seasns 
+- scenario: set as "pulse" for flood events and "extended" for drought events
+- uncertainty framework: to run uncertainty under different assumptions 
+- solution algorithm: switch between bonferroni "jcc-bon" and supporting hyperplane "jcc-ssh"
 
 ```matlab
 simSettings = initSimSettings( ...
