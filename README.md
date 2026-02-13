@@ -137,6 +137,11 @@ Saved variables include `X, V_eff, std_hat, q, sysparams, T, c, lag, season`.
 
 ## Plotting utilities
 
+**To use the extra plotting functions** set save_mat = True and run the simulation for the 6 different settings under one season
+- "season", jcc-bon (det, diu, ddu)
+- "season", jcc-ssh, (det, diu, ddu)
+
+
 ### Compare DET vs DIU vs DDU (pre-saved results)
 Edit `season = "wet"` or `"dry"` in `plotPolicies.m`, and specify the solution alg to load files from then run:
 ```matlab
