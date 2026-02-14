@@ -17,7 +17,7 @@ path = "./resultsBonferroni/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
-font  = 16;
+font  = 24;
 
 % Load files for Unit 1 just to get sysparams / n_units
 D1 = load(fullfile(path, sprintf('results_unit1_%s.mat', lower(tag1))));
@@ -46,15 +46,15 @@ end
 if path == "./resultsBonferroni/"+season
     alg = "Bonferroni";
     sgtitle('Bonferroni Trajectories', ...
-        'FontSize', font+6, 'FontWeight','bold');
+        'FontSize', 36, 'FontWeight','bold');
 else
     alg = "SSH";
     sgtitle('Supporting Hyperplane Trajectories', ...
-        'FontSize', font+6, 'FontWeight','bold');
+        'FontSize', 36, 'FontWeight','bold');
 end
 
 % Print metrics
-printBenchLatexBlock(D1, D2, D3, alg, 5);
+printBenchLatexBlock(D1, D2, D3, alg, 5, season);
 
 labels = {upper(tag1), upper(tag2), upper(tag3)};
 
@@ -114,25 +114,6 @@ for i = 1:n_units
         h1_leg = h1; h2_leg = h2; h3_leg = h3;
     end
 
-    %{
-    % accumulated energy
-    E1 = cumsum(p1);
-    E2 = cumsum(p2);
-    E3 = cumsum(p3);
-
-    ax = subplot(n_units, subfig_n, row*subfig_n + 2);
-    plot(E1,'-', 'Color', c1, 'LineWidth',2); hold on;
-    plot(E2,'-', 'Color', c2, 'LineWidth',2);
-    plot(E3,'-', 'Color', c3, 'LineWidth',2);
-    if i == 1
-        title('Accumulated Energy [MWh]','FontSize',font);
-    end
-    if i == n_units
-        xlabel('Time [hr]');
-    end
-    xlim([1, T]);
-    set(ax,'FontSize',font);
-    %}
 
     % h_t 
     ax = subplot(n_units, subfig_n, row*subfig_n + 2);
@@ -155,12 +136,6 @@ for i = 1:n_units
     ylim([3, 5.1]);
     set(ax,'FontSize',font);
 
-    %{
-    yyaxis right
-    ax.YColor = 'k'; 
-    ylim([0, 0.02])
-    ylabel('Variance')
-    %}
 
     if season == "wet"
         ax = subplot(n_units, subfig_n, row*subfig_n + 3);
@@ -186,7 +161,7 @@ end
 if ~isempty(h1_leg)
     lg = legend([h1_leg h2_leg h3_leg], labels{:}, ...
                 'Orientation', 'horizontal', ...
-                'FontSize', 14, ...
+                'FontSize', font-2, ...
                 'Box', 'on');
 
     lg.ItemTokenSize = [40, 28];
@@ -206,43 +181,65 @@ if printplot
 end
 
 
-function printBenchLatexBlock(Ddet, Ddiu, Dddu, algName, indentMM)
+function printBenchLatexBlock(Ddet, Ddiu, Dddu, algName, indentMM, season)
 % Prints LaTeX block:
-% \multirow{5}{*}{Alg}
+% \multirow{...}{*}{Alg}
 %  & System Total [MWh]   & DET & DIU & DDU \\
 %  & \hspace{Xmm}Unit 1   & ... \\
+%  ...
+%  & System Spill [m^3]   & ... \\        (wet only)
+%  & \hspace{Xmm}Unit 1   & ... \\        (wet only)
 %  ...
 %  & System Efficiency [MWh/m$^3$] & ... \\
 % \hline
 
     indent = sprintf('\\hspace{%dmm}', indentMM);
 
-    % Compute [totalE, eff, unitE] for each framework
-    [E_det, eff_det, uE_det] = metrics(Ddet);
-    [E_diu, eff_diu, uE_diu] = metrics(Ddiu);
-    [E_ddu, eff_ddu, uE_ddu] = metrics(Dddu);
+    isWet = (season == "wet");
+
+    % Compute [totalE, eff, unitE, totalS, unitS] for each framework
+    [E_det, eff_det, uE_det, S_det, uS_det] = metrics(Ddet, isWet);
+    [E_diu, eff_diu, uE_diu, S_diu, uS_diu] = metrics(Ddiu, isWet);
+    [E_ddu, eff_ddu, uE_ddu, S_ddu, uS_ddu] = metrics(Dddu, isWet);
 
     n_units = numel(Ddet.sysparams);
 
-    fprintf('\\multirow{%d}{*}{%s}\n', n_units+2, algName);
+    % Multirow count: energy rows (1 + n_units) + (spill rows if wet) + efficiency row
+    n_rows = (1 + n_units) + (isWet*(1 + n_units)) + 1;
 
+    fprintf('\\multirow{%d}{*}{%s}\n', n_rows, algName);
+
+    % Energy block 
     fprintf(' & System Total [MWh] & %.2f & %.2f & %.2f \\\\\n', E_det, E_diu, E_ddu);
-
     for i = 1:n_units
         fprintf(' & %sUnit %d & %.2f & %.2f & %.2f \\\\\n', ...
             indent, i, uE_det(i), uE_diu(i), uE_ddu(i));
     end
 
+    % Spill block (wet season only)
+    if isWet
+        fprintf(' & System Spill [m$^3$] & %.2f & %.2f & %.2f \\\\\n', S_det, S_diu, S_ddu);
+        for i = 1:n_units
+            fprintf(' & %sUnit %d & %.2f & %.2f & %.2f \\\\\n', ...
+                indent, i, uS_det(i), uS_diu(i), uS_ddu(i));
+        end
+    end
+
+    % --- Efficiency block ---
     fprintf(' & System Efficiency [MWh/m$^3$] & %.2f & %.2f & %.2f \\\\\n', ...
         eff_det, eff_diu, eff_ddu);
 
     fprintf('\\hline\n');
 
-    function [totalE, eff, unitE] = metrics(D)
+    function [totalE, eff, unitE, totalS, unitS] = metrics(D, wantSpill)
         T = D.T;
         n = numel(D.sysparams);
+
         unitE = zeros(n,1);
-        totalW = 0;
+        unitS = zeros(n,1);
+
+        totalW = 0;   % total water release (u)
+        totalS = 0;   % total spill (s)
 
         for k = 1:n
             base = (k-1)*5;
@@ -251,9 +248,15 @@ function printBenchLatexBlock(Ddet, Ddiu, Dddu, algName, indentMM)
 
             unitE(k) = sum(p);
             totalW   = totalW + sum(u);
+
+            if wantSpill
+                s = D.X(1:T, base+4);   % m^3 per hour-step
+                unitS(k) = sum(s);
+                totalS   = totalS + unitS(k);
+            end
         end
 
         totalE = sum(unitE);
-        eff = totalE / totalW;
+        eff    = totalE / totalW;
     end
 end

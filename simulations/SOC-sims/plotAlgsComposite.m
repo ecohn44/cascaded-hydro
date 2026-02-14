@@ -12,13 +12,13 @@
 %   - V_eff layout: [V1_max V1_min V2_max V2_min ...]
 % ========================================================================
 
-% clc; clear; close all;
+close all;
 
 %% Plot Settings
 
 bounds_plot = "soc"; %options: "soc" "head"
 
-resultsPath = './resultsSSH/wet/';
+resultsPath = './resultsBonferroni/wet/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end
@@ -345,13 +345,13 @@ l1 = plot(tt_all, E_M1, 'LineWidth', 2, 'Color', blueBound);
 l2 = plot(tt_all, E_M2, 'LineWidth', 2, 'Color', redBound);
 l3 = plot(tt_all, E_M3, 'LineWidth', 2, 'Color', greenBound);
 
-ylabel('Accumulated Energy (p.u.·h)');
+ylabel('Accumulated Energy');
 xlabel('Time (h)');
 xlim([1 T])
-set(gca, 'FontSize', fontAxes);
-set(findall(gcf,'Type','text'), 'FontSize', fontAxes);
+set(gca, 'FontSize', 24);
+set(findall(gcf,'Type','text'), 'FontSize', 24);
 legend([l1 l2 l3], {'DET', 'DIU', 'DDU'}, ...
-       'Location', 'best', 'FontSize', fontLegend);
-title('Accumulated Energy Dispatch', 'FontSize', 24);
+       'Location', 'best', 'FontSize', 24);
+title('Accumulated Energy Dispatch', 'FontSize', 36);
 
 % saveas(f4, fullfile(resultsPath, 'allUnits_accumulated_energy.png'));

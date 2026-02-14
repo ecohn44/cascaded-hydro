@@ -14,7 +14,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 
 %% Simulation settings
 
-mode = 2; % Toggle between testing hypothesis 1 or 2
+mode = 1; % Toggle between testing hypothesis 1 or 2
 
 season = "wet";
 baseFolder = './resultsBonferroni/' + season;
@@ -46,7 +46,7 @@ MC = struct();
 
 % For H2 set all variance to DDU estimation 
 if mode == 2
-    polCode = 'det';
+    polCode = 'ddu';
     fname = fullfile(baseFolder, sprintf('results_unit1_%s.mat', polCode));
     S = load(fname);          % expects: S.X (T x 5n), S.std_hat (T x n)
     std_all = S.std_hat; 
@@ -67,7 +67,6 @@ for k = 1:numel(polCodes)
     T       = S.T;
     X_all   = S.X;   
     tt      = (1:T)';
-
     % Load corresponding std for H1
     if mode == 1
         std_all = S.std_hat; 
@@ -92,7 +91,7 @@ for k = 1:numel(polCodes)
     MC.(polName).MFV     = MFV;         % 1 x n_units 
     MC.(polName).RLR     = RLR;         % 1 x n_units
     MC.(polName).IVI     = IVI;  
-    MC.(polName).sStats  = spillStats;
+    MC.(polName).sStats  = spillStats
     fprintf('%s complete.\n\n', polName);
 end
 
@@ -128,7 +127,7 @@ for k = 1:n_pols
     meanIVI(k)  = mean(IVI);
 end
 
-%{
+
 %% Print summary for table
 fprintf('\nMonte Carlo Benchmark Summary\n\n');
 
@@ -150,4 +149,4 @@ for k = 1:n_pols
     fprintf('  %s: %.4f\n', polNames{k}, 100*meanIVI(k));
 end
 fprintf('\n');
-%}
+

@@ -129,7 +129,7 @@ function [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
     end
     fprintf('System Total: AFV = %.4f\n', AFV_sys);
 
-    %% Spill / Absorption Metrics
+        %% Spill / Absorption Metrics
 
     % Time-integrated totals per run
     spill_tot_runs   = squeeze(sum(s_sim, 1));   % n x nSim
@@ -151,26 +151,9 @@ function [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
         fprintf('   Spill (released):  %.4f\n', spill_mean(i));
     end
     
+
     fprintf('System Total Absorbed: %.4f\n', absorb_sys);
     fprintf('System Total Spill:    %.4f\n', spill_sys);
-
-    %% Net Inflow Diagnostics
-    % Mean net inflow over runs
-    net_mean_t = mean(net_sim, 3);      % T x n
-    net_mean   = mean(net_mean_t, 1);   % 1 x n (time-avg)
-    
-    % Positive net inflow only (flood pressure)
-    pos_net_sim = max(net_sim, 0);
-    pos_net_tot_runs = squeeze(sum(pos_net_sim, 1));  % n x nSim
-    pos_net_mean = mean(pos_net_tot_runs, 2);         % n x 1
-    
-    fprintf('\n  Net Inflow Diagnostic\n');
-    for i = 1:n
-        fprintf('Reservoir %d:\n', i);
-        fprintf('   Mean net inflow (time-avg): %.4f\n', net_mean(i));
-        fprintf('   Total positive net inflow:  %.4f\n', pos_net_mean(i));
-    end
-    fprintf('System total positive net inflow: %.4f\n', mean(sum(pos_net_tot_runs,1)));
 
     spillStats.absorb_mean = absorb_mean;
     spillStats.spill_mean  = spill_mean;
