@@ -198,8 +198,8 @@ for i = 1:n_units
         V2max = Vmax_M2_all(:,i);
         V3min = Vmin_M3_all(:,i);
         V3max = Vmax_M3_all(:,i);
-        ylim_array = [0.9 1.05];%[-.01 0.045];
-        vol_title = 'Unit %d SoC Bounds';
+        ylim_array = [0.8 1.05];%[-.01 0.045];
+        vol_title = 'Unit %d Volume Bounds';
         vol_ylabel = 'SoC';
     else
         V1min = a_M1*(Vmin_M1_all(:,i).^b_M1);
@@ -276,7 +276,7 @@ for i = 1:n_units
     xlabel('Time (h)');
     ylabel('\sigma_t');
     xlim([1, T])
-    ylim([-.001 0.03]);
+    ylim([-.001 0.05]);
     set(gca, 'FontSize', fontAxes);
 end
 

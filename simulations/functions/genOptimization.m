@@ -138,7 +138,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
         
 
         % Maximizing (Power - Spill) + (Value of Stored Head)
-        Objective = sum(LMP(t, :) * p) - sum(sp) + sum(lambda .* V);  
+        Objective = sum(LMP(t, :) * p) - 1e6*sum(sp) + sum(lambda .* V);  
 
         %% Static Constraints
         for i = 1:n
@@ -149,7 +149,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
             cons = [cons, 0 <= p(i) <= s(i).F];
 
             % Spill Bounds
-            cons = [cons, 0 <= sp(i) <= 0.03];
+            cons = [cons, 0 <= sp(i)];
         end
 
         %% Time-Varying Constraints

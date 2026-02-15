@@ -46,7 +46,7 @@ MC = struct();
 
 % For H2 set all variance to DDU estimation 
 if mode == 2
-    polCode = 'det';
+    polCode = 'ddu';
     fname = fullfile(baseFolder, sprintf('results_unit1_%s.mat', polCode));
     S = load(fname);          % expects: S.X (T x 5n), S.std_hat (T x n)
     std_all = S.std_hat; 

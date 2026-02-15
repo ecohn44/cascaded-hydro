@@ -1,7 +1,7 @@
 function [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot, policyLabel)
 
     % Set random seed
-    rng(0, 'twister');
+    % rng(0, 'twister');
 
     % Dimensions
     T     = size(X,1);              % number of time steps
