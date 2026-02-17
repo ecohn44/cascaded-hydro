@@ -17,7 +17,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 mode = 2; % Toggle between testing hypothesis 1 or 2
 
 season = "wet";
-baseFolder = './resultsBonferroni/' + season;
+baseFolder = './resultsSSH/' + season;
 simSettings.bounds = "jcc-bon";
 printplot = true;
 flood = false; 

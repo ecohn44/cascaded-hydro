@@ -1,4 +1,4 @@
-function x_slater = findSlater(X_prev, q_mean, sys, c)
+function x_slater = findSlater(X_prev, q_mean, sys, c, season)
     
     % findSlater:      Identify a feasible solution to the current LP
     %
@@ -34,31 +34,60 @@ function x_slater = findSlater(X_prev, q_mean, sys, c)
         Vprev = X_prev(baseX + 1);   
        
         % mean inflow for unit i
-        mu    = q_mean(i);           
+        mu    = q_mean(i); 
 
         % Previous water release for unit i (u_i at t-1)
         Uprev = X_prev(baseX + 3);
 
-        % Calculate current volume before release
-        V_pre = Vprev + mu;
-     
-        % Conservative release is full curtailment 
-        u_try = max(umin, Uprev + RRdn);
+        if season == "dry"
+            % Calculate current volume before release
+            V_pre = Vprev + mu;
+         
+            % Conservative release is full curtailment 
+            u_try = max(umin, Uprev + RRdn);
+    
+            % Calculate spill if volume is above upper bounds
+            s_try = 0;
+            V_after = V_pre - u_try;
+    
+            if V_after > maxV
+                s_try = V_after - maxV;
+                V_after = maxV;
+            end 
+       
+            % Compute head and power; clamp p to feeder capacity 
+            V_try = V_after;
+            h_try = a * (V_after^b);          
+            p_try = c * u_try * h_try;
+            p_try = min(max(p_try, 0), Fcap);
+        
+        elseif season == "wet"
+            % Pick target volume total outflow r = u+s ----
+            Vmid = 0.5*(minV + maxV);
 
-        % Calculate spill if volume is above upper bounds
-        s_try = 0;
-        V_after = V_pre - u_try;
+            % Calculate total outflow r to mean volume target
+            r_center = Vprev + mu - Vmid;
 
-        if V_after > maxV
-            s_try = V_after - maxV;
-            V_after = maxV;
-        end 
-   
-        % Compute head and power; clamp p to feeder capacity 
-        V_try = V_after;
-        h_try = a * (V_after^b);          
-        p_try = c * u_try * h_try;
-        p_try = min(max(p_try, 0), Fcap);
+            % Feasible r range to keep next volume in [minV,maxV]
+            r_lo = Vprev + mu - maxV;
+            r_hi = Vprev + mu - minV;
+
+            % Clamp release into feasible interval
+            r_try = min(max(r_center, r_lo), r_hi);
+
+            % Partition release into spill and generation 
+            u_try = min(max(umin, Uprev + RRdn), r_try);     % propose conservartive turbine release
+            s_try = max(0, r_try - u_try);                   % spill absorbs the remainder
+
+            % Calculate resulting volume state 
+            V_try = Vprev + mu - (u_try + s_try);
+
+            % Calculate power generation 
+            h_try = a * (V_try^b);          
+            p_try = c * u_try * h_try;
+
+        end
+
 
         % Store into x_slater
         baseXsl = 4*(i-1);
@@ -66,27 +95,6 @@ function x_slater = findSlater(X_prev, q_mean, sys, c)
         x_slater(baseXsl + 2) = p_try;
         x_slater(baseXsl + 3) = u_try;
         x_slater(baseXsl + 4) = s_try;
-
-        %% Feasibility Check
-        %{
-        % Bounds and interior
-        isVok = (V_try >= minV) && (V_try <= maxV);
-        isUok = (u_try >= umin) && (u_try <= umax);
-        isPok = (p_try >= 0)    && (p_try <= Fcap);
-        
-        % Ramp-rate feasibility
-        isRUok = (u_try <= Uprev + RRup);
-        isRDok = (u_try >= Uprev + RRdn);
-        
-        % Mass balance: V_try ≈ Vprev + mu - u_try - s_try
-        mb = Vprev + mu - u_try - s_try;
-          
-        isMBok = (abs(V_after - mb) <= 1e-5);
-        
-        fprintf('    Unit %d: V:%d u:%d p:%d RU:%d RD:%d MB:%d\n', ...
-            i, isVok, isUok, isPok, isRUok, isRDok, isMBok);
-        fprintf('       V_try=%.4f, u_try=%.4f, minV=%.4f, maxV=%.4f\n', V_try, u_try, minV, maxV);
-        %}
 
     end
 end

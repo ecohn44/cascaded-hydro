@@ -20,7 +20,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % Toggle for creating folder and plotting
 make_dir = false;
 printplot = false; 
-save_mat = false; 
+save_mat = true; 
 save_streamflow = false;
 
 % Static parameters 
@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("wet", "pulse", "pwl", "det", "jcc-bon", "none");
+simSettings = initSimSettings("wet", "pulse", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));

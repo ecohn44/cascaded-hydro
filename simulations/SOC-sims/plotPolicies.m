@@ -13,7 +13,7 @@ close all; clc;
 season = "wet";
 
 % Loading parameters 
-path = "./resultsBonferroni/" + season;
+path = "./resultsSSH/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
@@ -69,24 +69,32 @@ for i = 1:n_units
     V1 = D1.X(:, base+1);  p1 = D1.X(:, base+2);
     u1 = D1.X(:, base+3);  s1 = D1.X(:, base+4); 
     V1min = D1.V_eff(:, 2*i);
+    V1max = D1.V_eff(:, 2*i - 1);
 
     % Extract trajectory from Policy 2
     V2 = D2.X(:, base+1);  p2 = D2.X(:, base+2);
     u2 = D2.X(:, base+3);  s2 = D2.X(:, base+4); 
     V2min = D2.V_eff(:, 2*i);
+    V2max = D2.V_eff(:, 2*i - 1);
 
     % Extract trajectory from Policy 3
     V3 = D3.X(:, base+1);  p3 = D3.X(:, base+2);
     u3 = D3.X(:, base+3);  s3 = D3.X(:, base+4);  
     V3min = D3.V_eff(:, 2*i);
+    V3max = D3.V_eff(:, 2*i - 1);
 
     % Calculate hydraulic head
     head1 = sp.a .* (V1.^sp.b);
     head1min = sp.a .* (V1min.^sp.b);
+    head1max = sp.a .* (V1max.^sp.b);
+
     head2 = sp.a .* (V2.^sp.b);
     head2min = sp.a .* (V2min.^sp.b);
+    head2max = sp.a .* (V2max.^sp.b);
+
     head3 = sp.a .* (V3.^sp.b);
     head3min = sp.a .* (V3min.^sp.b);
+    head3max = sp.a .* (V3max.^sp.b);
 
     % Row index for subplots (1..n_units)
     row = i - 1;
@@ -121,11 +129,18 @@ for i = 1:n_units
     ax.YColor = 'k'; 
     plot(head1, 'LineStyle','-', 'Color', c1, 'LineWidth',2); hold on;
     plot(head1min, 'LineStyle','--', 'Color', c1, 'LineWidth',2); 
+    plot(head1max, 'LineStyle','--', 'Color', c1, 'LineWidth',2); 
+    
     plot(head2, 'LineStyle','-', 'Color', c2, 'LineWidth',2);
     plot(head2min, 'LineStyle','--', 'Color', c2, 'LineWidth',2); 
+    plot(head2max, 'LineStyle','--', 'Color', c2, 'LineWidth',2);
+    
     plot(head3, 'LineStyle','-', 'Color', c3, 'LineWidth',2);
     plot(head3min, 'LineStyle','--', 'Color', c3, 'LineWidth',2); 
+    plot(head3max, 'LineStyle','--', 'Color', c3, 'LineWidth',2);
+    
     % yline(sp.max_h,'--k'); yline(sp.min_h,'--k');
+    
     if i == 1
         title('Hydraulic Head [m]','FontSize',font);
     end 
@@ -133,7 +148,11 @@ for i = 1:n_units
         xlabel('Time [hr]');
     end
     xlim([1, T]);
-    ylim([3, 5.1]);
+    if season == "wet"
+        ylim([4.3, 5.1]);
+    else
+        ylim([-.1, 2.5]);
+    end 
     set(ax,'FontSize',font);
 
 

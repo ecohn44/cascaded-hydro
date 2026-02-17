@@ -6,10 +6,23 @@ function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev
     dim_x   = 4 * n_units;
     
     % Initialize from Solving LP
-    optimize(cons, -Objective, options); 
+    sol = optimize(cons, -Objective, options); 
+
+    if sol.problem ~= 0
+        error('Initial LP solve failed in SSH initialization.');
+    end
     
     % Extract starting values from YALMIP objects
     xk = get_current_x(vars, n_units);
+
+    % Return LP solution for deterministic case
+    if all(abs(Sigma_q(:)) < 1e-12)
+        cons_out  = cons;
+        x_sol     = xk;
+        phi_val   = 1;                     % deterministic feasibility
+        alpha_vals = zeros(n_units,1);     % no risk allocation
+        return;
+    end
 
     w = zeros(n_units, 1);
     

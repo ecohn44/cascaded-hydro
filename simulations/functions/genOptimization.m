@@ -138,7 +138,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
         
 
         % Maximizing (Power - Spill) + (Value of Stored Head)
-        Objective = sum(LMP(t, :) * p) - 1e6*sum(sp) + sum(lambda .* V);  
+        Objective = sum(LMP(t, :) * p) - sum(sp) + sum(lambda .* V);  
 
         %% Static Constraints
         for i = 1:n
@@ -290,7 +290,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
                     % Find Slater Point
                     fprintf('\n@t=%d SSH Initialization: \n', t)
-                    x_slater = findSlater(X(t-1,:), q_t, s, c);
+                    x_slater = findSlater(X(t-1,:), q_t, s, c, params.season);
             
                     target_phi = (1 - eps);
                 

@@ -11,8 +11,8 @@
 close all; clc;
 
 % Loading parameters
-pathSSH = "./resultsSSH";
-pathBON = "./resultsBonferroni";
+pathSSH = "./resultsSSH/wet";
+pathBON = "./resultsBonferroni/wet";
 tag     = 'ddu';      % compare under DDU only
 
 font  = 16;
