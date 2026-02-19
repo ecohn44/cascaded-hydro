@@ -153,7 +153,7 @@ function [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
     
     fprintf('System Total Absorbed: %.4f\n', absorb_sys);
     fprintf('System Total Spill:    %.4f\n', spill_sys);
-    
+
     spillStats.absorb_mean = absorb_mean;
     spillStats.spill_mean  = spill_mean;
     spillStats.absorb_sys  = absorb_sys;

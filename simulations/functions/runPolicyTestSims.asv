@@ -1,0 +1,235 @@
+%% Policy Test Framework 
+% =======================================================================
+% Author: Eliza Cohn
+% Description: Simulate hte reservoir volume trajecotry under historical
+%               inflow and optimal release policies learned during training
+%               
+
+function [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runPolicyTestSims(sysparams, bounds, X, policyLabel)
+
+    % Set random seed
+    % rng(0, 'twister');
+
+    % Dimensions
+    T     = size(X,1);              % number of time steps
+    n     = numel(sysparams);       % number of units
+    tt    = (1:T)';
+
+    % Extract deterministic (solved) policy for all units
+    % X columns per unit i: [V_i, p_i, u_i, s_i, q_mean_i]
+    V_opt = zeros(T, n);
+    u_opt = zeros(T, n);
+    s_opt = zeros(T, n);
+    q_hist = zeros(T, n);
+
+    for i = 1:n
+        base = 5*(i-1);
+        V_opt(:, i)   = X(:, base+1);
+        u_opt(:, i)   = X(:, base+3);
+        s_opt(:, i)   = X(:, base+4);
+
+        % Extract historical streamflow data 
+        q_hist(:, i)  = X(:, base+5);
+    end
+
+    % Extract initial volumes and bounds
+    Vmin = zeros(1,n);
+    Vmax = zeros(1,n);
+    V0   = zeros(1,n);
+    a    = zeros(1,n);
+    b    = zeros(1,n);
+
+    for i = 1:n
+        Vmin(i) = sysparams(i).min_V;
+        Vmax(i) = sysparams(i).max_V;
+        V0(i)   = sysparams(i).V0;
+        a(i)    = sysparams(i).a;
+        b(i)    = sysparams(i).b;
+    end
+
+    % Allocate arrays for historical policy testing
+    V_sim = zeros(T, n);
+    u_sim = zeros(T, n);
+    p_sim = zeros(T, n);
+
+    % Violation indicators: T x n
+    violation_count = false(T, n);
+    viol_mag = zeros(T, n);
+
+    %% Begin Simulation 
+    % Previous volumes for each unit
+    V_prev = V0;
+
+    for t = 1:T
+        for i = 1:n
+            
+            % Record historical inflow for unit i at time t
+            inflow_i = q_hist(t,i);
+
+            % Optimal release policy at this time
+            u_i = u_opt(t,i);
+
+            % Optimal spill policy 
+            s_i = s_opt(t,i);
+
+            % Next volume state
+            V_i = V_prev(i) + inflow_i - u_i - s_i;
+
+            % Record violations
+            below = max(Vmin(i) - V_i, 0);
+            above = max(V_i - Vmax(i), 0);
+            
+            viol_mag(t, i) = below + above;
+            violation_count(t, i) = (viol_mag(t, i) > 0);
+
+            if V_i <= 0
+                p_i = 0; 
+            else
+                % Compute head and generation
+                h_i = a(i) * (V_i^b(i));
+                p_i = u_i * h_i;    % (TEMP) multiply by c when rescaled
+            end
+
+            % Store trajectories
+            V_sim(t, i) = V_i;
+            u_sim(t, i) = u_i;
+            p_sim(t, i) = p_i;
+
+            % Advance state
+            V_prev(i) = V_i;
+        end
+    end
+
+    %% Flood Metrics
+    headroom = zeros(T,n);
+    for i = 1:n
+        headroom(:,i) = Vmax(i) - V_sim(:,i);
+    end
+    
+    AFV_tot  = sum(headroom, 1);   % 1 x n  (sum over time)
+    AFV_mean = AFV_tot(:);         % n x 1
+    AFV_sys  = sum(AFV_tot);       % scalar
+    
+    fprintf('\n  AFV (time-integrated headroom) Report\n');
+    for i = 1:n
+        fprintf('Reservoir %d: AFV = %.4f\n', i, AFV_mean(i));
+    end
+    fprintf('System Total: AFV = %.4f\n', AFV_sys);
+
+
+    %% General Simulation Metrics
+
+    % Terminal volume (end-of-horizon storage)
+    V_T = V_sim(end, :);   % 1 x n
+    
+    fprintf('\n  Terminal Storage Report\n');
+    for i = 1:n
+        fprintf('Reservoir %d: V_T = %.4f\n', i, V_T(i));
+    end
+    fprintf('System Mean: mean(V_T) = %.4f\n', mean(V_T));
+    
+    % Metric #1 (MFV): Per-time-step violation fraction
+    MFV = mean(violation_count, 1);   % 1 x n               
+    
+    % Metric #2 (RLR): Run-level violation probability
+    RLR = any(violation_count, 1);     
+
+    % Metric #3 (IVI): Integrated (time-avg) violation magnitude
+    IVI = mean(viol_mag, 1); 
+
+    
+    fprintf('\n  Monte Carlo Violation Report\n');
+    
+    for i = 1:n
+        
+        fprintf('Reservoir %d:\n', i);
+        
+        %{
+        fprintf('   Mean Frequency of Violations (MFV): %.2f%%\n', ...
+                100 * MFV(i));
+
+        fprintf('   Run-Level Risk (RLR): %.2f%%\n', ...
+                100 * RLR(i));
+        %}
+
+        fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
+    end
+    
+
+    switch string(bounds)
+        case "det",     bLabel = "Deterministic";
+        case "icc",     bLabel = "Individual CC";
+        case "jcc-bon", bLabel = "Bonferroni JCC";
+        otherwise,      bLabel = char(bounds);
+    end
+
+    % Plot policy test volume trajectories for each reservoir
+    plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
+
+end
+
+
+function plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel)
+
+    [~, n] = size(V_sim);
+
+    figure('Name', sprintf('Policy Replay Storage Trajectories — %s', bLabel), ...
+       'NumberTitle','off', ...
+       'Units','normalized', ...
+       'Position',[0.1 0.3 0.8 0.4]);   % [left bottom width height]
+    tiledlayout(1, n, 'TileSpacing','compact', 'Padding','compact');
+
+
+    for i = 1:n
+        nexttile; hold on; grid on;
+    
+        Vp = V_opt(:,i);
+        Vs = V_sim(:,i);
+    
+        % Plot trajectories
+        plot(tt, Vp, 'r-', 'LineWidth', 2.0, 'DisplayName','Planned (training)');
+        plot(tt, Vs, 'b-', 'LineWidth', 2.0, 'DisplayName','Replay (historical)');
+    
+        % Bounds
+        yline(Vmin(i), '--b', 'LineWidth', 1.5, 'HandleVisibility','off');
+        yline(Vmax(i), '--b', 'LineWidth', 1.5, 'HandleVisibility','off');
+
+        % IVI shading
+        idxU = Vs > Vmax(i);
+        if any(idxU)
+            xU = tt(idxU);
+            y1 = Vmax(i) * ones(size(xU));
+            y2 = Vs(idxU);
+    
+            hIVI = fill([xU; flipud(xU)], [y1; flipud(y2)], ...
+                [0.6 0.6 0.6], ...
+                'FaceAlpha', 0.35, ...
+                'EdgeColor', 'none');
+    
+            % Put IVI in legend only once
+            if i == 1
+                set(hIVI, 'DisplayName', 'IVI (V > V_{max})');
+            else
+                set(hIVI, 'HandleVisibility', 'off');
+            end
+        end
+    
+        xlabel('Hour');
+        ylabel(sprintf('V_%d (p.u.)', i));
+        title(sprintf('Reservoir %d', i));
+    
+        % Limits (pad a bit)
+        y_low  = min([Vp; Vs; Vmin(i)]) - 0.03;
+        y_high = max([Vp; Vs; Vmax(i)]) + 0.03;
+        ylim([y_low y_high]);
+    
+        if i == 1
+            legend('Location','best');
+        end
+    end
+
+
+
+    sgtitle(sprintf('Policy Replay Storage Trajectories — %s — %s', policyLabel, bLabel));
+end
+

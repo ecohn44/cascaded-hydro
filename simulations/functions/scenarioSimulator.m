@@ -36,6 +36,9 @@ function q = scenarioSimulator(T, lag, season, mode, scenarioParams)
         case 'extended'
             q = applyExtended(q, T, lag, season, scenarioParams);
 
+        case 'ramp'
+            q = applyRamp(q, T, lag, season, scenarioParams);
+
         otherwise
             error('Unknown drought mode: %s', mode);
     end
@@ -44,8 +47,10 @@ function q = scenarioSimulator(T, lag, season, mode, scenarioParams)
     deltaq = q - base;   % length n
 
     % Number of time steps to shift drought events between units 
-    shiftSteps = round(scenarioParams.startSteps + scenarioParams.shiftMult * scenarioParams.unitDelay);
-    deltaq     = shift_with_zeros(deltaq, shiftSteps);
+    if ~strcmpi(mode,'ramp')
+        shiftSteps = round(scenarioParams.startSteps + scenarioParams.shiftMult * scenarioParams.unitDelay);
+        deltaq     = shift_with_zeros(deltaq, shiftSteps);
+    end
 
     % Reconstruct inflow and enforce nonnegativity
     q = base + deltaq;
@@ -53,6 +58,26 @@ function q = scenarioSimulator(T, lag, season, mode, scenarioParams)
 
 
 end
+
+
+function q = applyRamp(q, T, lag, season, scenarioParams)
+
+    % Store base flow
+    q0 = q;
+    
+    % Create normalized ramp from 0 to +1(wet) or -1(dry)
+    if season == "wet"
+        endpoint = .5;
+    else
+        endpoint = -.5;
+    end
+
+    ramp = linspace(0,endpoint,T+lag)';   % T×1
+
+    q = q0 + scenarioParams.k * ramp;
+
+end
+
 
 function q = applyPulse(q, T, lag, season, scenarioParams)
 

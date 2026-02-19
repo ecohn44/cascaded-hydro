@@ -14,17 +14,20 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 
 %% Simulation settings
 
-mode = 2; % Toggle between testing hypothesis 1 or 2
+mode = 1; % Toggle between testing hypothesis 1 or 2
 
 season = "wet";
 baseFolder = './resultsSSH/' + season;
 simSettings.bounds = "jcc-bon";
 printplot = true;
-flood = false; 
+hist_flood = true; 
 path      = "";
 
 n = 3;
 N = 40;
+
+% Load in historical streamflow data 
+q_flood =load("floodFlow.mat").q_save;
 
 % Load model + system parameters 
 [params, sysparams, ~] = dataload(n, N);
@@ -68,14 +71,30 @@ for k = 1:numel(polCodes)
     X_all   = S.X;   
     tt      = (1:T)';
 
+    plotInflowMismatchUnit1(X_all, q_flood, policyLabel);
+
+    % load in base streamflow data (no predictions)
+    if hist_flood
+        for i = 1:n
+            base = 5*(i-1);
+            X_all(:, base+5) = q_flood(:,i);
+        end
+
+    end
+
     % Load corresponding std for H1
     if mode == 1
         std_all = S.std_hat; 
     end 
 
-    % Run Monte Carlo sims (general n-unit version)
-    [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = ...
-        runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, path, printplot, policyLabel);
+    % Run Policy Test Sims 
+    [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel);
+
+    V_plan = X_all(:,1:5:end);
+    dV = V_plan - V_sim;
+
+    % Run MC Test Sims
+    % [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, path, printplot, policyLabel);
 
     % Mean power per unit over MC runs 
     p_mean = mean(p_sim, 3); % T x n_units
@@ -92,7 +111,6 @@ for k = 1:numel(polCodes)
     MC.(polName).MFV     = MFV;         % 1 x n_units 
     MC.(polName).RLR     = RLR;         % 1 x n_units
     MC.(polName).IVI     = IVI;  
-    MC.(polName).sStats  = spillStats;
     fprintf('%s complete.\n\n', polName);
 end
 
@@ -128,10 +146,11 @@ for k = 1:n_pols
     meanIVI(k)  = mean(IVI);
 end
 
-%{
+
 %% Print summary for table
 fprintf('\nMonte Carlo Benchmark Summary\n\n');
 
+%{
 fprintf('Mean Frequency of Violations (MFV):\n');
 for k = 1:n_pols
     fprintf('  %s: %.2f%% of runs\n', ...
@@ -144,10 +163,52 @@ for k = 1:n_pols
     fprintf('  %s: %.4f\n', polNames{k}, 100*meanRLR(k));
 end
 fprintf('\n');
+%}
 
 fprintf('Mean Integrated Violation Index (IVI):\n');
 for k = 1:n_pols
     fprintf('  %s: %.4f\n', polNames{k}, 100*meanIVI(k));
 end
 fprintf('\n');
-%}
+
+
+
+function plotInflowMismatchUnit1(X, q_hist, policyLabel)
+
+    % X:        T x (5n) optimization output
+    % q_hist:   T x n historical inflow used in replay
+    % policyLabel: string for figure title
+
+    T  = size(X,1);
+    tt = (1:T)';
+
+    % Extract predicted inflow for Unit 1
+    q_pred = X(:,5);        % column 5 = q_1(t)
+    q_hist1 = q_hist(:,1);
+
+    dq = q_pred - q_hist1;
+
+    figure('Name','Inflow Comparison Unit 1','NumberTitle','off');
+    tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
+
+    % --- Top: Historical vs Predicted ---
+    nexttile; hold on; grid on;
+    plot(tt, q_hist1, 'k-',  'LineWidth', 2,   'DisplayName','Historical');
+    plot(tt, q_pred,  'b--', 'LineWidth', 1.8, 'DisplayName','Predicted');
+
+    ylabel('q_1');
+    title('Unit 1 Inflow: Historical vs Predicted');
+    legend('Location','best');
+
+    % --- Bottom: Difference ---
+    nexttile; hold on; grid on;
+    plot(tt, dq, 'r-', 'LineWidth', 2);
+    yline(0,'k--','HandleVisibility','off');
+
+    xlabel('Time');
+    ylabel('\Delta q_1');
+    title('Prediction Error: q_{pred} - q_{hist}');
+
+    sgtitle(sprintf('Forecast vs Historical Inflow — %s', policyLabel));
+
+end

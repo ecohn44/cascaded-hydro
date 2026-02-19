@@ -99,7 +99,8 @@ function [params, sysparams, scenarioparams] = dataload(n, N)
         'tauHours',     [],  ...
         'unitDelay',    [],  ...
         'startSteps',   [],  ...
-        'recoverHours', []);
+        'recoverHours', [], ...
+        'k', []);
 
     % Preallocate 1x2 struct array with same fields
     scenarioparams(1) = scenarioTemplate;
@@ -127,6 +128,9 @@ function [params, sysparams, scenarioparams] = dataload(n, N)
     scenarioparams(2).recoverHours = 10;     % recovery time from drought event to q0
 
     scenarioparams(3).mode         = 'constant';
+
+    scenarioparams(4).mode         = 'ramp';
+    scenarioparams(4).k            = 0.15;  
 
 end
 

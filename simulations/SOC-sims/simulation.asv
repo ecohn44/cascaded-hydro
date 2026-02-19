@@ -21,7 +21,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 make_dir = false;
 printplot = false; 
 save_mat = true; 
-save_streamflow = true;
+save_streamflow = false;
 
 % Static parameters 
 eta = .9;           % efficiency of release-energy conversion
@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("wet", "pulse", "pwl", "ddu", "jcc-bon", "none");
+simSettings = initSimSettings("wet", "ramp", "pwl", "det", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -53,8 +53,8 @@ if simSettings.season == "dry"
     seasonparams.q0 = 0.9*sysparams(1).max_ut;
     [sysparams.V0] = deal(0.1);
 elseif simSettings.season == "wet"
-    seasonparams.q0 = 0.95*sysparams(1).max_ut;
-    [sysparams.V0] = deal(0.8);
+    seasonparams.q0 = 0.3*sysparams(1).max_ut;
+    [sysparams.V0] = deal(0.2);
 else
     seasonparams.q0 = sysparams(1).max_ut;
 end
@@ -179,18 +179,12 @@ if save_mat
 end 
 
 if save_streamflow
-    
-    %{
-    q_save = zeros(T, n);
+    q_sim = zeros(T, n);
     for i = 1:n
         base = 5*(i-1);
-        q_save(:, i)  = X(:, base+5);
+        q_sim(:, i)  = X(:, base+5);
     end
-    %}
-
-    q_save = q(1+lag:T+lag, :);
-
-    save('floodFlow.mat', 'q_save')
+    save('floodFlow.mat','q_sim')
 end
 
 fprintf('Simulation complete.\n');

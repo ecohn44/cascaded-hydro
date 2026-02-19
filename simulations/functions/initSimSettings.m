@@ -3,7 +3,7 @@ function settings = initSimSettings(season, scenario, method, framework, bounds,
     validMethods = ["minlp", "pwl"];
     validFrameworks = ["det", "diu", "ddu"];
     validBounds = ["det", "icc", "jcc-bon", "jcc-ssh"];
-    validScenarios = ["constant", "pulse", "extended"];
+    validScenarios = ["constant", "pulse", "extended", "ramp"];
     validVolumePrices = ["none", "static", "dynamic"];
 
     if ~ismember(season, validSeasons)
