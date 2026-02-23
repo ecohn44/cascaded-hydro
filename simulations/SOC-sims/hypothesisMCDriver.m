@@ -1,4 +1,4 @@
-%% Hypothesis 01 Monte Carlo Driver and Benchmarking
+%% Monte Carlo Driver and Benchmarking
 % Author: Eliza Cohn
 % Description:
 %   Benchmark DET (M1), DIU (M2), and DDU (M3) policies for a 4-unit
@@ -88,7 +88,7 @@ for k = 1:numel(polCodes)
     end 
 
     % Run Policy Test Sims 
-    [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel);
+    [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel, std_all);
 
     V_plan = X_all(:,1:5:end);
     dV = V_plan - V_sim;
@@ -110,7 +110,7 @@ for k = 1:numel(polCodes)
     MC.(polName).P_mean  = p_mean;      % T x n_units
     MC.(polName).MFV     = MFV;         % 1 x n_units 
     MC.(polName).RLR     = RLR;         % 1 x n_units
-    MC.(polName).IVI     = IVI;  
+    MC.(polName).IVI     = IVI;         % 1 x n_units
     fprintf('%s complete.\n\n', polName);
 end
 
@@ -149,21 +149,6 @@ end
 
 %% Print summary for table
 fprintf('\nMonte Carlo Benchmark Summary\n\n');
-
-%{
-fprintf('Mean Frequency of Violations (MFV):\n');
-for k = 1:n_pols
-    fprintf('  %s: %.2f%% of runs\n', ...
-            polNames{k}, 100*meanMFV(k));
-end
-fprintf('\n');
-
-fprintf('Mean Run-Level Risk (RLR):\n');
-for k = 1:n_pols
-    fprintf('  %s: %.4f\n', polNames{k}, 100*meanRLR(k));
-end
-fprintf('\n');
-%}
 
 fprintf('Mean Integrated Violation Index (IVI):\n');
 for k = 1:n_pols

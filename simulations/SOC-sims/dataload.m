@@ -32,10 +32,10 @@ function [params, sysparams, scenarioparams] = dataload(n, N)
         'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
         'AR_const', 0.00, ...     % DIU params
         'AR_coef',  0.995, ...    % DIU inflow_lag1
-        'AR_std',   0.0035, ...   % DIU residual variance 
-        'omega',    (0.0035^2), ... % GARCH-X params 
-        'alpha',    0.8,   ...      % GARCH-X params 
-        'gamma',    0.001);        % GARCH-X params 
+        'AR_std',   0.006, ...    % DIU residual variance % 0.0035
+        'omega',    0.0001, ...   % GARCH-X params     % (0.0035^2)
+        'alpha',    0.008,   ...  % GARCH-X params % 0.8
+        'gamma',    0.003);       % GARCH-X params % 0.001
 
 
     %% Base Unit Template 

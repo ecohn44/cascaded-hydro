@@ -1,6 +1,6 @@
 %% Author: Eliza Cohn
 % Date: February 2026
-% Description: Main driver for cascaded hydropower simulations 
+% Description: Sensitivity analysis for cascaded hydropower simulations 
 % Paper: EXPLICIT RISK ALLOCATION FOR CASCADED HYDROELECTRIC SYSTEMS UNDER EXTREME EVENTS
 
 tic; 
@@ -16,12 +16,6 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 %% ========================================================================
 % SECTION 1: DATA LOADING AND PARAMETER DEFINITION
 % ========================================================================
-
-% Toggle for creating folder and plotting
-make_dir = false;
-printplot = false; 
-save_mat = true; 
-save_streamflow = true;
 
 % Static parameters 
 eta = .9;           % efficiency of release-energy conversion
@@ -40,7 +34,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("wet", "pulse", "pwl", "det", "jcc-bon", "none");
+simSettings = initSimSettings("wet", "pulse", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -65,16 +59,7 @@ T = 24*D;                     % Number of simulation hours
 lag = 1;                      % Travel time between units (hrs)
 
 % Load price data
-LMP = ones(T, n); % simulatePrice(T, n, true);
-
-% Create path to store results  
-if simSettings.bounds == "jcc-ssh"
-    results_dir = "./resultsSSH/" + modelparams.season + "/";
-elseif simSettings.bounds == "jcc-bon"
-    results_dir = "./resultsBonferroni/" + modelparams.season + "/";
-else 
-    warning('Results directory does not exist');
-end 
+LMP = ones(T, n); 
 
 fprintf('Data loading complete.\n');
 
@@ -87,26 +72,15 @@ q = zeros(T+lag, n);
 
 % Cascaded drought parameters
 baseStreamflow = seasonparams;
-severityScales = makeSeverityScales(n);    
 
 % Simulate scaled events 
 for i = 1:n
+    
     dp    = baseStreamflow; 
-
-    % Apply scaling to each inflow profile 
-    scale = 1; % severityScales(i);
-
-    if strcmpi(dp.mode, 'extended')
-        dp.amp1 = baseStreamflow.amp1 * scale;
-    end
-
     dp.shiftMult = i - 1;
 
     q(:,i) = scenarioSimulator(T, lag, simSettings.season, dp.mode, dp);
 end
-
-% Plot streamflow profiles
-plotStreamflows(q)
 
 % Offline DIU covariance and std devs
 sigma_diu                 = modelparams.AR_std*ones(n,1);   % n×1 std devs
@@ -131,118 +105,70 @@ else
 end 
 
 %% ========================================================================
-% SECTION 4: OPTIMIZATION FRAMEWORK
+% SECTION 4: SENSITIVITY ANALYSIS & OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-% Scaling factor for chance-constrained bounds
-scale = 1;
+% Record initial parameters
+gamma0 = modelparams.gamma;
+xi0 = modelparams.alpha; 
 
-[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, ...
-    simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
+% Multiplicative sweep factors 
+xi_factors    = [0, 1, 5, 10, 50];
+gamma_factors = [0, 0.5, 1, 1.5, 2, 3];
+
+% Build sweep grids
+xi_vals    = xi0    .* xi_factors;
+gamma_vals = gamma0 .* gamma_factors;
+n_xi    = length(xi_vals);
+n_gamma = length(gamma_vals);
+
+% Intialize array to store objective values 
+J_vals = zeros(n_xi, n_gamma); 
+IVI_vals = zeros(n_xi, n_gamma); 
+
+for i = 1:n_xi
+    xi = xi_vals(i);
+    
+    for j = 1:n_gamma
+        gamma = gamma_vals(j);
+
+        fprintf('Running xi = %.4f, gamma = %.4f\n', xi, gamma);
+        
+        % Update model parameters
+        modelparams.alpha = xi;
+        modelparams.gamma = gamma;
+        
+        % Run optimization
+        [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
+            simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
+
+        % Store objective value
+        J_vals(i,j) = obj;
+
+        % Load in historical streamflow 
+        for k = 1:n
+            base = 5*(k-1);
+            X(:, base+5) = q(1+lag:T+lag,k);
+        end
+
+        % Run Policy Test Sims 
+        [~, ~, ~, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X, 'DDU', std_hat);
+
+        % Store system-wide constraint violation 
+        IVI_vals(i,j) = sum(IVI);
+    end
+end
 
 
 %% ========================================================================
 % SECTION 5: PLOTTING
 % ========================================================================
 
-% Make plot directory for current simulation run 
-if make_dir
-    dir_path = "./plots/";
-    stamp = datestr(now,'mm-dd-yyyy HH.MM.SS');
-    path = fullfile(dir_path, stamp + " " + simSettings.season + " " ...
-        + simSettings.framework + ...
-        " T=" + string(T));
-    mkdir(path)
-end
-
-% Plot simulation behavior for all units
-simPlots(path, X, sysparams, T, c, printplot);
-
-% Plot SSH algorithm behavior 
-if simSettings.bounds == "jcc-ssh"
-    plotSSH(phi_vals, alpha_vals, eps, upper(simSettings.framework));
-end 
-
-% Save results 
-if save_mat
-    for i = 1:numel(sysparams)
-        sp = sysparams(i);
-        fname = sprintf('results_unit%d_%s.mat', ...
-            sp.unit, lower(simSettings.framework));
-    
-        season = simSettings.season;  
-    
-        save(fullfile(results_dir, fname), ...
-            'X', 'V_eff', 'std_hat', 'q', 'sysparams', ...
-            'T', 'c', 'lag', 'season', '-v7');
-    end
-end 
-
-if save_streamflow
-    
-    %{
-    q_save = zeros(T, n);
-    for i = 1:n
-        base = 5*(i-1);
-        q_save(:, i)  = X(:, base+5);
-    end
-    %}
-
-    q_save = q(1+lag:T+lag, :);
-
-    save('floodFlow.mat', 'q_save')
-end
+plotHeat(gamma_vals, xi_vals, J_vals, gamma0, xi0, "obj")
+plotHeat(gamma_vals, xi_vals, IVI_vals, gamma0, xi0, "IVI")
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
-
-
-function plotStreamflows(q)
-    % q: T+lag x n matrix, each column is a streamflow time series
-
-    [T, n] = size(q);
-    t = (1:T)';        
-
-    figure;
-    for i = 1:n
-        subplot(n, 1, i);
-        plot(t, q(:, i), 'LineWidth', 3);
-        ylim([0 1.1*max(q(:,i))]); 
-        xlim([1, T]);
-        
-        ylabel(sprintf('q_%d', i), 'FontSize', 16);
-        set(gca, 'FontSize', 16); 
-
-        if i == 1
-            title('Streamflow Time Series', 'FontSize', 20);
-        end
-        if i == n
-            xlabel('Time (hour)', 'FontSize', 16);
-        else
-            set(gca, 'XTickLabel', []);  % hide x labels for middle plots
-        end
-
-        grid on;
-    end
-end
-
-
-function severityScales = makeSeverityScales(N)
-
-    % Split into two halves
-    half = floor(N/2);         % first half length
-    rest = N - half;           % second half length
-    
-    % First half: 1.0, 0.9, 0.8, ..., decreasing by 0.1
-    firstHalf  = 1.0 - 0.1*(0:half-1);
-    
-    % Second half: 0.1, 0.2, 0.3, ..., increasing by 0.1
-    secondHalf = 0.1*(1:rest);
-    
-    % Combine
-    severityScales = [firstHalf flip(secondHalf)];
-end
-
 
 function tf = isPD(A)
     % Symmetrize first

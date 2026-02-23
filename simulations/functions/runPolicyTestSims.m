@@ -5,7 +5,7 @@
 %               inflow and optimal release policies learned during training
 %               
 
-function [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runPolicyTestSims(sysparams, bounds, X, policyLabel)
+function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, policyLabel, std_hat)
 
     % Set random seed
     % rng(0, 'twister');
@@ -63,8 +63,8 @@ function [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runPolicyTestSims(sysparams, bou
     for t = 1:T
         for i = 1:n
             
-            % Record historical inflow for unit i at time t
-            inflow_i = q_hist(t,i);
+            % Record historical inflow and sample forecast uncertainty
+            inflow_i = q_hist(t,i) + std_hat(t,i)*randn;
 
             % Optimal release policy at this time
             u_i = u_opt(t,i);
@@ -128,34 +128,18 @@ function [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runPolicyTestSims(sysparams, bou
     end
     fprintf('System Mean: mean(V_T) = %.4f\n', mean(V_T));
     
-    % Metric #1 (MFV): Per-time-step violation fraction
-    MFV = mean(violation_count, 1);   % 1 x n               
-    
-    % Metric #2 (RLR): Run-level violation probability
-    RLR = any(violation_count, 1);     
 
-    % Metric #3 (IVI): Integrated (time-avg) violation magnitude
+    % Metric (IVI): Integrated (time-avg) violation magnitude
     IVI = mean(viol_mag, 1); 
 
-    
     fprintf('\n  Monte Carlo Violation Report\n');
     
     for i = 1:n
         
         fprintf('Reservoir %d:\n', i);
-        
-        %{
-        fprintf('   Mean Frequency of Violations (MFV): %.2f%%\n', ...
-                100 * MFV(i));
-
-        fprintf('   Run-Level Risk (RLR): %.2f%%\n', ...
-                100 * RLR(i));
-        %}
-
         fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
     end
     
-
     switch string(bounds)
         case "det",     bLabel = "Deterministic";
         case "icc",     bLabel = "Individual CC";
@@ -164,7 +148,7 @@ function [V_sim, u_sim, p_sim, MFV, RLR, IVI] = runPolicyTestSims(sysparams, bou
     end
 
     % Plot policy test volume trajectories for each reservoir
-    plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
+    % plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
 
 end
 
