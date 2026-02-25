@@ -107,15 +107,11 @@ end
 % Historical anchors
 scale.wet_muQ = 7160;
 scale.wet_stdQ = 2550;
+scale.dry_muQ = 2900;
+scale.wet_muQ = 686;
 
-if modelparams.season == "dry"
-    scale.mu_Q = 2900;
-    scale.std_Q = 686;
-else 
-    scale.mu_Q = 4600;
-    scale.std_Q = 2100;
-end
-
+scale.mu_Q = 4600;
+scale.std_Q = 2100;
 
 % Simulated metrics
 scale.mu_q = mean(q(:,1));
@@ -197,7 +193,7 @@ if save_streamflow
    
     q_save = q(1+lag:T+lag, :);
 
-    save('floodFlow.mat', 'q_save')
+    save('streamflow.mat', 'q_save')
 end
 
 fprintf('Simulation complete.\n');

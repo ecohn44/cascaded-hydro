@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "det", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -103,11 +103,21 @@ for i = 1:n
     q(:,i) = scenarioSimulator(T, lag, simSettings.season, dp.mode, dp);
 end
 
+
+% Historical anchors
+scale.wet_muQ = 7160;
+scale.wet_stdQ = 2550;
+scale.dry_muQ = 2900;
+scale.wet_muQ = 686;
+
+scale.mu_Q = 4600;
+scale.std_Q = 2100;
+
 % Simulated metrics
 scale.mu_q = mean(q(:,1));
 scale.std_q = std(q(:,1));
-scale.H0 = 9.5;
-scale.dH_m = 1.2; 
+scale.H0 = 20;
+scale.dH_m = 2.5; 
 
 % Plot streamflow profiles
 plotStreamflows(q, scale)
@@ -183,7 +193,7 @@ if save_streamflow
    
     q_save = q(1+lag:T+lag, :);
 
-    save('floodFlow.mat', 'q_save')
+    save('streamflow.mat', 'q_save')
 end
 
 fprintf('Simulation complete.\n');

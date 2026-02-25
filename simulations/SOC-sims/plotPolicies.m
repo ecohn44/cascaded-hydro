@@ -14,12 +14,12 @@ season = "dry";
 alg = "BON";
 
 % Scale Metrics
-scale.mu_Q   = 2900;
-scale.std_Q  = 680;
+scale.mu_Q = 4600;
+scale.std_Q = 2100;
 scale.mu_q   = 0.0406; 
 scale.std_q  = 0.0060; 
-scale.H0 = 15;
-scale.dH_m = 5; 
+scale.H0 = 10;
+scale.dH_m = 10; 
 scale.alpha_q = scale.std_Q / scale.std_q;   
 scale.eta = 0.9;
 
@@ -97,13 +97,13 @@ end
 
 % Y-tick formatting (release)
 u_max = max(u_all);
-u_step = 2;                        
+u_step = 5;                        
 u_hi = ceil(u_max/u_step)*u_step;
 u_ticks = 0:u_step:u_hi;
 
 % Y-tick formatting (head)
 H_min = min(H_all); H_max = max(H_all);
-H_step = 0.5;                         
+H_step = 2;                         
 H_lo = floor(H_min/H_step)*H_step;
 H_hi = ceil(H_max/H_step)*H_step;
 H_ticks = H_lo:H_step:H_hi;

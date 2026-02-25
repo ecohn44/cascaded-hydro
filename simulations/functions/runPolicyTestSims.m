@@ -5,10 +5,7 @@
 %               inflow and optimal release policies learned during training
 %               
 
-function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, policyLabel, std_hat)
-
-    % Set random seed
-    % rng(0, 'twister');
+function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, policyLabel)
 
     % Dimensions
     T     = size(X,1);              % number of time steps
@@ -63,8 +60,8 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
     for t = 1:T
         for i = 1:n
             
-            % Record historical inflow and sample forecast uncertainty
-            inflow_i = q_hist(t,i) + std_hat(t,i)*randn;
+            % Record historical inflow 
+            inflow_i = q_hist(t,i);
 
             % Optimal release policy at this time
             u_i = u_opt(t,i);
@@ -148,7 +145,7 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
     end
 
     % Plot policy test volume trajectories for each reservoir
-    % plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
+    plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
 
 end
 
