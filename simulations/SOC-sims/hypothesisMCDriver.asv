@@ -89,11 +89,41 @@ for k = 1:numel(polCodes)
         std_all = S.std_hat; 
     end 
 
+    K = 100;                      % number of Monte Carlo runs
+    n = numel(sysparams);
+    
+    IVI_sum    = zeros(1,n);
+    AFV_sum    = zeros(n,1);
+    VT_sum     = zeros(1,n);
+    AFVsys_sum = 0;
+    
+    for k = 1:K
+        
+        rng(k);   % different seed each run
+        
+        [~,~,~, IVI, AFV_mean, AFV_sys, V_T] = ...
+            runPolicyTestSims(sysparams, bounds, X, policyLabel, std_hat);
+        
+        IVI_sum    = IVI_sum + IVI;
+        AFV_sum    = AFV_sum + AFV_mean;
+        VT_sum     = VT_sum + V_T;
+        AFVsys_sum = AFVsys_sum + AFV_sys;
+    
+    end
+    
+    % averages
+    IVI_avg    = IVI_sum / K;
+    AFV_avg    = AFV_sum / K;
+    VT_avg     = VT_sum / K;
+    AFVsys_avg = AFVsys_sum / K;
+
+    print(IVI_avg);
+
     % Run Policy Test Sims 
     % [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel, std_all);
 
     % Run MC Test Sims
-    [V_sim, u_sim, p_sim, ~, ~, IVI, ~] = runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, printplot, policyLabel);
+    % [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, path, printplot, policyLabel);
 
     % Mean power per unit over MC runs 
     p_mean = mean(p_sim, 3); % T x n_units
@@ -182,3 +212,73 @@ function plotInflowMismatch(X, q_hist, policyLabel)
     sgtitle(sprintf('Forecast vs Historical Inflow — %s', policyLabel));
 
 end
+
+
+function plotMCPolicies(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel)
+
+    [~, n] = size(V_sim);
+
+    figure('Name', sprintf('Policy Replay Storage Trajectories — %s', bLabel), ...
+       'NumberTitle','off', ...
+       'Units','normalized', ...
+       'Position',[0.1 0.3 0.8 0.4]);   % [left bottom width height]
+    tiledlayout(1, n, 'TileSpacing','compact', 'Padding','compact');
+
+
+    for i = 1:n
+        nexttile; hold on; grid on;
+    
+        Vp = V_opt(:,i);
+        Vs = V_sim(:,i);
+    
+        % Plot trajectories
+        plot(tt, Vp, 'r-', 'LineWidth', 2.0, 'DisplayName','Planned (training)');
+        plot(tt, Vs, 'b-', 'LineWidth', 2.0, 'DisplayName','Replay (historical)');
+    
+        % IVI shading (robust to multiple violation segments)
+        idxU = Vs > Vmax(i);
+        
+        d = diff([false; idxU; false]);
+        starts = find(d == 1);
+        ends   = find(d == -1) - 1;
+        
+        for k = 1:numel(starts)
+            ii = starts(k):ends(k);
+        
+            xU = tt(ii);
+            y1 = Vmax(i) * ones(size(xU));
+            y2 = Vs(ii);
+        
+            hIVI = fill([xU; flipud(xU)], [y1; flipud(y2)], ...
+                [0.6 0.6 0.6], 'FaceAlpha', 0.35, 'EdgeColor', 'none');
+        
+            if i == 1 && k == 1
+                set(hIVI, 'DisplayName', 'IVI (V > V_{max})');
+            else
+                set(hIVI, 'HandleVisibility', 'off');
+            end
+        end
+
+        % Bounds
+        yline(Vmin(i), '--k', 'LineWidth', 1.5, 'HandleVisibility','off');
+        yline(Vmax(i), '--k', 'LineWidth', 1.5, 'HandleVisibility','off');
+
+    
+        xlabel('Hour');
+        ylabel(sprintf('V_%d (p.u.)', i));
+        title(sprintf('Reservoir %d', i));
+    
+        % Limits (pad a bit)
+        y_low  = min([Vp; Vs; Vmin(i)]) - 0.03;
+        y_high = max([Vp; Vs; Vmax(i)]) + 0.03;
+        ylim([y_low y_high]);
+        xlim([1, length(tt)])
+    
+        if i == 1
+            legend('Location','best');
+        end
+    end
+
+    sgtitle(sprintf('Policy Replay Storage Trajectories — %s — %s', policyLabel, bLabel));
+end
+

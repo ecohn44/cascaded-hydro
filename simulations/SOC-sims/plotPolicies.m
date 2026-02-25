@@ -10,10 +10,10 @@
 
 close all; clc;
 
-season = "wet";
+season = "dry";
 
 % Loading parameters 
-path = "./resultsSSH/" + season;
+path = "./resultsBonferroni/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 

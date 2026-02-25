@@ -38,6 +38,7 @@ flow = innerjoin( ...
 
 % Drop NaNs and convert to 6-hour timestep
 flow = flow(~isnan(flow.inflow_m3s), :);
+flow = flow(~isnan(flow.outflow_m3s), :);
 
 % Extract aligned signals
 t      = flow.DateTime;
@@ -115,94 +116,7 @@ grid on
 box on
 set(gca,'FontSize',14)
 
-%% Fig 3A: Boxplot for Residuals vs Upstream Release
-
-res = res(valid);
-
-% Bin definition 
-binW  = 0.5e7/3600;
-edges = (floor(min(Q_proxy)/binW)*binW) : binW : (ceil(max(Q_proxy)/binW)*binW);
-
-bin_id = discretize(Q_proxy, edges);
-
-ok = ~isnan(bin_id) & ~isnan(res);
-bin_id = bin_id(ok);
-res_ok = res(ok);
-
-nbins = max(bin_id);
-
-% Bin centers in physical units
-centers = edges(1:end-1) + binW/2;
-centers = centers(1:nbins);
-
-figure('Color','w'); hold on
-
-for i = 1:nbins
-    
-    x = centers(i);
-    r = res_ok(bin_id == i);
-    
-    if isempty(r), continue, end
-    
-    % Trim extreme outliers (3–97%)
-    lo = quantile(r,0.03);
-    hi = quantile(r,0.97);
-    r  = r(r >= lo & r <= hi);
-    
-    % Statistics
-    q05 = quantile(r,0.05);
-    q10 = quantile(r,0.10);
-    q50 = quantile(r,0.50);
-    q90 = quantile(r,0.90);
-    q95 = quantile(r,0.95);
-    
-    % Width in physical units
-    w   = binW * 0.35;
-    cap = binW * 0.15;
-    
-    % Shaded envelope
-    fill([x-w x+w x+w x-w], ...
-         [q10 q10 q90 q90], ...
-         [0.35 0.75 1.0], ...
-         'FaceAlpha',0.60, ...
-         'EdgeColor','k', ...
-         'LineWidth',1.2);
-    
-    % Mean line 
-    plot([x-w x+w], [q50 q50], ...
-         'r', 'LineWidth', 2.2);
-    
-    % Whiskers (5–95%)
-    plot([x x], [q05 q10], 'k', 'LineWidth',1.2);
-    plot([x x], [q90 q95], 'k', 'LineWidth',1.2);
-    
-    % Caps
-    plot([x-cap x+cap], [q05 q05], 'k', 'LineWidth',1.2);
-    plot([x-cap x+cap], [q95 q95], 'k', 'LineWidth',1.2);
-    
-end
-
-% Axis formatting 
-xticks(centers)
-
-ax = gca;
-ax.XAxis.Exponent = 7;
-ax.YAxis.Exponent = 6;
-
-xlabel('Upstream Release (m^3/s)')
-ylabel('Residuals (m^3/s)')
-
-grid on
-box on
-
-set(gca, ...
-    'FontSize',14, ...
-    'LineWidth',1.2)
-
-% xlim([min(edges) max(edges)])
-% ylim([-2e6 2e6])
-
-%% Fig 3B: Quantile-binned box-bars for Residuals Standard Deviation vs Upstream Release
+%% Fig 3: Quantile-binned box-bars for Residuals Standard Deviation vs Upstream Release
 
 res_std = abs(res); 
 

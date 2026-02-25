@@ -1,4 +1,4 @@
-function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sysparams, bounds, std_hat, X, printplot, policyLabel)
+function [V_sim, u_sim, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sysparams, bounds, std_hat, X, savePath, printplot, policyLabel)
 
     % Set random seed
     % rng(0, 'twister');
@@ -6,7 +6,7 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
     % Dimensions
     T     = size(X,1);              % number of time steps
     n     = numel(sysparams);       % number of units
-    nSim  = 1000;                   % number of Monte Carlo runs
+    nSim  = 500;                   % number of Monte Carlo runs
     tt    = (1:T)';
 
     % Extract deterministic (solved) policy for all units
@@ -41,7 +41,6 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
 
     % Allocate arrays for MC trajectories
     V_sim = zeros(T, n, nSim);
-    p_sim = zeros(T, n, nSim);
 
     % Violation indicators: T x nSim x n
     violation_count = false(T, nSim, n);
@@ -74,13 +73,19 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
                 else
                     % Compute head and generation
                     h_i = a(i) * (V_i^b(i));
-                    p_i = u_opt(t,i) * h_i;    % (TEMP) multiply by c when rescaled
+                    p_i = u_i * h_i;    % (TEMP) multiply by c when rescaled
                 end
 
                 % Store trajectories
                 V_sim(t, i, sIdx) = V_i;
+                u_sim(t, i, sIdx) = u_i;
                 p_sim(t, i, sIdx) = p_i;
                 
+                % Store flood metrics
+                s_sim(t,i,sIdx)    = s_i;
+                a_sim(t,i,sIdx)    = a_i;
+                net_sim(t,i,sIdx) = net_i;
+
                 % Advance state
                 V_prev(i) = V_i;
             end
@@ -103,6 +108,35 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
     end
     fprintf('System Total: AFV = %.4f\n', AFV_sys);
 
+    %% Spill / Absorption Metrics
+
+    % Time-integrated totals per run
+    spill_tot_runs   = squeeze(sum(s_sim, 1));   % n x nSim
+    absorb_tot_runs  = squeeze(sum(a_sim, 1));   % n x nSim
+
+    % Mean across Monte Carlo runs
+    spill_mean  = mean(spill_tot_runs, 2);   % n x 1
+    absorb_mean = mean(absorb_tot_runs, 2);  % n x 1
+
+    % System totals (mean over runs)
+    spill_sys  = mean(sum(spill_tot_runs, 1));
+    absorb_sys = mean(sum(absorb_tot_runs, 1));
+
+    fprintf('\n  Flood Absorption / Spill Report\n');
+
+    for i = 1:n
+        fprintf('Reservoir %d:\n', i);
+        fprintf('   Absorbed (stored): %.4f\n', absorb_mean(i));
+        fprintf('   Spill (released):  %.4f\n', spill_mean(i));
+    end
+    
+    fprintf('System Total Absorbed: %.4f\n', absorb_sys);
+    fprintf('System Total Spill:    %.4f\n', spill_sys);
+
+    spillStats.absorb_mean = absorb_mean;
+    spillStats.spill_mean  = spill_mean;
+    spillStats.absorb_sys  = absorb_sys;
+    spillStats.spill_sys   = spill_sys;
     spillStats.AFV_mean = AFV_mean;
     spillStats.AFV_sys  = AFV_sys;
 
@@ -119,24 +153,22 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
     IVI_runs = squeeze(mean(viol_mag, 1));  % nSim x n  (avg over time)
     IVI      = mean(IVI_runs, 1);          % 1 x n     (avg over runs)
 
-    
+    %{
     fprintf('\n  Monte Carlo Violation Report\n');
     
     for i = 1:n
         
         fprintf('Reservoir %d:\n', i);
         
-        %{
         fprintf('   Mean Frequency of Violations (MFV): %.2f%%\n', ...
                 100 * MFV(i));
 
         fprintf('   Run-Level Risk (RLR): %.2f%%\n', ...
                 100 * RLR(i));
-        %}
 
         fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
     end
-    
+    %}
 
     switch string(bounds)
         case "det",     bLabel = "Deterministic";
@@ -147,12 +179,14 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
 
     % Plot MC volume trajectories for each reservoir
     if printplot
-        plotReservoirMCGrid(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
+        plotReservoirMCGrid(tt, V_opt, V_sim, Vmin, Vmax, ...
+                            bLabel, policyLabel, savePath, bounds, printplot);
     end
 end
 
 
-function plotReservoirMCGrid(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel)
+function plotReservoirMCGrid(tt, V_opt, V_sim, Vmin, Vmax, ...
+                             bLabel, policyLabel, savePath, bounds, printplot)
 
     [~, n, ~] = size(V_sim);
 
