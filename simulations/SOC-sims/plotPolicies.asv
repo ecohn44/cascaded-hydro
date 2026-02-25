@@ -11,7 +11,7 @@
 close all; clc;
 
 season = "dry";
-alg = "BON";
+alg = "SSH";
 
 % Scale Metrics
 scale.mu_Q   = 2900;
@@ -24,7 +24,7 @@ scale.alpha_q = scale.std_Q / scale.std_q;
 scale.eta = 0.9;
 
 % Loading parameters 
-path = "./resultsBonferroni/" + season;
+path = "./resultsSSH/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
@@ -223,75 +223,6 @@ end
 set(gcf,'Renderer','painters');
 exportgraphics(gcf,'figures/dry_policy_trajectories.pdf','ContentType','vector');
 
-
-%% Fig 2: Accumulated Energy 
-rho = 1000; g = 9.81; eta = scale.eta;
-tt_all = (1:T)';
-
-sysPowerMW = @(D) local_system_power_MW(D, scale, rho, g, eta);
-
-Psys1 = sysPowerMW(D1);   % DET
-Psys2 = sysPowerMW(D2);   % DIU
-Psys3 = sysPowerMW(D3);   % DDU
-
-Eacc1 = cumsum(Psys1);    % MWh (dt=1 hr)
-Eacc2 = cumsum(Psys2);
-Eacc3 = cumsum(Psys3);
-
-% Plot
-fE = figure('Position',[100 100 300*n_units 300*n_units]); hold on; grid on;
-
-% Shaded areas (accumulated energy)
-a1 = area(tt_all, Eacc1); a1.FaceColor = c1; a1.FaceAlpha = 0.22; a1.EdgeColor = 'none';
-a2 = area(tt_all, Eacc2); a2.FaceColor = c2; a2.FaceAlpha = 0.14; a2.EdgeColor = 'none';
-a3 = area(tt_all, Eacc3); a3.FaceColor = c3; a3.FaceAlpha = 0.14; a3.EdgeColor = 'none';
-
-% Lines on top
-l1 = plot(tt_all, Eacc1, 'LineWidth', lw, 'Color', c1);
-l2 = plot(tt_all, Eacc2, 'LineWidth', lw, 'Color', c2);
-l3 = plot(tt_all, Eacc3, 'LineWidth', lw, 'Color', c3);
-
-xlabel('Time (hours)','FontSize',font_axis);
-ylabel('Accumulated Energy (MWh)','FontSize',font_axis);
-set(gca,'FontSize',font_tick);
-xlim([1 T]);
-
-% Keep legend consistent with your main figure labels
-legend([l1 l2 l3], labels{:}, 'Location','northwest', 'FontSize',font_leg, 'Box','off');
-
-set(gcf,'Renderer','painters');
-exportgraphics(gcf,'figures/dry_accumulated_energy.pdf','ContentType','vector');
-
-function P_sys_MW = local_system_power_MW(D, scale, rho, g, eta)
-    % Returns system total power time series (MW): sum over units, each hour.
-    T = D.T;
-    n = numel(D.sysparams);
-
-    P_sys_MW = zeros(T,1);
-
-    for k = 1:n
-        sp   = D.sysparams(k);
-        base = (k-1)*5;
-
-        % Turbine release (normalized) -> m^3/s
-        u_norm = D.X(1:T, base+3);
-        Q_m3ps = scale.alpha_q * u_norm;
-
-        % Head proxy -> percent-full -> physical meters
-        V_norm  = D.X(1:T, base+1);
-        h_model = sp.a .* (V_norm.^sp.b);           % in [0, a]
-        h_norm  = min(max(h_model ./ sp.a, 0), 1);  % clip to [0,1]
-        H_m     = scale.H0 + (h_norm - 0.5) * scale.dH_m;
-
-        % Unit power (MW)
-        P_unit_MW = (rho * g * eta .* Q_m3ps .* H_m) / 1e6;
-
-        % Add to system
-        P_sys_MW = P_sys_MW + P_unit_MW;
-    end
-end
-
-
 printBenchLatexBlock(D1, D2, D3, alg, 5, scale)
 
 
@@ -339,24 +270,25 @@ function printBenchLatexBlock(Ddet, Ddiu, Dddu, algName, indentMM, scale)
     Pavg_unit_diu = Pavg_sys_diu / n_units;
     Pavg_unit_ddu = Pavg_sys_ddu / n_units;
 
-    fmtInt = @(x) regexprep(sprintf('%.0f', round(x)), '\B(?=(\d{3})+(?!\d))', ',');
-
+    % --- helper: integer with commas ---
+    fmtInt = @(x) regexprep(sprintf('%.0f', round(x,-1)), '\B(?=(\d{3})+(?!\d))', ',');
+    
     % Multirow count: energy rows (1+n_units) + 2 avg-power rows
     n_rows = (1 + n_units) + 2;
     
     fprintf('\\multirow{%d}{*}{%s}\n', n_rows, algName);
     
-    % System total energy (integer MWh)
+    % System total energy
     fprintf(' & System Total [MWh] & %s & %s & %s \\\\\n', ...
         fmtInt(E_det), fmtInt(E_diu), fmtInt(E_ddu));
     
-    % Unit-level energy (integer MWh)
+    % Unit-level energy
     for i = 1:n_units
         fprintf(' & %sUnit %d & %s & %s & %s \\\\\n', ...
             indent, i, fmtInt(uE_det(i)), fmtInt(uE_diu(i)), fmtInt(uE_ddu(i)));
     end
     
-    % Avg powers (integer MW)
+    % Avg powers
     fprintf(' & Avg System Power [MW] & %s & %s & %s \\\\\n', ...
         fmtInt(Pavg_sys_det), fmtInt(Pavg_sys_diu), fmtInt(Pavg_sys_ddu));
     

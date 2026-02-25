@@ -43,8 +43,10 @@
 % -------------------------------------------------------------------------
 
 
-function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, framework, bounds, params, s, eps, volPrice)
+function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, framework, bounds, params, s, eps, volPrice)
 
+    % Scaling factor for bounds
+    scale = 1;
 
     % Number of units
     n = numel(s);
