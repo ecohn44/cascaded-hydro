@@ -13,7 +13,7 @@ close all; clc;
 season = "dry";
 
 % Loading parameters 
-path = "./resultsBonferroni/" + season;
+path = "./resultsSSH/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
