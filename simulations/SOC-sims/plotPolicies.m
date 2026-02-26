@@ -11,7 +11,7 @@
 close all; clc;
 
 season = "dry";
-alg = "BON";
+alg = "SSH";
 
 % Scale Metrics
 scale.mu_Q = 4600;
