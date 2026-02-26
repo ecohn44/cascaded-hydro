@@ -149,7 +149,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
             cons = [cons, 0 <= p(i) <= s(i).F];
 
             % Spill Bounds
-            cons = [cons, 0 <= sp(i)];
+            cons = [cons, 0 <= sp(i) <= s(i).max_S];
         end
 
         %% Time-Varying Constraints

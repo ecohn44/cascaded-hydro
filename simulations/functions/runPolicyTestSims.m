@@ -246,6 +246,7 @@ function plotSpill(tt, s_policy, s_test, bLabel, policyLabel)
         % Plot trajectories
         plot(tt, Sp, 'r-', 'LineWidth', 2.0, 'DisplayName','Planned (training)');
         plot(tt, St, 'b-', 'LineWidth', 2.0, 'DisplayName','Replay (historical)');
+        yline(0.05, 'k--', 'LineWidth', 2.0)
     
         xlabel('Hour');
         ylabel(sprintf('V_%d (p.u.)', i));
