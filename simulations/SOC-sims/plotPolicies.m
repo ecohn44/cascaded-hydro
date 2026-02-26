@@ -10,14 +10,15 @@
 
 close all; clc;
 
-season = "dry";
+season = "wet";
+alg = "Bonferroni";
 
 % Loading parameters 
-path = "./resultsSSH/" + season;
+path = "./resultsBonferroni/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
-font  = 24;
+font  = 22;
 
 % Load files for Unit 1 just to get sysparams / n_units
 D1 = load(fullfile(path, sprintf('results_unit1_%s.mat', lower(tag1))));
@@ -40,17 +41,6 @@ if season == "dry"
     subfig_n = 2;  % number of states to plot
 else
     subfig_n = 3; 
-end
-
-% 'Optimal Policy Trajectories under Uncertainty Frameworks'
-if path == "./resultsBonferroni/"+season
-    alg = "Bonferroni";
-    sgtitle('Bonferroni Trajectories', ...
-        'FontSize', 36, 'FontWeight','bold');
-else
-    alg = "SSH";
-    sgtitle('Supporting Hyperplane Trajectories', ...
-        'FontSize', 36, 'FontWeight','bold');
 end
 
 % Print metrics
@@ -113,7 +103,7 @@ for i = 1:n_units
     if i == n_units
         xlabel('Time [hr]');
     end
-    ylabel(sprintf('Unit %d', sp.unit),'FontWeight','bold');
+    ylabel(sprintf('Unit %d', sp.unit));
     xlim([1, T]);
     set(ax,'FontSize',font);
 
@@ -167,7 +157,6 @@ for i = 1:n_units
         if i == n_units
             xlabel('Time [hr]');
         end
-        ylabel(sprintf('Unit %d', sp.unit),'FontWeight','bold');
         xlim([1, T]);
         set(ax,'FontSize',font);
     end

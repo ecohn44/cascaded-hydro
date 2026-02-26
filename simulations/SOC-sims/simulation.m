@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
+simSettings = initSimSettings("wet", "pulse", "pwl", "det", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -56,7 +56,7 @@ if simSettings.season == "dry"
 elseif simSettings.season == "wet"
     seasonparams.q0 = sysparams(1).max_ut;
     [sysparams.V0] = deal(0.8);
-    D = 14;         % Simulation duration in days
+    D = 3.5;         % Simulation duration in days
 else
     seasonparams.q0 = sysparams(1).max_ut;
 end
@@ -181,14 +181,6 @@ end
 
 if save_streamflow
     
-    %{
-    q_save = zeros(T, n);
-    for i = 1:n
-        base = 5*(i-1);
-        q_save(:, i)  = X(:, base+5);
-    end
-    %}
-
     q_save = q(1+lag:T+lag, :);
 
     save('floodFlow.mat', 'q_save')

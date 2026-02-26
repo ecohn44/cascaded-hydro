@@ -151,7 +151,6 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
 
     % Plot policy test volume trajectories for each reservoir
     plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
-    plotSpill(tt, s_opt, s_sim, bLabel, policyLabel)
 
 end
 
@@ -226,38 +225,44 @@ end
 
 
 
-function plotSpill(tt, s_policy, s_test, bLabel, policyLabel)
+function plotSpill(s_policy, s_test, policyLabel)
 
-    [~, n] = size(s_policy);
+    % X:        T x (5n) optimization output
+    % q_hist:   T x n historical inflow used in replay
+    % policyLabel: string for figure title
 
-    figure('Name', sprintf('Spill Trajectories — %s', bLabel), ...
-       'NumberTitle','off', ...
-       'Units','normalized', ...
-       'Position',[0.1 0.3 0.8 0.4]);   % [left bottom width height]
-    tiledlayout(1, n, 'TileSpacing','compact', 'Padding','compact');
+    T  = size(X,1);
+    tt = (1:T)';
 
+    % Extract predicted inflow for Unit 1
+    q_pred = X(:,5);        % column 5 = q_1(t)
+    q_hist1 = q_hist(:,1);
 
-    for i = 1:n
-        nexttile; hold on; grid on;
-    
-        Sp = s_policy(:,i);
-        St = s_test(:,i);
-    
-        % Plot trajectories
-        plot(tt, Sp, 'r-', 'LineWidth', 2.0, 'DisplayName','Planned (training)');
-        plot(tt, St, 'b-', 'LineWidth', 2.0, 'DisplayName','Replay (historical)');
-    
-        xlabel('Hour');
-        ylabel(sprintf('V_%d (p.u.)', i));
-        title(sprintf('Reservoir %d', i));
-    
-        xlim([1, length(tt)])
-    
-        if i == 1
-            legend('Location','best');
-        end
-    end
+    dq = s_policy - q_hist1;
 
-    sgtitle(sprintf('Spill Trajectories — %s — %s', policyLabel, bLabel));
+    figure('Name','Inflow Comparison Unit 1','NumberTitle','off');
+    tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
+
+    % Top: Historical vs Predicted
+    nexttile; hold on; grid on;
+    plot(tt, q_hist1, 'k-',  'LineWidth', 2,   'DisplayName','Historical');
+    plot(tt, q_pred,  'b--', 'LineWidth', 1.8, 'DisplayName','Predicted');
+
+    ylabel('q_1');
+    title('Unit 1 Inflow: Historical vs Predicted');
+    legend('Location','best');
+
+    % Bottom: Difference
+    nexttile; hold on; grid on;
+    plot(tt, dq, 'r-', 'LineWidth', 2);
+    yline(0,'k--','HandleVisibility','off');
+
+    xlabel('Time');
+    ylabel('\Delta q_1');
+    title('Prediction Error: q_{pred} - q_{hist}');
+
+    sgtitle(sprintf('Forecast vs Historical Inflow — %s', policyLabel));
+
 end
+
 

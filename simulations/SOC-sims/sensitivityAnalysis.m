@@ -34,7 +34,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("wet", "pulse", "pwl", "ddu", "jcc-bon", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -46,15 +46,16 @@ seasonparams = seasonparams(strcmp({seasonparams.mode}, simSettings.scenario));
 if simSettings.season == "dry"
     seasonparams.q0 = 0.9*sysparams(1).max_ut;
     [sysparams.V0] = deal(0.1);
+    D = 3.5;  
 elseif simSettings.season == "wet"
     seasonparams.q0 = 0.95*sysparams(1).max_ut;
     [sysparams.V0] = deal(0.8);
+    D = 14;
 else
     seasonparams.q0 = sysparams(1).max_ut;
 end
 
 % Date range settings 
-D = 3.5;                      % Simulation duration in days
 T = 24*D;                     % Number of simulation hours
 lag = 1;                      % Travel time between units (hrs)
 
@@ -113,8 +114,8 @@ gamma0 = modelparams.gamma;
 xi0 = modelparams.alpha; 
 
 % Multiplicative sweep factors 
-xi_factors    = [0, 1, 5, 10, 50];
-gamma_factors = [0, 0.5, 1, 1.5, 2, 3];
+xi_factors    = [0, 1, 5, 10, 20, 30, 40 50];
+gamma_factors = [0, 0.5, 1, 1.5, 2, 2.5, 3];
 
 % Build sweep grids
 xi_vals    = xi0    .* xi_factors;
@@ -152,7 +153,7 @@ for i = 1:n_xi
         end
 
         % Run Policy Test Sims 
-        [~, ~, ~, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X, 'DDU', std_hat);
+        [~, ~, ~, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X, 'DDU');
 
         % Store system-wide constraint violation 
         IVI_vals(i,j) = sum(IVI);

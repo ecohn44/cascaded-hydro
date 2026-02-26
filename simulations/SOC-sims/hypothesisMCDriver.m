@@ -90,10 +90,10 @@ for k = 1:numel(polCodes)
     end 
 
     % Run Policy Test Sims 
-    % [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel, std_all);
+    [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel);
 
     % Run MC Test Sims
-    [V_sim, u_sim, p_sim, ~, ~, IVI, ~] = runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, printplot, policyLabel);
+    % [V_sim, u_sim, p_sim, ~, ~, IVI, ~] = runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, printplot, policyLabel);
 
     % Mean power per unit over MC runs 
     p_mean = mean(p_sim, 3); % T x n_units

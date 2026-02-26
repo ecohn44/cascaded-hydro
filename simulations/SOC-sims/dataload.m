@@ -109,11 +109,11 @@ function [params, sysparams, scenarioparams] = dataload(n, N)
 
     % Pulse-type event (uses t0 as FRACTIONS of horizon)
     scenarioparams(1).mode         = 'pulse';
-    scenarioparams(1).amp1         = 0.85;      % +% gain for pulse 1
-    scenarioparams(1).amp2         = 1.5;      % +% gain for pulse 2
-    scenarioparams(1).w1           = 12;        % first drought pulse lasts 8 hours
-    scenarioparams(1).w2           = 16;        % second drought pulse lasts 4 hours
-    scenarioparams(1).t0           = [0.3, 0.8];  % pulses at 30% and 50% of horizon
+    scenarioparams(1).amp1         = 0.65;      % +% gain for pulse 1
+    scenarioparams(1).amp2         = 0.85;      % +% gain for pulse 2
+    scenarioparams(1).w1           = 8;        % first drought pulse lasts 8 hours
+    scenarioparams(1).w2           = 8;        % second drought pulse lasts 4 hours
+    scenarioparams(1).t0           = [0.3, 0.5];  % pulses at 30% and 50% of horizon
     scenarioparams(1).unitDelay    = 12;       % time units between drought events 
     scenarioparams(1).startSteps   = 2;        % time before initial drought event begins 
 
