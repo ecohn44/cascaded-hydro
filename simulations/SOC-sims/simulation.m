@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("wet", "pulse", "pwl", "det", "jcc-bon", "none");
+simSettings = initSimSettings("wet", "pulse", "pwl", "diu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -54,7 +54,7 @@ if simSettings.season == "dry"
     [sysparams.V0] = deal(0.1);
     D = 3.5;        % Simulation duration in days
 elseif simSettings.season == "wet"
-    seasonparams.q0 = sysparams(1).max_ut;
+    seasonparams.q0 = 0.8*sysparams(1).max_ut;
     [sysparams.V0] = deal(0.8);
     D = 3.5;         % Simulation duration in days
 else

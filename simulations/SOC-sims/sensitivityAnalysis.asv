@@ -111,21 +111,19 @@ end
 
 % Record initial parameters
 gamma0 = modelparams.gamma;
-xi0 = modelparams.alpha;
-omega0 = modelparams.omega; 
+xi0 = modelparams.alpha; 
 
 % Multiplicative sweep factors 
-xi_factors    = [0, 1, 5, 50]; %10, 20, 30, 40 50];
+xi_factors    = [0, 1, 5, 10, 20, 30, 40 50];
 gamma_factors = [0, 1, 2, 5];
 omega_factors = [0, 1, 2, 5];
 
 % Build sweep grids
 xi_vals    = xi0    .* xi_factors;
 gamma_vals = gamma0 .* gamma_factors;
-omega_vals = omega0 .* omega_factors; 
+omega)
 n_xi    = length(xi_vals);
 n_gamma = length(gamma_vals);
-n_omega = length(omega_vals);
 
 % Intialize array to store objective values 
 J_vals = zeros(n_xi, n_gamma); 

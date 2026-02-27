@@ -150,8 +150,8 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
     end
 
     % Plot policy test volume trajectories for each reservoir
-    plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
-    plotSpill(tt, s_opt, s_sim, bLabel, policyLabel)
+    % plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
+    % plotSpill(tt, s_opt, s_sim, bLabel, policyLabel)
 
 end
 
