@@ -10,8 +10,8 @@
 
 close all; clc;
 
-season = "wet";
-alg = "Bonferroni";
+season = "dry";
+alg = "BON";
 
 % Loading parameters 
 path = "./resultsBonferroni/" + season;
