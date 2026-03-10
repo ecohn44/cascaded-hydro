@@ -21,7 +21,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 make_dir = false;
 printplot = false; 
 save_mat = true; 
-save_streamflow = true;
+save_streamflow = false;
 
 % Static parameters 
 eta = .9;           % efficiency of release-energy conversion
@@ -95,11 +95,15 @@ for i = 1:n
     dp    = baseStreamflow; 
 
     % Apply scaling to each inflow profile 
-    scale = 1; % severityScales(i);
+    scale = severityScales(i);
 
     if strcmpi(dp.mode, 'extended')
         dp.amp1 = baseStreamflow.amp1 * scale;
     end
+
+    if i > 1
+        dp.q0 = (0.85+i/10)*sysparams(1).max_ut;
+    end 
 
     dp.shiftMult = i - 1;
 
@@ -135,10 +139,8 @@ end
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-% Scaling factor for chance-constrained bounds
-scale = 1;
 
-[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, ...
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
 
 
