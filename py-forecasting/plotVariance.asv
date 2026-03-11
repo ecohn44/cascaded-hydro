@@ -280,8 +280,6 @@ function plotSeasonalHydrograph(bon_path)
     % Two-panel figure:
     % (a) Seasonal hydrograph with dry-season baseline
     % (b) Empirical dry-season inflow distribution
-
-    fontSize = 16;
     
     bon = readtable(fullfile(bon_path, "bon-daily-inflow-calc.csv"));
     bon.DateTime = datetime(bon.DateTime);
@@ -345,98 +343,99 @@ function plotSeasonalHydrograph(bon_path)
     % nexttile; hold on
     
     yl = [min(q25,[],'omitnan') max(q75,[],'omitnan')];
-    yl = [yl(1) yl(2)];
+    pad = 0.05*range(yl);
+    yl = [yl(1)-pad yl(2)+pad];
     
     patch([dry fliplr(dry)], [yl(1)*ones(size(dry)) yl(2)*ones(size(dry))], ...
-        [0.93 0.75 0.45], 'FaceAlpha',0.4, 'EdgeColor','none');
+        [0.93 0.75 0.45], 'FaceAlpha',0.12, 'EdgeColor','none');
     
-    plot(1:365, q75_s, 'Color',[0.65 0.75 0.9], 'LineWidth',1.5);
-    plot(1:365, q25_s, 'Color',[0.65 0.75 0.9], 'LineWidth',1.5);
+    p75 = plot(1:365, q75_s, '--', 'Color',[0.65 0.75 0.9], 'LineWidth',1.0);
+    p25 = plot(1:365, q25_s, '--', 'Color',[0.65 0.75 0.9], 'LineWidth',1.0);
+    p75.Color(4) = 0.7;
+    p25.Color(4) = 0.7;
+    
     plot(1:365, qmean_s, 'Color',[0 0.2 0.6], 'LineWidth',2.2)
     
     scatter(q0_day, q0, 55, [0.9 0.1 0.1], 'filled')
     plot([1 365], [q0 q0], '--', ...
         'Color',[0.85 0.1 0.1], 'LineWidth',1.8);
     
-    %{
     text(q0_day+6, q0-300, sprintf('$q_0^{\\mathrm{dry}} = %.0f$ m$^3$/s', q0), ...
-        'Interpreter','latex', 'FontSize',fontSize-2, 'VerticalAlignment','middle');
-    %}
+        'Interpreter','latex', 'FontSize',11, 'VerticalAlignment','middle');
     
     % legend handles
     h_mean = plot(nan,nan,'Color',[0 0.2 0.6],'LineWidth',2.4);
-    h_pct  = plot(nan,nan,'Color',[0.65 0.75 0.9],'LineWidth',1.5);
+    h_pct  = plot(nan,nan,'--','Color',[0.65 0.75 0.9],'LineWidth',1.5);
     h_q0   = plot(nan,nan,'--','Color',[0.85 0.1 0.1],'LineWidth',1.8);
-    h_dry  = patch(nan,nan,[0.93 0.75 0.45],'FaceAlpha',0.45,'EdgeColor','none');
+    h_dry  = patch(nan,nan,[0.93 0.75 0.45],'FaceAlpha',0.12,'EdgeColor','none');
     
     lg = legend([h_mean h_pct h_q0 h_dry], ...
         {'Mean Inflow', ...
-         '25$^{th}$--75$^{th}$ Percentile', ...
-         'Dry Season Baseline', ...
+         '25th--75th Percentile Inflow', ...
+         'Dry Season Baseline ($q_0^{dry}$)', ...
          'Dry Season Window'}, ...
         'Interpreter','latex', ...
         'Location','northeast');
-    lg.FontSize = fontSize-4;
+    lg.FontSize = 10;
     lg.Color = [1 1 1 0.85];
     lg.EdgeColor = [0.8 0.8 0.8];
     
     xticks([1 32 60 91 121 152 182 213 244 274 305 335])
     xticklabels({'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'})
-    xlim([1 365]); ylim([yl(1)-100 yl(2)+100])
+    xlim([1 365]); ylim(yl)
     
-    xlabel('Day of Year', 'Interpreter','latex', 'FontSize', fontSize)
-    ylabel('Inflow (m$^3$/s)', 'Interpreter','latex', 'FontSize', fontSize)
+    xlabel('Day of Year', 'Interpreter','latex', 'FontSize', 13)
+    ylabel('Inflow (m$^3$/s)', 'Interpreter','latex', 'FontSize', 13)
     
     grid on; box on
-    set(gca, 'Color','w', 'FontSize',fontSize, 'LineWidth',0.8, 'Box','on');
+    set(gca, 'Color','w', 'FontSize',11, 'LineWidth',0.8, 'Box','on');
     ax = gca;
     ax.GridAlpha = 0.07;
     ax.MinorGridAlpha = 0.04;
     
     text(0.02, 0.98, '(a)', 'Units','normalized', ...
-        'FontWeight','bold', 'FontSize',fontSize, ...
+        'FontWeight','bold', 'FontSize',12, ...
         'HorizontalAlignment','left', 'VerticalAlignment','top');
     
     % =========================
     % Panel (b): Dry distribution
     % =========================
-    ax2 = nexttile(7,[1 4]);
+    ax2 = nexttile(7,[1 3]);
     hold(ax2,'on')
     %nexttile; hold on
     
     histogram(drySamples, 'Normalization','pdf', ...
-        'FaceColor',[0.93 0.75 0.45], ...
+        'FaceColor',[0.70 0.78 0.90], ...
         'EdgeColor','none', ...
-        'FaceAlpha',0.45);
+        'FaceAlpha',0.85);
     
     xpdf = linspace(min(drySamples), max(drySamples), 400);
     pdf_dry = ksdensity(drySamples, xpdf, 'Bandwidth', 250);
     plot(xpdf, pdf_dry, 'Color',[0 0.2 0.6], 'LineWidth',2.2)
     
     xline(q0, '--', 'Color',[0.85 0.1 0.1], 'LineWidth',1.8);
-    y_q0 = interp1(xpdf, pdf_dry, q0, 'linear');
-    scatter(q0, y_q0, 55, [0.9 0.1 0.1], 'filled')
+    
     
     legend({'Empirical Distribution', ...
             'KDE Approximation', ...
-            'Dry Season Baseline'}, ...
+            'Dry Season Baseline ($q_0^{dry}$)'}, ...
            'Interpreter','latex', ...
            'Location','northeast', ...
-           'FontSize',fontSize-4, ...
+           'FontSize',10, ...
            'Color',[1 1 1 0.85], ...
            'EdgeColor',[0.8 0.8 0.8]);
     
-    xlabel('Dry Season Inflow (m$^3$/s)', 'Interpreter','latex', 'FontSize',fontSize)
-    ylabel('PDF', 'Interpreter','latex', 'FontSize',fontSize)
-
+    xlabel('Dry-Season Inflow (m$^3$/s)', 'Interpreter','latex', 'FontSize',13)
+    ylabel('PDF', 'Interpreter','latex', 'FontSize',13)
+    
     grid on; box on
-    set(gca, 'Color','w', 'FontSize',fontSize, 'LineWidth',0.8, 'Box','on');
+    set(gca, 'Color','w', 'FontSize',11, 'LineWidth',0.8, 'Box','on');
     ax = gca;
     ax.GridAlpha = 0.07;
     ax.MinorGridAlpha = 0.04;
     
     text(0.02, 0.98, '(b)', 'Units','normalized', ...
-        'FontWeight','bold', 'FontSize',fontSize, ...
+        'FontWeight','bold', 'FontSize',12, ...
         'HorizontalAlignment','left', 'VerticalAlignment','top');
     
     % full two-column width export size

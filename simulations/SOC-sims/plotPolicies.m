@@ -14,8 +14,8 @@ season = "dry";
 alg = "SSH";
 
 % Scale Metrics
-scale.mu_Q = 4600;
-scale.std_Q = 2100;
+scale.mu_Q = 3000;
+scale.std_Q = 680;
 scale.mu_q   = 0.0406; 
 scale.std_q  = 0.0060; 
 scale.H0 = 10;
@@ -24,7 +24,7 @@ scale.alpha_q = scale.std_Q / scale.std_q;
 scale.eta = 0.9;
 
 % Loading parameters 
-path = "./resultsBonferroni/" + season;
+path = "./resultsSSH/" + season;
 tag1 = 'det'; tag2 = 'diu'; tag3 = 'ddu';
 printplot = false;
 
