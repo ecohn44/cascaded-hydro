@@ -14,10 +14,17 @@ season = "dry";
 alg = "SSH";
 
 % Scale Metrics
-scale.mu_Q = 3000;
-scale.std_Q = 680;
-scale.mu_q   = 0.0406; 
-scale.std_q  = 0.0060; 
+% Historical anchors
+scale.dry_muQ = 3000;
+scale.dry_stdQ = 686;
+scale.mu_Q = scale.dry_muQ;
+scale.std_Q = scale.dry_stdQ;
+
+% Simulated metrics
+scale.mu_q = seasonparams.q0;
+scale.std_q = 0.004;
+
+% Hydraulic head scales
 scale.H0 = 10;
 scale.dH_m = 10; 
 scale.alpha_q = scale.std_Q / scale.std_q;   
@@ -72,27 +79,9 @@ for i = 1:n_units
 
     % Convert releases (normalized) -> physical 10^3 m^3/s
     u1 = D1.X(:, base+3);  u2 = D2.X(:, base+3);  u3 = D3.X(:, base+3);
+
     u_all = [u_all; (scale.alpha_q*u1)/1e3; (scale.alpha_q*u2)/1e3; (scale.alpha_q*u3)/1e3; ...
                    (scale.alpha_q*sp.min_ut)/1e3; (scale.alpha_q*sp.max_ut)/1e3];
-
-    % Convert heads (normalized proxy) -> percent-full -> physical meters
-    V1 = D1.X(:, base+1);  V2 = D2.X(:, base+1);  V3 = D3.X(:, base+1);
-    head1 = sp.a .* (V1.^sp.b);
-    head2 = sp.a .* (V2.^sp.b);
-    head3 = sp.a .* (V3.^sp.b);
-
-    hmin_model = 0;           
-    hmax_model = sp.a;
-
-    h1n = min(max((head1 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-    h2n = min(max((head2 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-    h3n = min(max((head3 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-
-    H1 = scale.H0 + (h1n - 0.5) * scale.dH_m;
-    H2 = scale.H0 + (h2n - 0.5) * scale.dH_m;
-    H3 = scale.H0 + (h3n - 0.5) * scale.dH_m;
-
-    H_all = [H_all; H1; H2; H3];
 end
 
 % Y-tick formatting (release)
@@ -102,7 +91,7 @@ u_hi = ceil(u_max/u_step)*u_step;
 u_ticks = 0:u_step:u_hi;
 
 % Y-tick formatting (head)
-H_min = min(H_all); H_max = max(H_all);
+H_min = 5; H_max = 12;
 H_step = 2;                         
 H_lo = floor(H_min/H_step)*H_step;
 H_hi = ceil(H_max/H_step)*H_step;
@@ -116,11 +105,15 @@ for i = 1:n_units
     V1 = D1.X(:, base+1);  u1 = D1.X(:, base+3);  s1 = D1.X(:, base+4); 
     V2 = D2.X(:, base+1);  u2 = D2.X(:, base+3);  s2 = D2.X(:, base+4); 
     V3 = D3.X(:, base+1);  u3 = D3.X(:, base+3);  s3 = D3.X(:, base+4);  
+    V1min = D1.V_eff(:, 2*i); V2min = D2.V_eff(:, 2*i); V3min = D3.V_eff(:, 2*i);
 
     % Calculate hydraulic head (model proxy)
     head1 = sp.a .* (V1.^sp.b);
+    head1min = sp.a .* (V1min.^sp.b);
     head2 = sp.a .* (V2.^sp.b);
+    head2min = sp.a .* (V2min.^sp.b);
     head3 = sp.a .* (V3.^sp.b);
+    head3min = sp.a .* (V3min.^sp.b);
 
     row = i - 1;
 
@@ -134,8 +127,8 @@ for i = 1:n_units
     h2 = plot(u2_phys, 'Color', c2, 'LineWidth', lw);
     h3 = plot(u3_phys, 'Color', c3, 'LineWidth', lw);
 
-    yline((scale.alpha_q*sp.max_ut)/1e3,'--','Color',[0.3 0.3 0.3],'LineWidth',1.2)
-    yline((scale.alpha_q*sp.min_ut)/1e3,'--','Color',[0.3 0.3 0.3],'LineWidth',1.2)
+    yline((scale.alpha_q*sp.max_ut)/1e3,'--','Color',[0.3 0.3 0.3],'LineWidth',1.5)
+    yline((scale.alpha_q*sp.min_ut)/1e3,'--','Color',[0.3 0.3 0.3],'LineWidth',1.5)
 
     % column header only (small + normal weight)
     if i == 1
@@ -162,17 +155,30 @@ for i = 1:n_units
     hmax_model = sp.a;       
 
     head1_norm = min(max((head1 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+    head1_minnorm = min(max((head1min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+    
     head2_norm = min(max((head2 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+    head2_minnorm = min(max((head2min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+    
     head3_norm = min(max((head3 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+    head3_minnorm = min(max((head3min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
 
-    head1_phys = scale.H0 + (head1_norm - 0.5) * scale.dH_m;  
+    head1_phys = scale.H0 + (head1_norm - 0.5) * scale.dH_m; 
+    head1_minphys = scale.H0 + (head1_minnorm - 0.5) * scale.dH_m; 
+
     head2_phys = scale.H0 + (head2_norm - 0.5) * scale.dH_m;  
-    head3_phys = scale.H0 + (head3_norm - 0.5) * scale.dH_m;  
+    head2_minphys = scale.H0 + (head2_minnorm - 0.5) * scale.dH_m; 
+
+    head3_phys = scale.H0 + (head3_norm - 0.5) * scale.dH_m; 
+    head3_minphys = scale.H0 + (head3_minnorm - 0.5) * scale.dH_m; 
 
     ax = subplot(n_units, subfig_n, row*subfig_n + 2);
     plot(head1_phys, 'LineStyle','-', 'Color', c1, 'LineWidth', lw); hold on;
-    plot(head2_phys, 'LineStyle','-', 'Color', c2, 'LineWidth', lw); 
+    plot(head1_minphys, 'LineStyle','--', 'Color', c1, 'LineWidth', 1.5);
+    plot(head2_phys, 'LineStyle','-', 'Color', c2, 'LineWidth', lw);
+    plot(head2_minphys, 'LineStyle','--', 'Color', c2, 'LineWidth', 1.5);
     plot(head3_phys, 'LineStyle','-', 'Color', c3, 'LineWidth', lw);
+    plot(head3_minphys, 'LineStyle','--', 'Color', c3, 'LineWidth', 1.5);
 
     if i == 1
         title('Head (m)','FontSize',font_title,'FontWeight','normal');
@@ -297,35 +303,18 @@ printBenchLatexBlock(D1, D2, D3, alg, 5, scale)
 
 
 function printBenchLatexBlock(Ddet, Ddiu, Dddu, algName, indentMM, scale)
-% =========================================================================
-% printBenchLatexBlock (SIMPLIFIED: ENERGY + AVG POWER)
-%
-% Prints LaTeX rows for:
-%   - System Total Energy [MWh]  (sum across units)
-%   - Unit i Energy [MWh]
-%   - Avg System Power [MW]      (= System Total / T_hours)
-%   - Avg Unit Power [MW]        (= Avg System / n_units)
-%
-% Physical energy computed from post-processed turbine release and head:
-%   u_norm  -> u_m3ps = scale.alpha_q * u_norm
-%   V_norm  -> h_model = a * V^b
-%           -> h_norm  = clip(h_model / a, 0, 1)
-%          -> H_m     = scale.H0 + (h_norm - 0.5) * scale.dH_m
-%   P_MW(t) = rho*g*eta*u_m3ps(t)*H_m(t) / 1e6
-%   E_MWh   = sum_t P_MW(t)   (dt = 1 hour)
-% =========================================================================
 
-    dt_hr = 1;       % fixed 1-hour timestep
-    rho   = 1000;    % kg/m^3
-    g     = 9.81;    % m/s^2
+    dt_hr = 1;       
+    rho   = 1000;    
+    g     = 9.81;    
     eta   = scale.eta;
 
     indent = sprintf('\\hspace{%dmm}', indentMM);
 
-    % Compute energy for each framework
-    [E_det, uE_det] = energySum(Ddet);
-    [E_diu, uE_diu] = energySum(Ddiu);
-    [E_ddu, uE_ddu] = energySum(Dddu);
+    % Compute energy + released volume for each framework
+    [E_det, uE_det, Vrel_det] = energySum(Ddet);
+    [E_diu, uE_diu, Vrel_diu] = energySum(Ddiu);
+    [E_ddu, uE_ddu, Vrel_ddu] = energySum(Dddu);
 
     n_units = numel(Ddet.sysparams);
     T_hours = Ddet.T * dt_hr;
@@ -339,37 +328,43 @@ function printBenchLatexBlock(Ddet, Ddiu, Dddu, algName, indentMM, scale)
     Pavg_unit_diu = Pavg_sys_diu / n_units;
     Pavg_unit_ddu = Pavg_sys_ddu / n_units;
 
+    % System efficiency [MWh/m^3]
+    Eff_det = E_det / (Vrel_det / 1e6);
+    Eff_diu = E_diu / (Vrel_diu / 1e6);
+    Eff_ddu = E_ddu / (Vrel_ddu / 1e6);
+
     fmtInt = @(x) regexprep(sprintf('%.0f', round(x)), '\B(?=(\d{3})+(?!\d))', ',');
 
-    % Multirow count: energy rows (1+n_units) + 2 avg-power rows
-    n_rows = (1 + n_units) + 2;
+    % Multirow count: energy rows (1+n_units) + 2 avg-power rows + 1 efficiency row
+    n_rows = (1 + n_units) + 3;
     
     fprintf('\\multirow{%d}{*}{%s}\n', n_rows, algName);
     
-    % System total energy (integer MWh)
     fprintf(' & System Total [MWh] & %s & %s & %s \\\\\n', ...
         fmtInt(E_det), fmtInt(E_diu), fmtInt(E_ddu));
     
-    % Unit-level energy (integer MWh)
     for i = 1:n_units
         fprintf(' & %sUnit %d & %s & %s & %s \\\\\n', ...
             indent, i, fmtInt(uE_det(i)), fmtInt(uE_diu(i)), fmtInt(uE_ddu(i)));
     end
     
-    % Avg powers (integer MW)
     fprintf(' & Avg System Power [MW] & %s & %s & %s \\\\\n', ...
         fmtInt(Pavg_sys_det), fmtInt(Pavg_sys_diu), fmtInt(Pavg_sys_ddu));
     
     fprintf(' & Avg Unit Power [MW] & %s & %s & %s \\\\\n', ...
         fmtInt(Pavg_unit_det), fmtInt(Pavg_unit_diu), fmtInt(Pavg_unit_ddu));
+
+    fprintf(' & System Efficiency [MWh/$10^6$ m$^3$] & %.2f & %.2f & %.2f \\\\\n', ...
+        Eff_det, Eff_diu, Eff_ddu);
     
     fprintf('\\hline\n');
 
-    function [E_system, E_unit] = energySum(D)
+    function [E_system, E_unit, Vrel_system] = energySum(D)
         T = D.T;
         n = numel(D.sysparams);
 
         E_unit = zeros(n,1);
+        Vrel_unit = zeros(n,1);
 
         for k = 1:n
             sp   = D.sysparams(k);
@@ -379,18 +374,22 @@ function printBenchLatexBlock(Ddet, Ddiu, Dddu, algName, indentMM, scale)
             u_norm = D.X(1:T, base+3);
             u_m3ps = scale.alpha_q * u_norm;
 
-            % Head proxy from normalized storage -> percent-full -> physical meters
+            % Total released volume [m^3]
+            Vrel_unit(k) = sum(u_m3ps) * 3600 * dt_hr;
+
+            % Head proxy from normalized storage -> physical meters
             V_norm  = D.X(1:T, base+1);
-            h_model = sp.a .* (V_norm.^sp.b);                % in [0, a]
-            h_norm  = min(max(h_model ./ sp.a, 0), 1);       % clip to [0,1]
+            h_model = sp.a .* (V_norm.^sp.b);
+            h_norm  = min(max(h_model ./ sp.a, 0), 1);
 
             H_m = scale.H0 + (h_norm - 0.5) * scale.dH_m;
 
-            % Instantaneous power in MW, then energy in MWh (dt_hr = 1)
+            % Power -> Energy
             P_MW = (rho * g * eta .* u_m3ps .* H_m) / 1e6;
-            E_unit(k) = sum(P_MW) * dt_hr;   % MWh
+            E_unit(k) = sum(P_MW) * dt_hr;
         end
 
         E_system = sum(E_unit);
+        Vrel_system = sum(Vrel_unit);
     end
 end

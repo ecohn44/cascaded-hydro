@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "det", "jcc-bon", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -99,22 +99,20 @@ end
 
 
 % Historical anchors
-scale.wet_muQ = 7160;
-scale.wet_stdQ = 2550;
-scale.dry_muQ = 2700;
+scale.dry_muQ = 3000;
 scale.dry_stdQ = 686;
-
 scale.mu_Q = scale.dry_muQ;
 scale.std_Q = scale.dry_stdQ;
 
 % Simulated metrics
-scale.mu_q = mean(q(:,1));
-scale.std_q = std(q(:,1));
-scale.H0 = 20;
-scale.dH_m = 2.5; 
+scale.mu_q = seasonparams.q0;
+scale.std_q = 0.004;
 
 % Plot streamflow profiles
 plotStreamflows(q, scale)
+
+% Plot PDFs for stochastic streamflow simulator
+plotDroughtParameterPDFs(scale)
 
 % Offline DIU covariance and std devs
 sigma_diu                 = modelparams.AR_std*ones(n,1);   % n×1 std devs
@@ -242,7 +240,7 @@ function plotStreamflows(q, scale)
                 plot(ax, [tmin tmin], [Qmin q0], '-', 'Color',[0.85 0.1 0.1], 'LineWidth',1.2);
                 text(tmin-.5, (q0+Qmin)/2, '$\alpha q_0$', ...
                     'Interpreter','latex', ...
-                    'FontSize',16, ...
+                    'FontSize',15, ...
                     'Color',[0.85 0.1 0.1], ...
                     'HorizontalAlignment','right');
             
@@ -255,7 +253,7 @@ function plotStreamflows(q, scale)
                 t_end   = drought_idx(end);
             
                 % duration line
-                yD  = 250;   % height of duration line
+                yD  = 1200;   % height of duration line
                 cap = 150;    % half-height of end caps
                 
                 % duration line
@@ -266,13 +264,13 @@ function plotStreamflows(q, scale)
                 plot(ax, [t_end t_end], [yD-cap yD+cap], 'k', 'LineWidth',2);
             
                 % duration label
-                text((t_start+t_end)/2, 600, '$D$', ...
+                text((t_start+t_end)/2, yD+350, '$D$', ...
                     'Interpreter','latex', ...
                     'FontSize',18, ...
                     'HorizontalAlignment','center');
             
                 % baseline label
-                text((t_start+t_end)/2, q0+500, '$q_0$', ...
+                text((t_start+t_end)/2, q0+400, '$q_0$', ...
                     'Interpreter','latex', ...
                     'FontSize',16, ...
                     'Color',[0.85 0.1 0.1], ...
@@ -350,3 +348,4 @@ function R = estimateR(T, n, lag, q, m)
     R = corr(E, 'Rows', 'complete');
 
 end
+
