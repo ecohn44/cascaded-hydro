@@ -20,8 +20,8 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % Toggle for creating folder and plotting
 make_dir = false;
 printplot = false; 
-save_mat = true; 
-save_streamflow = true;
+save_mat = false; 
+save_streamflow = false;
 
 % Static parameters 
 eta = .9;           % efficiency of release-energy conversion
@@ -39,8 +39,8 @@ eps = 0.05;         % risk tolerance
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("wet", "pulse", "pwl", "diu", "jcc-bon", "none");
+% Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -50,8 +50,8 @@ seasonparams = seasonparams(strcmp({seasonparams.mode}, simSettings.scenario));
 
 % Set baseline flow based on season
 if simSettings.season == "dry"
-    seasonparams.q0 = 0.9*sysparams(1).max_ut;
-    [sysparams.V0] = deal(0.1);
+    seasonparams.q0 = 0.85*sysparams(1).max_ut;
+    [sysparams.V0] = deal(0.25);
     D = 3.5;        % Simulation duration in days
 elseif simSettings.season == "wet"
     seasonparams.q0 = 0.8*sysparams(1).max_ut;
@@ -95,7 +95,7 @@ for i = 1:n
     dp    = baseStreamflow; 
 
     % Apply scaling to each inflow profile 
-    scale = 1; % severityScales(i);
+    scale = 1; %severityScales(i);
 
     if strcmpi(dp.mode, 'extended')
         dp.amp1 = baseStreamflow.amp1 * scale;
@@ -135,10 +135,8 @@ end
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-% Scaling factor for chance-constrained bounds
-scale = 1;
 
-[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, ...
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
 
 

@@ -18,7 +18,7 @@ close all;
 
 bounds_plot = "soc"; %options: "soc" "head"
 
-resultsPath = './resultsSSH/wet/';
+resultsPath = './resultsSSH/dry/';
 if ~exist(resultsPath,'dir')
     error('results folder not found: %s', resultsPath);
 end

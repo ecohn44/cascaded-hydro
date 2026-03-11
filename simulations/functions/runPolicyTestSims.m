@@ -10,7 +10,6 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
     % Dimensions
     T     = size(X,1);              % number of time steps
     n     = numel(sysparams);       % number of units
-    tt    = (1:T)';
 
     % Extract deterministic (solved) policy for all units
     % X columns per unit i: [V_i, p_i, u_i, s_i, q_mean_i]
@@ -68,10 +67,7 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
             u_i = u_opt(t,i);
 
             % Optimal spill policy 
-            % s_i = s_opt(t,i);
-
-            % Calculate spill 
-            s_i = max(0, V_prev(i) - Vmax(i) + inflow_i - u_i);
+            s_i = s_opt(t,i);
 
             % Next volume state
             V_i = V_prev(i) + inflow_i - u_i - s_i;
@@ -102,56 +98,29 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
         end
     end
 
-    %% Flood Metrics
-    headroom = zeros(T,n);
-    for i = 1:n
-        headroom(:,i) = Vmax(i) - V_sim(:,i);
-    end
-    
-    AFV_tot  = sum(headroom, 1);   % 1 x n  (sum over time)
-    AFV_mean = AFV_tot(:);         % n x 1
-    AFV_sys  = sum(AFV_tot);       % scalar
-    
-    fprintf('\n  AFV (time-integrated headroom) Report\n');
-    for i = 1:n
-        fprintf('Reservoir %d: AFV = %.4f\n', i, AFV_mean(i));
-    end
-    fprintf('System Total: AFV = %.4f\n', AFV_sys);
-
-
-    %% General Simulation Metrics
-
-    % Terminal volume (end-of-horizon storage)
-    V_T = V_sim(end, :);   % 1 x n
-    
-    fprintf('\n  Terminal Storage Report\n');
-    for i = 1:n
-        fprintf('Reservoir %d: V_T = %.4f\n', i, V_T(i));
-    end
-    fprintf('System Mean: mean(V_T) = %.4f\n', mean(V_T));
-    
-
     % Metric (IVI): Integrated (time-avg) violation magnitude
-    IVI = mean(viol_mag, 1); 
+    IVI = sum(viol_mag, 1); 
 
-    fprintf('\n  Monte Carlo Violation Report\n');
-    
-    for i = 1:n
+    %{
+        fprintf('\n  Monte Carlo Violation Report\n');
         
-        fprintf('Reservoir %d:\n', i);
-        fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
-    end
+        for i = 1:n
+            
+            fprintf('Reservoir %d:\n', i);
+            fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
+        end
+        
+        switch string(bounds)
+            case "det",     bLabel = "Deterministic";
+            case "icc",     bLabel = "Individual CC";
+            case "jcc-bon", bLabel = "Bonferroni JCC";
+            otherwise,      bLabel = char(bounds);
+        end
     
-    switch string(bounds)
-        case "det",     bLabel = "Deterministic";
-        case "icc",     bLabel = "Individual CC";
-        case "jcc-bon", bLabel = "Bonferroni JCC";
-        otherwise,      bLabel = char(bounds);
-    end
-
-    % Plot policy test volume trajectories for each reservoir
-    % plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
-    % plotSpill(tt, s_opt, s_sim, bLabel, policyLabel)
+        % Plot policy test volume trajectories for each reservoir
+        % plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
+        % plotSpill(tt, s_opt, s_sim, bLabel, policyLabel)
+    %}
 
 end
 
