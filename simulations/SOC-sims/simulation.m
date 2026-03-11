@@ -20,7 +20,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % Toggle for creating folder and plotting
 make_dir = false;
 printplot = false; 
-save_mat = true; 
+save_mat = false; 
 save_streamflow = false;
 
 % Static parameters 
@@ -95,15 +95,11 @@ for i = 1:n
     dp    = baseStreamflow; 
 
     % Apply scaling to each inflow profile 
-    scale = severityScales(i);
+    scale = 1; %severityScales(i);
 
     if strcmpi(dp.mode, 'extended')
         dp.amp1 = baseStreamflow.amp1 * scale;
     end
-
-    if i > 1
-        dp.q0 = (0.85+i/10)*sysparams(1).max_ut;
-    end 
 
     dp.shiftMult = i - 1;
 

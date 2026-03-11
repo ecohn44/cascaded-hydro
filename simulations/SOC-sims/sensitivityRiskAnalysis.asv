@@ -31,7 +31,7 @@ K = 100;            % number of MC sims
 [modelparams, sysparams, seasonparams] = dataload(n, N);
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -52,27 +52,26 @@ lag = 1;        % Travel time between units (hrs)
 LMP = ones(T, n); % simulatePrice(T, n, true);
 
 % Struct to hold outputs for each scenario
-alpha_set = .1:0.05:0.6;
-duration_set = 0.8:.1:2;
+alpha_set = .1:0.1:0.6;
+duration_set = 0.4:.4:2;
 phi_sweep = zeros(length(alpha_set), length(duration_set));
 
 fprintf('Data loading complete.\n');
 
 %% Step 2: SAMPLE STREAMFLOW BEHAVIOR & OPTIMIZE
-for a = 1:length(alpha_set)
-    alpha = alpha_set(a);
-    
-    for d = 1:length(duration_set)
-        eventDur = duration_set(d);
-
-        fprintf('Testing values of alpha = %.2f, D = %.2f\n', alpha, eventDur);
+for alpha = alpha_set
+    a = 1;
+    for D = 0.4:.4:2
+        d = 1;
+        
+        fprintf('Testing values of alpha = %.2f, D = %.2f\n', alpha, D);
         
         % Matrix for local streamflow 
         q = zeros(T+lag, n);
     
         % Build drought event 
         seasonparams.amp1 = alpha;
-        seasonparams.daysPerEvent = eventDur;
+        seasonparams.daysPerEvent = D;
         
         % Cascaded drought parameters
         baseStreamflow = seasonparams;
@@ -94,37 +93,16 @@ for a = 1:length(alpha_set)
     
         [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
         simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
-
-        % Manually adjust phi(t = 1) since under init conditions 
-        phi_vals(1) = 1;
     
         % Store risk attribution values
-        phi_sweep(a,d) =  min(phi_vals);
-
+        phi_sweep(a,d) = min(phi_vals);
+        d = d + 1;
     end 
-
+    a = a + 1;
 end 
 
 % plotRiskSpread(alphas_MC)
 
-% Plot Heat MaP
-figure;
-imagesc(alpha_set, duration_set, phi_sweep)
-set(gca,'YDir','normal');
-
-cblabel = 'Minimum Reliability Guarantee';
-xlabel('Drought Intensity (\alpha)', 'FontSize', 12);
-ylabel('Drought Duration (D)', 'FontSize', 12);
-
-cb = colorbar;
-ylabel(cb, cblabel, 'FontSize', 14);
-
-grid on;
-set(gca,'GridColor','k','GridAlpha',0.4,'LineWidth',1.0);
-
-
-save('phi_sweep.mat', 'phi_sweep');
-fprintf('Total runtime: %.2f seconds.\n', toc);
 
 function R = estimateR(T, n, lag, q, m)
 
