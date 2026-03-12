@@ -169,38 +169,13 @@ end
 % SECTION 5: PLOTTING
 % ========================================================================
 
-plotHeat(gamma_vals, xi_vals, J_vals, gamma0, xi0, "obj")
-plotHeat(gamma_vals, xi_vals, IVI_vals, gamma0, xi0, "IVI")
+xlab = 'Upstream Release Coefficient (\gamma)';
+ylab = 'Previous Forecast Error (\xi)';
+
+plotHeat(gamma_vals, xi_vals, J_vals, gamma0, xi0, "obj", xlab, ylab)
+plotHeat(gamma_vals, xi_vals, IVI_vals, gamma0, xi0, "IVI", xlab, ylab)
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
 
-function tf = isPD(A)
-    % Symmetrize first
-    A = (A + A')/2;      
-    [~,p] = chol(A);
-    tf = (p == 0);        % true if PD
-end
 
-function R = estimateR(T, n, lag, q, m)
-
-    alpha0 = m.AR_const;
-    alpha1 = m.AR_coef;
-
-    % Preallocate forecast and residuals
-    q_hat = nan(T, n);
-    E     = nan(T, n);
-    
-    % AR(1) forecast (q already starts at lag)
-    for t = 1:T
-        % Forecast streamflow based on lagged observation 
-        q_hat(t,:) = alpha0 + alpha1*q(t,:);
-
-        % Calculate forecast error based on actual observation 
-        E(t,:)     = q(t+lag,:) - q_hat(t,:);
-    end
-
-    % Compute correlation of forecast errors
-    R = corr(E, 'Rows', 'complete');
-
-end

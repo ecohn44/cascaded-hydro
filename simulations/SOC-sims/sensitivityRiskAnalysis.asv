@@ -1,7 +1,7 @@
 %% ========================================================================
 % Author: Eliza Cohn
 % Date: March 2026
-% Description: Probability Parameter Generator for MC Sims 
+% Description: Drought Parameter Sweep to test reliability 
 % =========================================================================
 
 tic; 
@@ -31,7 +31,7 @@ K = 100;            % number of MC sims
 [modelparams, sysparams, seasonparams] = dataload(n, N);
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -52,26 +52,28 @@ lag = 1;        % Travel time between units (hrs)
 LMP = ones(T, n); % simulatePrice(T, n, true);
 
 % Struct to hold outputs for each scenario
-alpha_set = .1:0.1:0.6;
-duration_set = 0.4:.4:2;
-phi_sweep = zeros(length(alpha_set), length(duration_set));
+alpha_set = .1:0.05:0.4;
+duration_set = 0.8:.1:2;
+baseline_set = 0.02:.0025:.045;
+phi_sweep = zeros(length(alpha_set), length(baseline_set));
 
 fprintf('Data loading complete.\n');
 
 %% Step 2: SAMPLE STREAMFLOW BEHAVIOR & OPTIMIZE
-for alpha = alpha_set
-    a = 1;
-    for D = 0.4:.4:2
-        d = 1;
-        
-        fprintf('Testing values of alpha = %.2f, D = %.2f\n', alpha, D);
+for a = 1:length(alpha_set)
+    alpha = alpha_set(a);
+    
+    for d = 1:length(baseline_set)
+        q0d = baseline_set(d);
+
+        fprintf('Testing values of alpha = %.2f,q0 = %.2f\n', alpha, q0d);
         
         % Matrix for local streamflow 
         q = zeros(T+lag, n);
     
         % Build drought event 
         seasonparams.amp1 = alpha;
-        seasonparams.daysPerEvent = D;
+        seasonparams.q0 = q0d;
         
         % Cascaded drought parameters
         baseStreamflow = seasonparams;
@@ -91,38 +93,24 @@ for alpha = alpha_set
         % Offline correlation matrix
         modelparams.Rcorr         = estimateR(T, n, lag, q, modelparams); % n×n correlation
     
+        try 
         [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
         simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
+        end
+
+        % Manually adjust phi(t = 1) since under init conditions 
+        phi_vals(1) = 1;
     
         % Store risk attribution values
-        phi_sweep(a,d) = min(phi_vals);
-        d = d + 1;
+        phi_sweep(a,d) =  min(phi_vals);
+
     end 
-    a = a + 1;
+
 end 
 
 % plotRiskSpread(alphas_MC)
 
-
-function R = estimateR(T, n, lag, q, m)
-
-    alpha0 = m.AR_const;
-    alpha1 = m.AR_coef;
-
-    % Preallocate forecast and residuals
-    q_hat = nan(T, n);
-    E     = nan(T, n);
-    
-    % AR(1) forecast (q already starts at lag)
-    for t = 1:T
-        % Forecast streamflow based on lagged observation 
-        q_hat(t,:) = alpha0 + alpha1*q(t,:);
-
-        % Calculate forecast error based on actual observation 
-        E(t,:)     = q(t+lag,:) - q_hat(t,:);
-    end
-
-    % Compute correlation of forecast errors
-    R = corr(E, 'Rows', 'complete');
-
-end
+xlab = 'Drought Intensity (\alpha)';
+ylab = 'Baseline Flow (q_0)';
+input = "phi";
+plotHeat(alpha_set, baseline_set, phi_sweep', 0, 0, input, xlab, ylab)

@@ -1,7 +1,7 @@
 %% ========================================================================
 % Author: Eliza Cohn
 % Date: March 2026
-% Description: Probability Parameter Generator for MC Sims 
+% Description: Drought Parameter Sweep to test reliability 
 % =========================================================================
 
 tic; 
@@ -31,7 +31,7 @@ K = 100;            % number of MC sims
 [modelparams, sysparams, seasonparams] = dataload(n, N);
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -52,9 +52,10 @@ lag = 1;        % Travel time between units (hrs)
 LMP = ones(T, n); % simulatePrice(T, n, true);
 
 % Struct to hold outputs for each scenario
-alpha_set = .1:0.05:0.6;
+alpha_set = .1:0.05:0.4;
 duration_set = 0.8:.1:2;
-phi_sweep = zeros(length(alpha_set), length(duration_set));
+baseline_set = 0.02:.0025:.045;
+phi_sweep = zeros(length(alpha_set), length(baseline_set));
 
 fprintf('Data loading complete.\n');
 
@@ -62,17 +63,17 @@ fprintf('Data loading complete.\n');
 for a = 1:length(alpha_set)
     alpha = alpha_set(a);
     
-    for d = 1:length(duration_set)
-        eventDur = duration_set(d);
+    for d = 1:length(baseline_set)
+        q0d = baseline_set(d);
 
-        fprintf('Testing values of alpha = %.2f, D = %.2f\n', alpha, eventDur);
+        fprintf('Testing values of alpha = %.2f, q0 = %.3f\n', alpha, q0d);
         
         % Matrix for local streamflow 
         q = zeros(T+lag, n);
     
         % Build drought event 
         seasonparams.amp1 = alpha;
-        seasonparams.daysPerEvent = eventDur;
+        seasonparams.q0 = q0d;
         
         % Cascaded drought parameters
         baseStreamflow = seasonparams;
@@ -92,59 +93,29 @@ for a = 1:length(alpha_set)
         % Offline correlation matrix
         modelparams.Rcorr         = estimateR(T, n, lag, q, modelparams); % n×n correlation
     
-        [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
-        simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
+        try 
+            [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
+            simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
+            
+            if simSettings.bounds == "jcc-ssh"
+                phi_vals(1) = 1;
+                phi_sweep(a,d) = phi_vals;
+            else
+                phi_sweep(a,d) = 1 - eps;
+            end
+        catch ME
 
-        % Manually adjust phi(t = 1) since under init conditions 
-        phi_vals(1) = 1;
-    
-        % Store risk attribution values
-        phi_sweep(a,d) =  min(phi_vals);
-
+            phi_sweep(a,d) = NaN;
+            fprintf('Optimization failed at alpha=%d, phi=%d\n', alpha, q0d);
+            continue
+        end
     end 
 
 end 
 
 % plotRiskSpread(alphas_MC)
 
-% Plot Heat MaP
-figure;
-imagesc(alpha_set, duration_set, phi_sweep)
-set(gca,'YDir','normal');
-
-cblabel = 'Minimum Reliability Guarantee';
-xlabel('Drought Intensity (\alpha)', 'FontSize', 12);
-ylabel('Drought Duration (D)', 'FontSize', 12);
-
-cb = colorbar;
-ylabel(cb, cblabel, 'FontSize', 14);
-
-grid on;
-set(gca,'GridColor','k','GridAlpha',0.4,'LineWidth',1.0);
-
-
-save('phi_sweep.mat', 'phi_sweep');
-fprintf('Total runtime: %.2f seconds.\n', toc);
-
-function R = estimateR(T, n, lag, q, m)
-
-    alpha0 = m.AR_const;
-    alpha1 = m.AR_coef;
-
-    % Preallocate forecast and residuals
-    q_hat = nan(T, n);
-    E     = nan(T, n);
-    
-    % AR(1) forecast (q already starts at lag)
-    for t = 1:T
-        % Forecast streamflow based on lagged observation 
-        q_hat(t,:) = alpha0 + alpha1*q(t,:);
-
-        % Calculate forecast error based on actual observation 
-        E(t,:)     = q(t+lag,:) - q_hat(t,:);
-    end
-
-    % Compute correlation of forecast errors
-    R = corr(E, 'Rows', 'complete');
-
-end
+xlab = 'Drought Intensity (\alpha)';
+ylab = 'Baseline Flow (q_0)';
+input = "phi";
+plotHeat(alpha_set, baseline_set, phi_sweep', 0, 0, input, xlab, ylab)

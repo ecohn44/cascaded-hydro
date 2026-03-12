@@ -119,7 +119,7 @@ function [params, sysparams, scenarioparams] = dataload(n, N)
 
     % Extended event (single-decay events)
     scenarioparams(2).mode         = 'extended';
-    scenarioparams(2).amp1         = 0.55;   % Magnitude of drought event %.15
+    scenarioparams(2).amp1         = 0.15;   % Magnitude of drought event %.15
     scenarioparams(2).nEvents      = 1;      % number of events
     scenarioparams(2).daysPerEvent = .8;      % drought length %.8
     scenarioparams(2).tauHours     = 12;     % decay rate
