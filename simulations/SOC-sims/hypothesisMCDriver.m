@@ -1,7 +1,7 @@
 %% Monte Carlo Driver and Benchmarking
 % Author: Eliza Cohn
 % Description:
-%   Benchmark DET (M1), DIU (M2), and DDU (M3) policies for a 4-unit
+%   Benchmark DET (M1), DIU (M2), and DDU (M3) policies for a 3-unit
 %   cascade under their corresponding uncertainty frameworks using
 %   Monte Carlo simulations. Then report total generation and violation
 %   statistics for your table.
@@ -16,7 +16,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 
 mode = 2; % Toggle between testing hypothesis 1 or 2
 
-season = "wet";
+season = "dry";
 baseFolder = './resultsBonferroni/' + season;
 simSettings.bounds = "jcc-bon";
 printplot = true;
@@ -34,7 +34,7 @@ q_flood =load("floodFlow.mat").q_save;
 
 % Set baseline flow based on season
 if season == "dry"
-    [sysparams.V0] = deal(0.1);
+    [sysparams.V0] = deal(0.25);
 elseif season == "wet"
     [sysparams.V0] = deal(0.8);
 end
@@ -90,10 +90,10 @@ for k = 1:numel(polCodes)
     end 
 
     % Run Policy Test Sims 
-    [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel);
+    % [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, simSettings.bounds, X_all, policyLabel);
 
     % Run MC Test Sims
-    % [V_sim, u_sim, p_sim, ~, ~, IVI, ~] = runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, printplot, policyLabel);
+    [V_sim, u_sim, p_sim, ~, ~, IVI, ~] = runMonteCarloSims(sysparams, simSettings.bounds, std_all, X_all, printplot, policyLabel);
 
     % Mean power per unit over MC runs 
     p_mean = mean(p_sim, 3); % T x n_units
@@ -133,7 +133,7 @@ end
 
 
 %% Print summary for table
-fprintf('\nMonte Carlo Benchmark Summary\n\n');
+fprintf('\nPolicy Testing Benchmark Summary\n\n');
 
 fprintf('Mean Integrated Violation Index (IVI):\n');
 for k = 1:n_pols

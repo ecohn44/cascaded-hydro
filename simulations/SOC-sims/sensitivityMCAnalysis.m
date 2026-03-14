@@ -33,8 +33,8 @@ K = 20000;            % number of MC sims
 % Policy test settings
 season = "dry";
 scenario = "extended";
-bounds = "jcc-bon";
-baseFolder = './resultsBonferroni/' + season;
+bounds = "jcc-ssh";
+baseFolder = './resultsSSH/' + season;
 
 % Policy codes (used in filenames) 
 polCodes = {'det','diu','ddu'};   

@@ -10,6 +10,7 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
     % Dimensions
     T     = size(X,1);              % number of time steps
     n     = numel(sysparams);       % number of units
+    tt = 1:1:T;
 
     % Extract deterministic (solved) policy for all units
     % X columns per unit i: [V_i, p_i, u_i, s_i, q_mean_i]
@@ -101,26 +102,24 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
     % Metric (IVI): Integrated (time-avg) violation magnitude
     IVI = sum(viol_mag, 1); 
 
-    %{
-        fprintf('\n  Monte Carlo Violation Report\n');
-        
-        for i = 1:n
-            
-            fprintf('Reservoir %d:\n', i);
-            fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
-        end
-        
-        switch string(bounds)
-            case "det",     bLabel = "Deterministic";
-            case "icc",     bLabel = "Individual CC";
-            case "jcc-bon", bLabel = "Bonferroni JCC";
-            otherwise,      bLabel = char(bounds);
-        end
+   
+    fprintf('\n  Monte Carlo Violation Report\n');
     
-        % Plot policy test volume trajectories for each reservoir
-        % plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
-        % plotSpill(tt, s_opt, s_sim, bLabel, policyLabel)
-    %}
+    for i = 1:n
+        
+        fprintf('Reservoir %d:\n', i);
+        fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
+    end
+    
+    switch string(bounds)
+        case "det",     bLabel = "Deterministic";
+        case "icc",     bLabel = "Individual CC";
+        case "jcc-bon", bLabel = "Bonferroni JCC";
+        otherwise,      bLabel = char(bounds);
+    end
+
+    % Plot policy test volume trajectories for each reservoir
+    plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
 
 end
 

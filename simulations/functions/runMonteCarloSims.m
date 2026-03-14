@@ -97,12 +97,6 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
     AFV_mean = mean(AFV_tot, 2);            % n x 1     (mean over runs)
     AFV_sys  = mean(sum(AFV_tot, 1));       % scalar   (system mean over runs)
     
-    fprintf('\n  AFV (time-integrated headroom) Report\n');
-    for i = 1:n
-        fprintf('Reservoir %d: AFV = %.4f\n', i, AFV_mean(i));
-    end
-    fprintf('System Total: AFV = %.4f\n', AFV_sys);
-
     spillStats.AFV_mean = AFV_mean;
     spillStats.AFV_sys  = AFV_sys;
 
@@ -125,14 +119,6 @@ function [V_sim, u_opt, p_sim, MFV, RLR, IVI, spillStats] = runMonteCarloSims(sy
     for i = 1:n
         
         fprintf('Reservoir %d:\n', i);
-        
-        %{
-        fprintf('   Mean Frequency of Violations (MFV): %.2f%%\n', ...
-                100 * MFV(i));
-
-        fprintf('   Run-Level Risk (RLR): %.2f%%\n', ...
-                100 * RLR(i));
-        %}
 
         fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
     end
