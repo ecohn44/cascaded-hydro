@@ -25,7 +25,7 @@ c = eta*rho_w*g/1e6;  % power prod coefficient (c = eta*rho_w*g/1e6)
 N = 40;             % number of sub-intervals for piecewise linear approx
 n = 3;              % number of units in cascaded network 
 eps = 0.05;         % risk tolerance 
-K = 200000;         % number of MC sims
+K = 100000;         % number of MC sims
 
 % Load simulation parameters
 [modelparams, sysparams, seasonparams] = dataload(n, N);
@@ -257,52 +257,43 @@ EIVI_DDU  = binMean(IVI_MC(:,mDDU));
 EPow_DIU  = binMean(P_MC(:,mDIU));
 EPow_DDU  = binMean(P_MC(:,mDDU));
 
-% Differences 
-dPviol = Pviol_DIU - Pviol_DDU;   
-dEIVI  = EIVI_DIU - EIVI_DDU;    
+% Differences (your requested directions)
+dPviol = Pviol_DDU - Pviol_DIU;   
+dEIVI  = EIVI_DDU - EIVI_DIU;    
 dPow   = EPow_DDU  - EPow_DIU;    
 
+
 % Plot
-figure('Name','Difference Heatmaps','NumberTitle','off', ...
+figure('Name','Difference Heatmaps (q0 integrated)','NumberTitle','off', ...
        'Units','normalized','Position',[0.12 0.18 0.8 0.3]);
 tiledlayout(1,3,'TileSpacing','compact','Padding','compact')
 
-
-% dPviol = Pviol_DIU - Pviol_DDU;  
 ax1 = nexttile;
 imagesc(aCenters, dCenters, dPviol); 
 axis xy; grid on;
 cb1 = colorbar;
-colormap(ax1, turbo);       
-clim([-0.01, 0.06])
-cb1.Limits = [0, 0.05]; 
+colormap(ax1, "parula"); 
 xlabel(xlab, "FontSize", fs); ylabel(ylab, "FontSize", fs);
-cblabel = 'Violation Rate (%)';
+cblabel = '\Delta Violation Rate (%)';
 ylabel(cb1, cblabel, "FontSize", fs)
 
-% dEIVI  = EIVI_DIU - EIVI_DDU; 
 ax2 = nexttile;
-imagesc(aCenters, dCenters, dEIVI/1e4); 
+imagesc(aCenters, dCenters, dEIVI/1e5); 
 axis xy; grid on;
 cb2 = colorbar;
 colormap(ax2, turbo);
-clim([5, 30])
-cb2.Limits = [10 24]; 
 xlabel(xlab, "FontSize", fs); ylabel(ylab, "FontSize", fs);
-cblabel = 'Mean IVI (10^4 m^3)';
+cblabel = '\Delta Mean IVI (10^5 m^3)';
 ylabel(cb2, cblabel, "FontSize", fs)
 
-% dPow   = EPow_DDU  - EPow_DIU; `  
 ax3 = nexttile;
 imagesc(aCenters, dCenters, dPow); 
 axis xy; grid on;
-cb3 = colorbar;
-colormap(ax3, flipud(turbo));
-clim([30 720])
-cb3.Limits = [100, 650]; 
+cb3 = 
+colormap(ax6, flipud(turbo));
 xlabel(xlab, "FontSize", fs); ylabel(ylab, "FontSize", fs);
-cblabel = 'Mean Total Energy (MWh)';
-ylabel(cb3, cblabel, "FontSize", fs)
+cblabel = '\Delta Mean Total Energy (MWh)';
+ylabel(cb, cblabel, "FontSize", fs)
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);

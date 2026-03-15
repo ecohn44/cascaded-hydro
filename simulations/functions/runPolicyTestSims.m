@@ -102,7 +102,7 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
     % Metric (IVI): Integrated (time-avg) violation magnitude
     IVI = sum(viol_mag, 1); 
 
-   
+    %{
     fprintf('\n  Monte Carlo Violation Report\n');
     
     for i = 1:n
@@ -120,6 +120,7 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
 
     % Plot policy test volume trajectories for each reservoir
     plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
+    %}
 
 end
 
