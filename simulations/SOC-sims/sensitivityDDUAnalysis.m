@@ -34,7 +34,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -44,15 +44,11 @@ seasonparams = seasonparams(strcmp({seasonparams.mode}, simSettings.scenario));
 
 % Set baseline flow based on season
 if simSettings.season == "dry"
-    seasonparams.q0 = 0.8*sysparams(1).max_ut;
-    [sysparams.V0] = deal(0.05);
+    seasonparams.q0 = 0.85*sysparams(1).max_ut;
+    [sysparams.V0] = deal(0.25);
     D = 3.5;  
-elseif simSettings.season == "wet"
-    seasonparams.q0 = 0.95*sysparams(1).max_ut;
-    [sysparams.V0] = deal(0.8);
-    D = 14;
-else
-    seasonparams.q0 = sysparams(1).max_ut;
+
+    seasonparams.amp1 = .35;
 end
 
 % Date range settings 
@@ -115,8 +111,8 @@ xi0 = modelparams.alpha;
 omega0 = modelparams.omega; 
 
 % Multiplicative sweep factors 
-xi_factors    = [0, 1, 5, 50]; %10, 20, 30, 40 50];
-gamma_factors = [0, 1, 2, 5];
+xi_factors    = linspace(1, 100, 5); 
+gamma_factors = linspace(1, 10, 5); 
 omega_factors = [0, 1, 2, 5];
 
 % Build sweep grids
@@ -130,6 +126,13 @@ n_omega = length(omega_vals);
 % Intialize array to store objective values 
 J_vals = zeros(n_xi, n_gamma); 
 IVI_vals = zeros(n_xi, n_gamma); 
+
+outDir = fullfile(thisFilePath, 'mats');
+
+S1 = load(fullfile(outDir, 'DDU_J_vals.mat'), 'J_vals');
+S2 = load(fullfile(outDir, 'DDU_IVI_vals.mat'), 'IVI_vals');
+J_vals = S1.J_vals;
+IVI_vals = S2.IVI_vals;
 
 for i = 1:n_xi
     xi = xi_vals(i);
@@ -173,9 +176,13 @@ xlab = 'Upstream Release Coefficient (\gamma)';
 ylab = 'Previous Forecast Error (\xi)';
 
 plotHeat(gamma_vals, xi_vals, J_vals, gamma0, xi0, "obj", xlab, ylab)
-plotHeat(gamma_vals, xi_vals, IVI_vals, gamma0, xi0, "IVI", xlab, ylab)
+plotHeat(gamma_vals, xi_vals, rescale(IVI_vals, "volume"), gamma0, xi0, "IVI", xlab, ylab)
+
+% Save results
+save(fullfile(outDir, 'DDU_J_vals.mat'), 'J_vals');
+save(fullfile(outDir, 'DDU_IVI_vals.mat'), 'IVI_vals');
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
-
+    
 

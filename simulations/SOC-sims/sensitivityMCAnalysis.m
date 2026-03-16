@@ -25,7 +25,7 @@ c = eta*rho_w*g/1e6;  % power prod coefficient (c = eta*rho_w*g/1e6)
 N = 40;             % number of sub-intervals for piecewise linear approx
 n = 3;              % number of units in cascaded network 
 eps = 0.05;         % risk tolerance 
-K = 200000;         % number of MC sims
+K = 200;         % number of MC sims
 
 % Load simulation parameters
 [modelparams, sysparams, seasonparams] = dataload(n, N);
@@ -129,6 +129,9 @@ for k = 1:K
     
         % Run Policy Test Sims 
         [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X_opt, "");
+        if sum(IVI) > 0
+            disp(IVI)
+        end
     
         % Total power generated (scaled to physical output)
         u_sim_phys = rescale(u_sim, "release");

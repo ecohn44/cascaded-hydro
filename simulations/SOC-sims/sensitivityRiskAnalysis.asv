@@ -31,7 +31,7 @@ K = 100;            % number of MC sims
 [modelparams, sysparams, seasonparams] = dataload(n, N);
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -102,7 +102,6 @@ for a = 1:length(alpha_set)
             [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
             simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
             
-            % Save policy trajectory for historical replay
             X_sweep{a, d} = X;
 
             if simSettings.bounds == "jcc-ssh"
@@ -127,6 +126,3 @@ xlab = 'Drought Intensity (\alpha)';
 ylab = 'Baseline Flow (q_0)';
 input = "phi";
 plotHeat(alpha_set, baseline_set, phi_sweep', 0, 0, input, xlab, ylab)
-
-save(sprintf('drought_sweep_%s.mat', simSettings.bounds), 'alpha_set', 'baseline_set', 'phi_sweep', 'X_sweep', 'q_sweep');
-fprintf('Total runtime: %.2f seconds.\n', toc);

@@ -14,8 +14,9 @@ if input == "obj"
 
 elseif input == "IVI"
     
-    Z = vals;
-    cblabel = 'Integrated Violation Index';
+    % rescaled to physical parameters
+    Z = vals/1e5;
+    cblabel = 'Integrated Violation Index (10^5 m^3)';
 
 elseif input == "phi"
 
@@ -34,8 +35,17 @@ if input == "phi"
     
     baseline = 0.95;
     d = .3; 
-    caxis([baseline-d, baseline+d])
+    clim([baseline-d, baseline+d])
     colormap(flipud(parula))
+
+elseif input == "obj"
+    set(gca,'YDir','normal');
+    colormap(flipud(summer))  
+
+elseif input == "IVI"
+    set(gca,'YDir','normal');
+    % clim([32, 35.5])
+    colormap(winter) 
 
 else
     set(gca,'YDir','normal');
@@ -47,9 +57,12 @@ ylabel(ylab,'FontSize',12)
 cb = colorbar;
 ylabel(cb,cblabel,'FontSize',14)
 
-if input == 'phi'
-    cb.Limits = [baseline-d baseline];      % zoom legend only
-    cb.Ticks  = (baseline-d):0.05:baseline;   % optional tick spacing
+if input == "phi"
+    cb.Limits = [baseline-d baseline];        % zoom legend only
+    cb.Ticks  = (baseline-d):0.05:baseline;  
+elseif input == "IVI"
+    %cb.Limits = [33 35]; 
+    %cb.Ticks  = 33:0.5:35;  
 end 
 
 grid on
