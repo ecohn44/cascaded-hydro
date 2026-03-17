@@ -35,6 +35,7 @@ switch lower(type)
         y = min(c .* x, F); % apply capacity rating 
 
     case "head"     % m
+        % convert from volume to head 
         x_floor = max(x, 0);  % clip negative volumes to zero
         h = a .* (x_floor .^ b);
         h_norm = min(max(h ./ a, 0), 1);

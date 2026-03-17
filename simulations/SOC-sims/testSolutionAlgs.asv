@@ -1,0 +1,48 @@
+%% ========================================================================
+% Author: Eliza Cohn
+% Date: March 2026
+% Description: Comparing the performance of BON to SSH on drought scenarios
+% where BON
+% =========================================================================
+
+
+load('drought_sweep_jcc-bon.mat');
+load('drought_sweep_jcc-ssh.mat'); 
+
+phi_bon = phi_sweep; X_bon = X_sweep; q_bon = q_sweep;
+
+phi_ssh = phi_sweep;
+
+% Storage for replay metrics
+IVI_replay        = nan(size(phi_bon));
+violation_replay  = nan(size(phi_bon));
+energy_replay     = nan(size(phi_bon));
+
+[fail_a, fail_d] = find(isnan(phi_bon));
+
+for k = 1:length(fail_a)
+    a = fail_a(k);
+    d = fail_d(k);
+
+    % Find nearest converged BON neighbor
+    [a_nb, d_nb] = nearestNeighbor(phi_bon, a, d);
+    
+    % Grab neighbor policy and failed cell's flow
+    X_neighbor = X_bon{a_nb, d_nb};
+    q_failed   = q_bon{a, d};
+
+    % Swap in the failed cell's streamflow by overwriting q_hist in X
+    % X columns per unit i: [V_i, p_i, u_i, s_i, q_mean_i]
+    for i = 1:n
+        base = 5*(i-1);
+        X_neighbor(:, base+5) = q_failed(:, i);  % inject failed flow
+    end
+
+    % Replay using your existing function
+    [V_sim, ~, p_sim, IVI] = runPolicyTestSims(sysparams, 'jcc-bon', X_neighbor, 'BON-replay');
+
+    % Store metrics
+    IVI_replay(a, d)       = sum(IVI);             % sum across units
+    energy_replay(a, d)    = sum(p_sim, 'all');
+    violation_replay(a, d) = mean(IVI > 0);        % fraction of units violated
+end

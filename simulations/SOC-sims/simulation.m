@@ -20,7 +20,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % Toggle for creating folder and plotting
 make_dir = false;
 printplot = false; 
-save_mat = true; 
+save_mat = false; 
 save_streamflow = false;
 
 % Static parameters 

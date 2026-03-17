@@ -1,7 +1,7 @@
 %% ========================================================================
 % Author: Eliza Cohn
 % Date: March 2026
-% Description: Drought Parameter Sweep to test reliability 
+% Description: DDU Parameter Sweep to test reliability 
 % =========================================================================
 
 tic; 

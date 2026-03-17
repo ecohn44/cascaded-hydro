@@ -23,6 +23,15 @@ elseif input == "phi"
     Z = vals;
     cblabel = 'Minimum Reliability Guarantee';
 
+elseif input == "IVI_diff"
+
+    Z = vals;
+    cblabel = 'IVI: BON - SSH (m^3)';
+
+elseif input == "energy"
+
+    Z = vals;
+    cblabel = 'Energy: SSH - BON (MWh)';
 end
 
 figure;
@@ -46,6 +55,14 @@ elseif input == "IVI"
     set(gca,'YDir','normal');
     % clim([32, 35.5])
     colormap(winter) 
+
+elseif input == "IVI_diff"
+    set(gca,'YDir','normal');
+    colormap(parula)  
+
+elseif input == "energy"
+    set(gca,'YDir','normal');
+    colormap(parula)
 
 else
     set(gca,'YDir','normal');
