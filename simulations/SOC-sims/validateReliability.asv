@@ -1,0 +1,102 @@
+%% ========================================================================
+% Author: Eliza Cohn
+% Date: March 2026
+% Description: Monte Carlo violation test 
+% =========================================================================
+
+clc; clear; close all;
+
+K = 1000;         % number of MC simulations
+sigma = 0.015;   % noise std
+rng(0)
+
+% Load precomputed results
+load('./mats/drought_sweep_jcc-bon.mat');
+phi_bon = phi_sweep; X_bon = X_sweep; q = q_sweep;
+
+load('./mats/drought_sweep_jcc-ssh.mat');
+phi_ssh = phi_sweep; X_ssh = X_sweep;
+
+n   = 3;
+N   = 40;        % piecewise intervals
+[modelparams, sysparams, seasonparams] = dataload(n, N);
+
+% Simulation horizon
+D = 3.5;         % days
+T = 24*D;        % hours
+lag = 1;
+
+Vmin = sysparams(1).min_V;   % minimum storage
+
+alpha_set = 0.1:0.05:0.4;
+baseline_set = 0.02:0.0025:0.045;
+
+empirical_phi_ssh = zeros(length(alpha_set), length(baseline_set));
+empirical_phi_bon = zeros(length(alpha_set), length(baseline_set));
+
+for a = 1:length(alpha_set)
+    for d = 1:length(baseline_set)
+    
+        % Base inflow for this grid cell
+        q_cell = q{a,d};
+    
+        % Policies
+        X_ssh_cell = X_ssh{a,d};
+        X_bon_cell = X_bon{a,d};
+    
+        % BON fallback if needed
+        if isnan(phi_bon(a,d))
+            [a_nb,d_nb] = nearestNeighbor(phi_bon,a,d);
+            X_bon_cell = X_bon{a_nb,d_nb};
+        end
+    
+        % Preallocate volume arrays: T x n x K
+        V_ssh_all = zeros(T,n,K);
+        V_bon_all = zeros(T,n,K);
+    
+        % Generate all K inflow realizations at once
+        noise_all = sigma * randn(T,n,K);
+        q_samples = max(q_cell + noise_all,0);  % avoid negative inflows
+
+
+        for k = 1:K
+            % Inject inflows into policies
+            for i = 1:n
+                base = 5*(i-1);
+                X_ssh_cell(:,base+5) = q_samples(:,i,k);
+                X_bon_cell(:,base+5) = q_samples(:,i,k);
+            end
+    
+            % Run policy simulations
+            [V_ssh,~,~,~] = runPolicyTestSims(sysparams,'jcc-ssh',X_ssh_cell,"");
+            [V_bon,~,~,~] = runPolicyTestSims(sysparams,'jcc-bon',X_bon_cell,"");
+    
+            V_ssh_all(:,:,k) = V_ssh;
+            V_bon_all(:,:,k) = V_bon;
+        end
+    
+        % Compute empirical per-timestep reliability
+        phi_ssh_t = mean(V_ssh_all >= Vmin,3);  % T x n
+        phi_bon_t = mean(V_bon_all >= Vmin,3);
+    
+        % Minimum over reservoirs per timestep
+        phi_ssh_t_min = min(phi_ssh_t,[],2);    % T x 1
+        phi_bon_t_min = min(phi_bon_t,[],2);
+    
+        % Minimum over time (matches phi_sweep)
+        empirical_phi_ssh(a,d) = min(phi_ssh_t_min);
+        empirical_phi_bon(a,d) = min(phi_bon_t_min);
+    
+    end
+end
+
+% Compare predicted vs empirical
+calibration_ssh = empirical_phi_ssh - phi_ssh;
+calibration_bon = empirical_phi_bon - phi_bon;
+
+% You can plot calibration heatmaps for your slide
+figure; heatmap(alpha_set, baseline_set, calibration_ssh', 'Colormap', parula, 'ColorbarVisible','on')
+title('SSH empirical - predicted reliability')
+
+figure; heatmap(alpha_set, baseline_set, calibration_bon', 'Colormap', parula, 'ColorbarVisible','on')
+title('BON empirical - predicted reliability')

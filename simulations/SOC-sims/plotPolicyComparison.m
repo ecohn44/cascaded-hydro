@@ -60,7 +60,7 @@ function plotPolicyComparison(IVI_bon, IVI_ssh, energy_bon, energy_ssh, alpha_se
     h_bon = patch(nan, nan, nan, 'FaceColor', bon_color,   'EdgeColor', 'k');
     h_ssh = patch(nan, nan, nan, 'FaceColor', ssh_color, 'EdgeColor', 'k', 'FaceAlpha', 0.4);
     
-    legend([h_bon h_ssh], 'BON', 'SSH', 'Location', 'northeast');
+    legend([h_bon h_ssh], 'BON', 'SSH', 'Location', 'northwest');
     
 
 end

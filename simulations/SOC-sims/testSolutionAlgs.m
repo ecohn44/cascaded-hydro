@@ -52,6 +52,7 @@ for a = 1:length(alpha_set)
             base = 5*(i-1);
             X_ssh_cell(:, base+5) = q_cell(:, i);
         end
+        
         [V_ssh, u_ssh, p_ssh, IVI_ssh_val] = runPolicyTestSims(sysparams, 'jcc-ssh', X_ssh_cell, "");
         IVI_ssh(a,d)    = sum(rescale(IVI_ssh_val, "volume"));
         h_phys_ssh = rescale(V_ssh, "head");
@@ -61,7 +62,7 @@ for a = 1:length(alpha_set)
     end
 end
 
-%% Plot
+% Plot
 plotPolicyComparison(IVI_bon, IVI_ssh, energy_bon, energy_ssh, alpha_set, baseline_set);
 
 IVI_diff    = IVI_bon    - IVI_ssh;
@@ -73,15 +74,4 @@ plotHeat(alpha_set, baseline_set, IVI_diff', 0, 0, "IVI_diff", ...
 plotHeat(alpha_set, baseline_set, energy_diff', 0, 0, "energy", ...
     'Drought Intensity (\alpha)', 'Baseline Flow (q_0)');
 
-
-function [a_nb, d_nb] = nearestNeighbor(phi_bon, a, d)
-    [rows, cols] = find(~isnan(phi_bon));
-    if isempty(rows)
-        error('No converged BON cells found.');
-    end
-    distances = sqrt((rows - a).^2 + (cols - d).^2);
-    [~, idx]  = min(distances);
-    a_nb = rows(idx);
-    d_nb = cols(idx);
-end
 
