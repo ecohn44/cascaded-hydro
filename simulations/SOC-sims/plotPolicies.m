@@ -13,6 +13,12 @@ close all; clc;
 season = "dry";
 alg = "SSH";
 
+N = 40;
+n = 3;
+
+% Load inflow data 
+[modelparams, sysparams, seasonparams] = dataload(n, N);
+
 % Scale Metrics
 % Historical anchors
 scale.dry_muQ = 3000;
@@ -86,7 +92,7 @@ end
 
 % Y-tick formatting (release)
 u_max = max(u_all);
-u_step = 5;                        
+u_step = 2;                        
 u_hi = ceil(u_max/u_step)*u_step;
 u_ticks = 0:u_step:u_hi;
 
@@ -139,8 +145,14 @@ for i = 1:n_units
     end
     ylabel(sprintf('Unit %d', sp.unit),'FontSize',font_unit);
 
-    xlim([1, T]);
-    ylim([0, u_hi]);
+    % xlim([1, T]);
+    % ylim([0, u_hi]);
+
+    xlim([30 50])
+    ylim([5 10])
+    
+    set(gca,'FontSize',12,'LineWidth',1,'Box','on','TickDir','out')
+
     yticks(u_ticks);
 
     grid on; set(ax,'XGrid','off','YGrid','on');
@@ -230,6 +242,7 @@ set(gcf,'Renderer','painters');
 exportgraphics(gcf,'figures/dry_policy_trajectories.pdf','ContentType','vector');
 
 
+%{
 %% Fig 2: Accumulated Energy 
 rho = 1000; g = 9.81; eta = scale.eta;
 tt_all = (1:T)';
@@ -296,7 +309,7 @@ function P_sys_MW = local_system_power_MW(D, scale, rho, g, eta)
         P_sys_MW = P_sys_MW + P_unit_MW;
     end
 end
-
+%}
 
 printBenchLatexBlock(D1, D2, D3, alg, 5, scale)
 
