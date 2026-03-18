@@ -75,3 +75,88 @@ plotHeat(alpha_set, baseline_set, energy_diff', 0, 0, "energy", ...
     'Drought Intensity (\alpha)', 'Baseline Flow (q_0)');
 
 
+%% 2D Line Plot
+figure; hold on; grid on;
+
+energy_ssh = energy_ssh/1e3;
+energy_bon = energy_bon/1e3;
+
+% Partition low and high flows 
+nq = size(energy_ssh,2);
+low_idx  = 1:floor(nq/2);
+high_idx = floor(nq/2)+1:nq;
+
+c_bon = [0 0.4470 0.7410];      % benchmark (blue)
+c_bon_dark = [0 0.2 0.5];
+c_ssh = [0.2 0.8 0.2];    % light green shading
+c_ssh_dark  = [0 0.5 0];        % dark green mean line
+
+mean_ssh_low  = mean(energy_ssh(:,low_idx), 2, 'omitnan');
+mean_ssh_high = mean(energy_ssh(:,high_idx),2, 'omitnan');
+mean_bon_low  = mean(energy_bon(:,low_idx), 2, 'omitnan');
+mean_bon_high = mean(energy_bon(:,high_idx),2, 'omitnan');
+
+
+std_ssh_low  = std(energy_ssh(:,low_idx), 0, 2);
+std_ssh_high = std(energy_ssh(:,high_idx),0, 2);
+std_bon_low  = std(energy_bon(:,low_idx), 0, 2);
+std_bon_high = std(energy_bon(:,high_idx),0, 2);
+
+
+% BON Low Flow
+fill([alpha_set, fliplr(alpha_set)], ...
+     [mean_bon_low'+std_bon_low', fliplr(mean_bon_low'-std_bon_low')], ...
+     c_bon, 'FaceAlpha',0.2, 'EdgeColor','none');
+
+% BON High Flow
+fill([alpha_set, fliplr(alpha_set)], ...
+     [mean_bon_high'+std_bon_high', fliplr(mean_bon_high'-std_bon_high')], ...
+     c_bon, 'FaceAlpha',0.1, 'EdgeColor','none');  % lighter for distinction
+
+% SSH Low Flow
+fill([alpha_set, fliplr(alpha_set)], ...
+     [mean_ssh_low'+std_ssh_low', fliplr(mean_ssh_low'-std_ssh_low')], ...
+     c_ssh, 'FaceAlpha',0.2, 'EdgeColor','none');
+
+% SSH High Flow
+fill([alpha_set, fliplr(alpha_set)], ...
+     [mean_ssh_high'+std_ssh_high', fliplr(mean_ssh_high'-std_ssh_high')], ...
+     c_ssh, 'FaceAlpha',0.1, 'EdgeColor','none');
+
+% Mean lines
+plot(alpha_set, mean_bon_low,  '-o','LineWidth',2.5,'Color',c_bon_dark, 'MarkerFaceColor',c_bon_dark,'MarkerSize',10)
+plot(alpha_set, mean_bon_high, '-s','LineWidth',2.5,'Color',c_bon_dark, 'MarkerSize',10)
+plot(alpha_set, mean_ssh_low,  '-o','LineWidth',2.5,'Color',c_ssh_dark, 'MarkerFaceColor',c_ssh_dark,'MarkerSize',10)
+plot(alpha_set, mean_ssh_high, '-s','LineWidth',2.5,'Color',c_ssh_dark, 'MarkerSize',10)
+
+ax = gca;                  % get current axes
+ax.FontSize = 14;           % increase tick labels (x and y)
+ax.LineWidth = 1.5;         % optional: thicker axes lines for clarity
+
+xlabel('Drought Intensity \alpha', FontSize=16)
+ylabel('Total Energy (GWh)', FontSize=16)
+xlim([min(alpha_set) max(alpha_set)])
+
+% Legend
+hMean_ssh = [plot(NaN,NaN,'-o','Color',c_ssh_dark,'MarkerFaceColor',c_ssh_dark,'LineWidth',2), ...
+         plot(NaN,NaN,'-s','Color',c_ssh_dark,'LineWidth',2)];
+hBand_ssh = [fill(NaN,NaN,c_ssh,'FaceAlpha',0.2,'EdgeColor','none')];
+
+hMean_bon = [plot(NaN,NaN,'-o','Color',c_bon_dark,'MarkerFaceColor',c_bon_dark,'LineWidth',2), ...
+         plot(NaN,NaN,'-s','Color',c_bon_dark,'LineWidth',2)];
+
+hBand_bon = [fill(NaN,NaN,c_bon,'FaceAlpha',0.2,'EdgeColor','none')];
+
+hLegend = legend([hMean_ssh hBand_ssh hMean_bon hBand_bon], {'SSH Low Flow','SSH High Flow', 'SSH ±1σ'...
+                       'BON Low Flow','BON High Flow','BON ±1σ'});
+
+% Make it larger
+hLegend.FontSize = 16;          % increase font size
+hLegend.Box = 'off';            % optional, remove box
+
+% Place below figure
+hLegend.Orientation = 'horizontal';
+hLegend.Location = 'southoutside';  % below the axes
+hLegend.NumColumns = 3;             % 2 columns: SSH vs BON
+
+grid off
