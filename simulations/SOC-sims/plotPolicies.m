@@ -43,11 +43,11 @@ printplot = false;
 
 set(groot,'defaultAxesFontName','Helvetica');
 set(groot,'defaultTextFontName','Helvetica');
-font_title = 22;
-font_axis  = 18;
-font_tick  = 16;
-font_unit  = 18;
-font_leg   = 18;
+font_title = 14;
+font_axis  = 14;
+font_tick  = 14;
+font_unit  = 14;
+font_leg   = 14;
 lw    = 2.5;
 
 % Load files for Unit 1 just to get sysparams / n_units
@@ -64,13 +64,10 @@ n_units = numel(D1.sysparams);
 T       = D1.T;
 
 % Create one big figure for all units
-fig = figure('Position',[100 100 400*n_units 300*n_units]);
+fig = figure('Position',[100 100 900 700]);
 
-if season == "dry"
-    subfig_n = 2;  % number of states to plot
-else
-    subfig_n = 3; 
-end
+subfig_n = 2;  % number of cols
+
 
 labels = {upper(tag1), upper(tag2), upper(tag3)};
 
@@ -139,17 +136,15 @@ for i = 1:n_units
     % column header only (small + normal weight)
     if i == 1
         title('Release (10^3 m^3/s)','FontSize',font_title,'FontWeight','normal');
-    end
-    if i == n_units
+    elseif i == n_units
         xlabel('Time (hours)','FontSize',font_axis);
     end
     ylabel(sprintf('Unit %d', sp.unit),'FontSize',font_unit);
 
     % xlim([1, T]);
     % ylim([0, u_hi]);
-
-    xlim([30 50])
     ylim([5 10])
+    xlim([30 50])
     
     set(gca,'FontSize',12,'LineWidth',1,'Box','on','TickDir','out')
 
@@ -206,22 +201,6 @@ for i = 1:n_units
     grid on; set(ax,'XGrid','off','YGrid','on');
     set(ax,'FontSize',font_tick);
 
-    if season == "wet"
-        ax = subplot(n_units, subfig_n, row*subfig_n + 3);
-        plot(s1, 'Color', c1, 'LineWidth', lw); hold on;
-        plot(s2, 'Color', c2, 'LineWidth', lw);
-        plot(s3, 'Color', c3, 'LineWidth', lw);
-        if i == 1
-            title('Spill (m^3/s)','FontSize',font,'FontWeight','normal');
-        end 
-        if i == n_units
-            xlabel('Time (hours)','FontSize',font_axis);
-        end
-        ylabel(sprintf('Unit %d', sp.unit),'FontSize',font_unit);
-        xlim([1, T]);
-        grid on; set(ax,'XGrid','off','YGrid','on');
-        set(ax,'FontSize',font_tick);
-    end
 end
 
 % Global legend (below)
