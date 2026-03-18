@@ -134,6 +134,7 @@ S2 = load(fullfile(outDir, 'DDU_IVI_vals.mat'), 'IVI_vals');
 J_vals = S1.J_vals;
 IVI_vals = S2.IVI_vals;
 
+%{
 for i = 1:n_xi
     xi = xi_vals(i);
     
@@ -166,7 +167,7 @@ for i = 1:n_xi
         IVI_vals(i,j) = sum(IVI);
     end
 end
-
+%}
 
 %% ========================================================================
 % SECTION 5: PLOTTING
@@ -175,8 +176,8 @@ end
 xlab = 'Upstream Release Coefficient (\gamma)';
 ylab = 'Previous Forecast Error (\xi)';
 
-plotHeat(gamma_vals, xi_vals, J_vals, gamma0, xi0, "obj", xlab, ylab)
-plotHeat(gamma_vals, xi_vals, rescale(IVI_vals, "volume"), gamma0, xi0, "IVI", xlab, ylab)
+%plotHeat(gamma_vals, xi_vals, J_vals, gamma0, xi0, "obj", xlab, ylab)
+%plotHeat(gamma_vals, xi_vals, rescale(IVI_vals, "volume"), gamma0, xi0, "IVI", xlab, ylab)
 
 % Save results
 save(fullfile(outDir, 'DDU_J_vals.mat'), 'J_vals');
@@ -186,3 +187,30 @@ fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
     
 
+% Average J_vals and IVI_vals over xi (rows)
+J_avg = mean(J_vals, 1);      % 1 × n_gamma
+IVI_avg = mean(rescale(IVI_vals, "volume"), 1);  % 1 × n_gamma
+
+figure('Color','w'); % white background
+
+markersize = 8;
+
+%% Plot: Mean Objective (J)
+subplot(2,1,1); hold on; grid on;
+plot(gamma_vals, J_avg, '-', 'Color', [0.85, 0.33, 0.1], 'LineWidth',2, ...   % Dark green
+     'Marker','o', 'MarkerFaceColor', [0.85, 0.33, 0.1], 'MarkerSize',markersize);
+xlabel(xlab, 'FontSize',14);
+ylabel('Mean Generation Increase (%)', 'FontSize',14);
+set(gca, 'FontSize',12, 'LineWidth',1.2, 'Box','on');
+ylim([15 23])
+xlim([min(gamma_vals) max(gamma_vals)]);
+
+%% Plot: Mean IVI
+subplot(2,1,2); hold on; grid on;
+plot(gamma_vals, IVI_avg/1e5, '-', 'Color', [0.4, 0.4, 0.4], 'LineWidth',2, ...  % Dark blue
+     'Marker','o', 'MarkerFaceColor', [0.4, 0.4, 0.4], 'MarkerSize',markersize);
+xlabel(xlab, 'FontSize',14);
+ylabel('Mean IVI (10^5 m^3)', 'FontSize',14);
+set(gca, 'FontSize',12, 'LineWidth',1.2, 'Box','on');
+xlim([min(gamma_vals) max(gamma_vals)]);
+ylim([5 35])
