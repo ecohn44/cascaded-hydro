@@ -220,6 +220,96 @@ end
 set(gcf,'Renderer','painters');
 exportgraphics(gcf,'figures/dry_policy_trajectories.pdf','ContentType','vector');
 
+fig = figure('Position',[100 100 900 700]);  % Release figure
+for i = 1:n_units
+    sp   = D1.sysparams(i);
+    base = (i-1)*5;
+
+    % Extract releases (same as before)
+    V1 = D1.X(:, base+1);  u1 = D1.X(:, base+3);  
+    V2 = D2.X(:, base+1);  u2 = D2.X(:, base+3);  
+    V3 = D3.X(:, base+1);  u3 = D3.X(:, base+3);  
+
+    % Physical scaling
+    u1_phys = (scale.alpha_q * u1) / 1e3; 
+    u2_phys = (scale.alpha_q * u2) / 1e3; 
+    u3_phys = (scale.alpha_q * u3) / 1e3; 
+
+    ax = subplot(n_units,1,i);  % <-- change from n_units x subfig_n to n_units x 1
+    plot(u1_phys, 'Color', c1, 'LineWidth', lw); hold on;
+    plot(u2_phys, 'Color', c2, 'LineWidth', lw);
+    plot(u3_phys, 'Color', c3, 'LineWidth', lw);
+
+    yline((scale.alpha_q*sp.max_ut)/1e3,'--','Color',[0.3 0.3 0.3],'LineWidth',1.5)
+    yline((scale.alpha_q*sp.min_ut)/1e3,'--','Color',[0.3 0.3 0.3],'LineWidth',1.5)
+
+    if i == 1
+        title('Release (10^3 m^3/s)','FontSize',font_title,'FontWeight','normal');
+    elseif i == n_units
+        xlabel('Time (hours)','FontSize',font_axis);
+    end
+    ylabel(sprintf('Unit %d', sp.unit),'FontSize',font_unit);
+
+    ylim([5 10])
+    xlim([30 50])
+    yticks(u_ticks)
+    grid on; set(ax,'XGrid','off','YGrid','on'); set(ax,'FontSize',font_tick);
+end
+
+fig = figure('Position',[100 100 900 600]);  % Head figure
+h1_leg = []; h2_leg = []; h3_leg = [];      % legend handles
+
+for i = 1:n_units
+    sp   = D1.sysparams(i);
+    base = (i-1)*5;
+
+    % Extract head trajectories (same as before)
+    V1 = D1.X(:, base+1);  V1min = D1.V_eff(:, 2*i);
+    V2 = D2.X(:, base+1);  V2min = D2.V_eff(:, 2*i);
+    V3 = D3.X(:, base+1);  V3min = D3.V_eff(:, 2*i);
+
+    head1_phys = scale.H0 + ((sp.a*(V1.^sp.b) - 0)./sp.a - 0.5)*scale.dH_m;
+    head1_minphys = scale.H0 + ((sp.a*(V1min.^sp.b) - 0)./sp.a - 0.5)*scale.dH_m;
+    head2_phys = scale.H0 + ((sp.a*(V2.^sp.b) - 0)./sp.a - 0.5)*scale.dH_m;
+    head2_minphys = scale.H0 + ((sp.a*(V2min.^sp.b) - 0)./sp.a - 0.5)*scale.dH_m;
+    head3_phys = scale.H0 + ((sp.a*(V3.^sp.b) - 0)./sp.a - 0.5)*scale.dH_m;
+    head3_minphys = scale.H0 + ((sp.a*(V3min.^sp.b) - 0)./sp.a - 0.5)*scale.dH_m;
+
+    ax = subplot(n_units,1,i);  % <-- single column
+    h1 = plot(head1_phys, 'LineStyle','-', 'Color', c1, 'LineWidth', lw); hold on;
+    plot(head1_minphys, 'LineStyle','--', 'Color', c1, 'LineWidth', 1.5);
+    h2 = plot(head2_phys, 'LineStyle','-', 'Color', c2, 'LineWidth', lw);
+    plot(head2_minphys, 'LineStyle','--', 'Color', c2, 'LineWidth', 1.5);
+    h3 = plot(head3_phys, 'LineStyle','-', 'Color', c3, 'LineWidth', lw);
+    plot(head3_minphys, 'LineStyle','--', 'Color', c3, 'LineWidth', 1.5);
+
+    % store handles from first unit for legend
+    if i == 1
+        h1_leg = h1; h2_leg = h2; h3_leg = h3;
+    end
+
+    if i == 1
+        title('Head (m)','FontSize',font_title,'FontWeight','normal');
+    elseif i == n_units
+        xlabel('Time (hours)','FontSize',font_axis);
+    end
+    ylim([H_lo, H_hi])
+    xlim([1, T])
+    yticks(H_ticks)
+    grid on; set(ax,'XGrid','off','YGrid','on'); set(ax,'FontSize',font_tick);
+end
+
+% Global legend (bottom)
+labels = {upper(tag1), upper(tag2), upper(tag3)};
+lg = legend([h1_leg h2_leg h3_leg], labels{:}, ...
+            'Orientation', 'horizontal', ...
+            'FontSize', font_leg, ...
+            'Box', 'off');
+lg.ItemTokenSize = [40, 28];
+drawnow;
+legendPos = lg.Position;
+legendWidth = legendPos(3);
+lg.Position = [0.5 - legendWidth/2, 0.01, legendWidth, legendPos(4)];
 
 %{
 %% Fig 2: Accumulated Energy 
