@@ -118,7 +118,7 @@ set(gca,'FontSize',14)
 
 %% Fig 3: Quantile-binned box-bars for Residuals Standard Deviation vs Upstream Release
 
-res_std = abs(res); 
+res_std = abs(res(valid)); 
 
 % Quantile bins (equal counts) 
 nbins = 12;  
@@ -173,7 +173,7 @@ for i = 1:nbins
 end
 
 grid on; box on
-set(gca,'FontSize',14,'LineWidth',1.2)
+set(gca,'FontSize',16,'LineWidth',1.2)
 
 % Create Legend
 h_box = fill(nan, nan, [0.35 0.75 1.0], ...
@@ -190,7 +190,9 @@ h_whisk = plot(nan, nan, 'k', ...
     'LineWidth',1.2, ...
     'DisplayName','Whiskers (15–85%)');
 
-legend([h_box, h_med, h_whisk], 'Location','northwest');
+legend([h_box, h_med, h_whisk], ...
+    'Location','northwest', ...
+    'FontSize',16);
 
 xlabel('Upstream Release (10^3 m^3/s)')  % median bin
 ylabel('Residual Magnitude (m^3/s)')
@@ -208,7 +210,7 @@ xticklabels(compose('%.1f', cent/1e3))
 
 %% Plot #4: Normal Distributions from DIU and DDU
 
-e = res;   % signed residuals (m^3/s)
+e = res(valid);   % signed residuals (m^3/s)
 
 % Quantile bins for low/high release regimes
 nbins = 12;
