@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin approx, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -253,7 +253,7 @@ function plotStreamflows(q, scale)
                 t_end   = drought_idx(end);
             
                 % duration line
-                yD  = 1200;   % height of duration line
+                yD  = 1750;   % height of duration line
                 cap = 150;    % half-height of end caps
                 
                 % duration line
@@ -264,7 +264,7 @@ function plotStreamflows(q, scale)
                 plot(ax, [t_end t_end], [yD-cap yD+cap], 'k', 'LineWidth',2);
             
                 % duration label
-                text((t_start+t_end)/2, yD+350, '$D$', ...
+                text((t_start+t_end)/2, yD+250, '$D$', ...
                     'Interpreter','latex', ...
                     'FontSize',18, ...
                     'HorizontalAlignment','center');
@@ -279,7 +279,7 @@ function plotStreamflows(q, scale)
 
         % axes limits
         xlim(ax, [1, T]);
-        ylim(ax, [ylo, yhi]);
+        ylim(ax, [1500, yhi]);
         yticks(ax, 0:1000:yhi);
 
         % labels
