@@ -12,6 +12,7 @@ close all; clc;
 
 season = "dry";
 alg = "SSH";
+plot_storage_as = "volume";   % "head" or "volume"
 
 N = 40;
 n = 3;
@@ -25,6 +26,9 @@ scale.dry_muQ = 3000;
 scale.dry_stdQ = 686;
 scale.mu_Q = scale.dry_muQ;
 scale.std_Q = scale.dry_stdQ;
+
+% Storage scaling [m^3] 
+scale.Vcap_m3 = 1.0e8;   
 
 % Simulated metrics
 scale.mu_q = seasonparams.q0;
@@ -43,11 +47,11 @@ printplot = false;
 
 set(groot,'defaultAxesFontName','Helvetica');
 set(groot,'defaultTextFontName','Helvetica');
-font_title = 14;
+font_title = 16;
 font_axis  = 14;
 font_tick  = 14;
-font_unit  = 14;
-font_leg   = 14;
+font_unit  = 16;
+font_leg   = 16;
 lw    = 2.5;
 
 % Load files for Unit 1 just to get sysparams / n_units
@@ -89,7 +93,7 @@ end
 
 % Y-tick formatting (release)
 u_max = max(u_all);
-u_step = 2;                        
+u_step = 1;                        
 u_hi = ceil(u_max/u_step)*u_step;
 u_ticks = 0:u_step:u_hi;
 
@@ -143,8 +147,15 @@ for i = 1:n_units
 
     % xlim([1, T]);
     % ylim([0, u_hi]);
-    ylim([5 10])
-    xlim([30 50])
+    ylim([5.5 9])
+
+    if i == 1
+        xlim([33 45])
+    elseif i ==2
+        xlim([35 47])
+    else 
+        xlim([40 50])
+    end 
     
     set(gca,'FontSize',12,'LineWidth',1,'Box','on','TickDir','out')
 
@@ -158,45 +169,103 @@ for i = 1:n_units
     end
 
     % Head: percent-full mapping -> physical meters 
-    hmin_model = 0;           
-    hmax_model = sp.a;       
-
-    head1_norm = min(max((head1 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-    head1_minnorm = min(max((head1min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-    
-    head2_norm = min(max((head2 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-    head2_minnorm = min(max((head2min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-    
-    head3_norm = min(max((head3 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-    head3_minnorm = min(max((head3min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
-
-    head1_phys = scale.H0 + (head1_norm - 0.5) * scale.dH_m; 
-    head1_minphys = scale.H0 + (head1_minnorm - 0.5) * scale.dH_m; 
-
-    head2_phys = scale.H0 + (head2_norm - 0.5) * scale.dH_m;  
-    head2_minphys = scale.H0 + (head2_minnorm - 0.5) * scale.dH_m; 
-
-    head3_phys = scale.H0 + (head3_norm - 0.5) * scale.dH_m; 
-    head3_minphys = scale.H0 + (head3_minnorm - 0.5) * scale.dH_m; 
-
+        % Right column: toggle between head and volume
     ax = subplot(n_units, subfig_n, row*subfig_n + 2);
-    plot(head1_phys, 'LineStyle','-', 'Color', c1, 'LineWidth', lw); hold on;
-    plot(head1_minphys, 'LineStyle','--', 'Color', c1, 'LineWidth', 1.5);
-    plot(head2_phys, 'LineStyle','-', 'Color', c2, 'LineWidth', lw);
-    plot(head2_minphys, 'LineStyle','--', 'Color', c2, 'LineWidth', 1.5);
-    plot(head3_phys, 'LineStyle','-', 'Color', c3, 'LineWidth', lw);
-    plot(head3_minphys, 'LineStyle','--', 'Color', c3, 'LineWidth', 1.5);
 
-    if i == 1
-        title('Head (m)','FontSize',font_title,'FontWeight','normal');
-    end 
-    if i == n_units
-        xlabel('Time (hours)');
+    if plot_storage_as == "head"
+        % Head: percent-full mapping -> physical meters
+        hmin_model = 0;
+        hmax_model = sp.a;
+
+        head1_norm = min(max((head1 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+        head1_minnorm = min(max((head1min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+
+        head2_norm = min(max((head2 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+        head2_minnorm = min(max((head2min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+
+        head3_norm = min(max((head3 - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+        head3_minnorm = min(max((head3min - hmin_model) ./ (hmax_model - hmin_model), 0), 1);
+
+        y1    = scale.H0 + (head1_norm    - 0.5) * scale.dH_m;
+        y1min = scale.H0 + (head1_minnorm - 0.5) * scale.dH_m;
+
+        y2    = scale.H0 + (head2_norm    - 0.5) * scale.dH_m;
+        y2min = scale.H0 + (head2_minnorm - 0.5) * scale.dH_m;
+
+        y3    = scale.H0 + (head3_norm    - 0.5) * scale.dH_m;
+        y3min = scale.H0 + (head3_minnorm - 0.5) * scale.dH_m;
+
+        plot(y1,    'LineStyle','-',  'Color', c1, 'LineWidth', lw); hold on;
+        plot(y1min, 'LineStyle','--', 'Color', c1, 'LineWidth', 1.5);
+        plot(y2,    'LineStyle','-',  'Color', c2, 'LineWidth', lw);
+        plot(y2min, 'LineStyle','--', 'Color', c2, 'LineWidth', 1.5);
+        plot(y3,    'LineStyle','-',  'Color', c3, 'LineWidth', lw);
+        plot(y3min, 'LineStyle','--', 'Color', c3, 'LineWidth', 1.5);
+
+        if i == 1
+            title('Head (m)','FontSize',font_title,'FontWeight','normal');
+        end
+        if i == n_units
+            xlabel('Time (hours)', 'FontSize', font_axis);
+        end
+
+        xlim([1, T]);
+        ylim([H_lo, H_hi]);
+        yticks(H_ticks);
+
+    elseif plot_storage_as == "volume"
+        % Volume: normalized storage -> physical volume 
+        y1    = (V1    * scale.Vcap_m3) / 1e6;
+        y1min = (V1min * scale.Vcap_m3) / 1e6;
+    
+        y2    = (V2    * scale.Vcap_m3) / 1e6;
+        y2min = (V2min * scale.Vcap_m3) / 1e6;
+    
+        y3    = (V3    * scale.Vcap_m3) / 1e6;
+        y3min = (V3min * scale.Vcap_m3) / 1e6;
+    
+        ax = subplot(n_units, subfig_n, row*subfig_n + 2);
+        plot(y1,    'LineStyle','-',  'Color', c1, 'LineWidth', lw); hold on;
+        plot(y1min, 'LineStyle','--', 'Color', c1, 'LineWidth', 1.5);
+        plot(y2,    'LineStyle','-',  'Color', c2, 'LineWidth', lw);
+        plot(y2min, 'LineStyle','--', 'Color', c2, 'LineWidth', 1.5);
+        plot(y3,    'LineStyle','-',  'Color', c3, 'LineWidth', lw);
+        plot(y3min, 'LineStyle','--', 'Color', c3, 'LineWidth', 1.5);
+
+        % Zoom inset
+        pos = get(ax, 'Position');  % position of main subplot
+        
+        ax_inset = axes('Position', [ ...
+            pos(1) + 0.45*pos(3), ...   % shift right
+            pos(2) + 0.5*pos(4), ...   % shift up
+            0.5*pos(3), ...            % width
+            0.4*pos(4)]);              % height
+        
+        box(ax_inset,'on'); hold(ax_inset,'on'); grid(ax_inset,'off'); 
+        set(ax_inset,'XGrid','off','YGrid','off'); 
+        
+        % Plot same data
+        plot(y1, 'Color', c1, 'LineWidth', 1.5);
+        plot(y2, 'Color', c2, 'LineWidth', 1.5);
+        plot(y3, 'Color', c3, 'LineWidth', 1.5);
+        
+        % Zoom region
+        xlim([60 80])      
+        ylim([-1 4])       
+        
+        set(ax_inset, 'FontSize', 8, 'LineWidth', 1);
+    
+        if i == 1
+            title(ax, 'Storage Volume (10^6 m^3)', ...
+                'FontSize',font_title,'FontWeight','normal');
+        end
+        if i == n_units
+            xlabel(ax, 'Time (hours)', 'FontSize', font_axis);
+        end
+
+        ylim(ax, [0, 35]);
+        xlim(ax, [1, T]);
     end
-
-    xlim([1, T]);
-    ylim([H_lo, H_hi]);
-    yticks(H_ticks);
 
     grid on; set(ax,'XGrid','off','YGrid','on');
     set(ax,'FontSize',font_tick);
