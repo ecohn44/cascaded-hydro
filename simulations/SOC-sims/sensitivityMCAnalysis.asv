@@ -273,34 +273,30 @@ dPow_pct_s  = movmean(movmean(dPow_pct,  2, 1), 2, 2);
 
 % Plot
 figure('Name','Difference Heatmaps','NumberTitle','off', ...
-       'Units','normalized','Position',[0.15 0.25 0.7 0.4]);
+       'Units','normalized','Position',[0.12 0.18 0.8 0.3]);
 tiledlayout(1,2,'TileSpacing','compact','Padding','compact')
 
 % Fig: (%) improvement in constraint violation magnitude 
 ax2 = nexttile;
-imagesc(aCenters, dCenters, dEIVI_pct_s);
-axis xy; grid off;
+imagesc(aCenters, dCenters, dEIVI_pct);
+axis xy; grid on;
 cb2 = colorbar;
 colormap(ax2, flipud(turbo));
-clim(ax2, [3.2 6.4]);
+clim(ax2, [3 6.5]);
 xlabel(xlab, "FontSize", fs); ylabel(ylab, "FontSize", fs);
 cblabel = 'IVI Reduction (%)';
 ylabel(cb2, cblabel, "FontSize", fs)
 
 % Fig: (%) improvement in generation 
 ax3 = nexttile;
-imagesc(aCenters, dCenters, dPow_pct_s);
-axis xy; grid off;
+imagesc(aCenters, dCenters, dPow_pct);
+axis xy; grid on;
 cb3 = colorbar;
 colormap(ax3, flipud(turbo));
-clim(ax3, [0.12 0.48]);
+clim(ax3, [0.1 0.5]);
 xlabel(xlab, "FontSize", fs); ylabel(ylab, "FontSize", fs);
 cblabel = 'Energy Increase (%)';
 ylabel(cb3, cblabel, "FontSize", fs)
-
-set([ax2, ax3], 'FontSize', 14, 'LineWidth', 1);
-set(cb2, 'FontSize', 16)
-set(cb3, 'FontSize', 16)
 
 %{
 % dEIVI  = EIVI_DIU - EIVI_DDU; 
