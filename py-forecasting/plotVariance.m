@@ -252,14 +252,15 @@ orange = [0.8500, 0.3250, 0.0980];
 
 % Plot
 figure('Color','w'); hold on
-plot(x, pdf_low,  'Color', orange,  'LineWidth',2.5);                 % DDU low release
-plot(x, pdf_high, 'Color', blue,  'LineWidth',2.5);     % DDU high release
-plot(x, pdf_diu,  'k', 'LineWidth',2.5);            % DIU (static)
+plot(x, pdf_low,  'Color', orange,  'LineWidth',3);                 % DDU low release
+plot(x, pdf_high, 'Color', blue,  'LineWidth',3);     % DDU high release
+plot(x, pdf_diu,  'k', 'LineWidth',3);            % DIU (static)
 
-xlabel('Forecast Error (m$^3$/s)','Interpreter','latex')
-ylabel('PDF','Interpreter','latex')
+xlabel('Forecast Error (m^3/s)')
+ylabel('PDF')
+xlim([-1000, 1000])
 grid on; box on
-set(gca,'FontSize',14,'LineWidth',1.2)
+set(gca,'FontSize',16,'LineWidth',1.2)
 
 % Bin medians for legend context (optional but nice)
 Q_low_med  = median(Q_proxy(ok & bin_id==lowBin),  'omitnan');   % careful: bin_id already filtered
