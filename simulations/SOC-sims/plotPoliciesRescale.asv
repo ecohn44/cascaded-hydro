@@ -142,7 +142,7 @@ for i = 1:n_units
     
     ax_inset = axes('Position', [ ...
         pos(1) + 0.1*pos(3), ...   % shift right
-        pos(2) + 0.25*pos(4), ...   % shift up
+        pos(2) + 0.22*pos(4), ...   % shift up
         0.4*pos(3), ...            % width
         0.35*pos(4)]);              % height
     
@@ -155,13 +155,12 @@ for i = 1:n_units
     plot(u3_phys, 'Color', c3, 'LineWidth', 1.5);
     
     % Zoom region     
-    ylim(ax_inset, [5.5 8.9])  
+    ylim(ax_inset, [5.5 9])  
 
     if i == 1
-        xlim(ax_inset, [33 43])
-        xticks(ax_inset, [35, 40])
+        xlim(ax_inset, [33 45])
     elseif i ==2
-        xlim(ax_inset, [35 45])
+        xlim(ax_inset, [35 47])
     else 
         xlim(ax_inset, [40 50])
     end 
@@ -252,7 +251,6 @@ for i = 1:n_units
         %plot(y2min, 'LineStyle','--', 'Color', c2, 'LineWidth', 1.5);
         plot(y3,    'LineStyle','-',  'Color', c3, 'LineWidth', lw);
         %plot(y3min, 'LineStyle','--', 'Color', c3, 'LineWidth', 1.5);
-        yline(0,'--','Color',[0.3 0.3 0.3],'LineWidth',1.5)
 
         % Zoom inset
         pos = get(ax, 'Position');  % position of main subplot
