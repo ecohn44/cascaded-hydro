@@ -8,10 +8,10 @@
 %                 2) Volume
 % ========================================================================
 
-close all; clc;
+close all; clear all; clc;
 
 season = "dry";
-alg = "SSH";
+alg = "SSH"; 
 plot_storage_as = "volume";   % "head" or "volume"
 
 N = 40;

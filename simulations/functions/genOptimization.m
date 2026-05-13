@@ -95,7 +95,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization
 
             case {"jcc-bon"}
                 % Bonferroni z-score
-                z = scale * norminv(1 - (eps/n));
+                z = scale * norminv(1 - (eps/(2*n)));
 
                 % Use safety-scaled std for all units
                 V_min_shift =  z .* std_hat(t,:);

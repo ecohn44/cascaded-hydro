@@ -31,7 +31,7 @@ K = 100;            % number of MC sims
 [modelparams, sysparams, seasonparams] = dataload(n, N);
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -128,5 +128,5 @@ ylab = 'Baseline Flow (q_0)';
 input = "phi";
 plotHeat(alpha_set, baseline_set, phi_sweep', 0, 0, input, xlab, ylab)
 
-save(sprintf('drought_sweep_%s.mat', simSettings.bounds), 'alpha_set', 'baseline_set', 'phi_sweep', 'X_sweep', 'q_sweep');
+save(sprintf('mats/drought_sweep_%s.mat', simSettings.bounds), 'alpha_set', 'baseline_set', 'phi_sweep', 'X_sweep', 'q_sweep');
 fprintf('Total runtime: %.2f seconds.\n', toc);
