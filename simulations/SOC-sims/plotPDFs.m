@@ -41,3 +41,79 @@ plot(x, pdf_D, 'LineWidth',2)
 xlabel('D (days)'); ylabel('PDF')
 title('D ~ \Gamma(4,0.2)')
 grid on
+
+%% Plot #2: Two Gaussian CDFs
+
+% Means
+mu = [0; 0];
+
+% Variances / standard deviations
+sigma1 = 1.5;   % larger uncertainty
+sigma2 = 0.6;   % smaller uncertainty
+
+% Diagonal covariance matrix
+Sigma_DDU = [sigma1^2 0;
+             0        sigma2^2];
+
+% Grid
+x1 = linspace(-5, 5, 200);
+x2 = linspace(-2, 2, 200);
+[X1, X2] = meshgrid(x1, x2);
+
+% 2D Gaussian PDF
+Z = zeros(size(X1));
+for i = 1:numel(X1)
+    x = [X1(i); X2(i)];
+    Z(i) = 1/(2*pi*sqrt(det(Sigma_DDU))) * ...
+           exp(-0.5*(x-mu)'*(Sigma_DDU\(x-mu)));
+end
+
+% Plot
+figure;
+set(gcf, 'Color', 'w');
+
+contour(X1, X2, Z, 8, 'LineWidth', 1.5);
+hold on;
+
+% Mean point
+plot(mu(1), mu(2), 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 5);
+
+% Axes labels
+% xlabel('Forecast error of reservoir 1');
+% ylabel('Forecast error of reservoir 2');
+
+% title('\Sigma_{DDU} = diag(\sigma_1^2,\sigma_2^2),  \sigma_1 > \sigma_2');
+
+% Use the outer contour scale
+r = sqrt(5.991);   % 95% confidence ellipse for 2D Gaussian
+
+% Arrow endpoints from mean to contour edge
+xEnd = mu(1) + r*sigma1;
+yEnd = mu(2) + r*sigma2;
+
+% Arrows from mu to contour boundary
+% quiver(mu(1), mu(2), r*sigma1, 0, 0, ...
+%     'k', 'LineWidth', 1.5, 'MaxHeadSize', 0.25);
+
+% quiver(mu(1), mu(2), 0, r*sigma2, 0, ...
+%     'k', 'LineWidth', 1.5, 'MaxHeadSize', 0.25);
+
+% Labels outside contour
+text(xEnd + 0.05, mu(2), '\sigma_1', ...
+    'FontName','Times', 'FontSize',24, ...
+    'HorizontalAlignment','left', ...
+    'VerticalAlignment','middle');
+
+text(mu(1), yEnd + 0.05, '\sigma_2', ...
+    'FontName','Times', 'FontSize',24, ...
+    'HorizontalAlignment','center', ...
+    'VerticalAlignment','bottom');
+
+% IEEE formatting
+grid off;
+box off;
+axis off;
+
+set(gca, 'FontName', 'Times', ...
+         'FontSize', 10, ...
+         'LineWidth', 1);

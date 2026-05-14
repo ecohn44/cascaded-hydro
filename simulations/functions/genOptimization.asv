@@ -43,14 +43,14 @@
 % -------------------------------------------------------------------------
 
 
-function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals, dx_vals] = genOptimization(T, N, c, q, LMP, lag, scale, framework, bounds, params, s, eps, volPrice)
+function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, scale, framework, bounds, params, s, eps, volPrice)
 
 
     % Number of units
     n = numel(s);
     phi_vals   = zeros(T,1);
     alpha_vals = zeros(T,n);
-    dx_vals = cell(T,1);
+    dx_hist_vals = cell(T,1);
 
     % Initialize storage
     X          = zeros(T, 5*n);
@@ -303,7 +303,7 @@ function [model, obj, X, std_hat, V_eff, phi_vals, alpha_vals, dx_vals] = genOpt
                     % Store latest values for this time step
                     phi_vals(t)      = phi_k;
                     alpha_vals(t, :) = alpha_k;
-                    dx_vals{t} = dx_hist;
+                    dx_hist_vals{t} = dx_hist;
 
                     % Remove floating point error
                     tol = 1e-10;

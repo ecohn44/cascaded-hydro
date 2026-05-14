@@ -1,12 +1,9 @@
-function [cons_out, x_sol, phi_val, alpha_vals, dx_hist] = applySSH(cons, vars, t, X_prev, q_mean, Sigma_q, ...
+function [cons_out, x_sol, phi_val, alpha_vals] = applySSH(cons, vars, t, X_prev, q_mean, Sigma_q, ...
         x_slater, p_target, s, Objective, options)
 
     fprintf('  START\n', t);
     n_units = numel(vars.V);
     dim_x   = 4 * n_units;
-
-    % Init convergence tracking
-    dx_hist = [];
     
     % Initialize from Solving LP
     sol = optimize(cons, -Objective, options); 
@@ -43,6 +40,8 @@ function [cons_out, x_sol, phi_val, alpha_vals, dx_hist] = applySSH(cons, vars, 
         fprintf('Slater point feasible: φ(x_slater)=%.4f >= p_target=%.4f\n', ...
                phi_s, p_target);
     end 
+
+    % Init convergence 
 
     while ~ssh_converged && iter_count < max_iter
         iter_count = iter_count + 1;
@@ -136,13 +135,13 @@ function [cons_out, x_sol, phi_val, alpha_vals, dx_hist] = applySSH(cons, vars, 
 
         optimize(cons, -Objective, options);
 
-        % Update xk for the next loop iteration
-        xk = get_current_x(vars, n_units);
-
         % Track convergence metric
         dx_inf = norm(xk - x_old, Inf);
-        dx_hist(iter_count) = dx_inf;
-    
+
+        
+        % Update xk for the next loop iteration
+        xk = get_current_x(vars, n_units);
+        
     end
     
     % Final outputs

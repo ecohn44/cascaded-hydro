@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-bon", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -132,7 +132,7 @@ end
 % ========================================================================
 
 
-[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals, dx_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
     simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
 
 
