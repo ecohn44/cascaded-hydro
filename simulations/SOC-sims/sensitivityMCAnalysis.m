@@ -64,7 +64,9 @@ end
 % Struct to hold MC outputs for each policy
 IVI_MC = zeros(K, n_pols);
 P_MC = zeros(K, n_pols);
+U_MC = zeros(K, n_pols);
 viol_MC = zeros(K, n_pols);
+H_MC = zeros(K, n_pols);
 
 q0_MC = zeros(K, 1);
 amp_MC = zeros(K, 1);
@@ -135,6 +137,7 @@ for k = 1:K
         h_sim_phys = rescale(V_sim, "head"); 
         p_sim_phys = rescale(u_sim_phys .* h_sim_phys, "power");
         p_tot = sum(sum(p_sim_phys)); 
+        u_tot = sum(sum(u_sim_phys));
 
         % Integrated violation index (scaled to physical)
         IVI_phys = rescale(IVI, "release");
@@ -143,9 +146,31 @@ for k = 1:K
         IVI_MC(k, m)     = sum(IVI_phys);
         viol_MC(k,m)     = sum(IVI_phys) > 0;
         P_MC(k, m)       = p_tot;
+        U_MC(k,m)        = u_tot;
+        H_MC(k,m)        = mean(h_sim_phys(:));
     end
 end 
 
+%% Step 3: METRIC REPORTING
+
+Rel_pct      = 100 * (1 - mean(viol_MC, 1));     % no-violation probability  
+MinGen       = min(P_MC, [], 1);
+AvgGen       = mean(P_MC, 1);
+MaxGen       = max(P_MC, [], 1);
+AvgIVI          = mean(IVI_MC, 1);
+
+Tsummary = table( ...
+    string({policies.code})', ...
+    Rel_pct', ...
+    MinGen', ...
+    AvgGen', ...
+    MaxGen', ...
+    AvgIVI', ...
+    'VariableNames', {'Policy','Reliability_pct', ...
+                      'MinProfit','AvgProfit','MaxProfit','IVI'} ...
+);
+
+disp(Tsummary)
 
 %% Step 4: HEATMAPS, BENCHMARKING AND REPORTING
 

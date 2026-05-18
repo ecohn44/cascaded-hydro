@@ -30,7 +30,7 @@ g = 9.8;            % acceleration due to gravity [m/s^2]
 c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
 N = 40;             % number of sub-intervals for piecewise linear approx
 n = 3;              % number of units in cascaded network 
-eps = 0.05;         % risk tolerance 
+eps = 0.01;         % risk tolerance 
 
 % Load inflow data 
 [modelparams, sysparams, seasonparams] = dataload(n, N);
@@ -40,7 +40,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "extended", "pwl", "ddu", "jcc-ssh", "none");
+simSettings = initSimSettings("dry", "extended", "pwl", "diu", "jcc-ssh", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
