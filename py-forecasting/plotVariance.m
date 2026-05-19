@@ -114,7 +114,7 @@ title('Binned Residual Variance vs Upstream Release')
 
 grid on
 box on
-set(gca,'FontSize',14)
+set(gca,'FontSize',18)
 
 %% Fig 3: Quantile-binned box-bars for Residuals Standard Deviation vs Upstream Release
 
@@ -192,7 +192,7 @@ h_whisk = plot(nan, nan, 'k', ...
 
 legend([h_box, h_med, h_whisk], ...
     'Location','northwest', ...
-    'FontSize',16);
+    'FontSize',20);
 
 xlabel('Upstream Release (10^3 m^3/s)')  % median bin
 ylabel('Residual Magnitude (m^3/s)')
@@ -260,7 +260,7 @@ xlabel('Forecast Error (m^3/s)')
 ylabel('PDF')
 xlim([-1000, 1000])
 grid on; box on
-set(gca,'FontSize',16,'LineWidth',1.2)
+set(gca,'FontSize',20,'LineWidth',1.2)
 
 % Bin medians for legend context (optional but nice)
 Q_low_med  = median(Q_proxy(ok & bin_id==lowBin),  'omitnan');   % careful: bin_id already filtered
