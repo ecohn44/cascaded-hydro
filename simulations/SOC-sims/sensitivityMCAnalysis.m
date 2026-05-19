@@ -97,7 +97,8 @@ for k = 1:K
     % Matrix for local streamflow 
     q = zeros(T+lag, n);
 
-    seasonparams.q0 = 0.0425 + 0.004*randn();
+    
+    seasonparams.q0 = 0.0425; % + 0.004*randn();
     seasonparams.amp1 = betarnd(1.5, 8.5);
     seasonparams.daysPerEvent = gamrnd(4, 0.25);
 

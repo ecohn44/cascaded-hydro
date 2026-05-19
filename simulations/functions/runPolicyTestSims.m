@@ -110,7 +110,7 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
         fprintf('Reservoir %d:\n', i);
         fprintf('   Integrated Violation Index (IVI): %.4f\n', IVI(i));
     end
-    
+
     switch string(bounds)
         case "det",     bLabel = "Deterministic";
         case "icc",     bLabel = "Individual CC";
@@ -118,6 +118,7 @@ function [V_sim, u_sim, p_sim, IVI] = runPolicyTestSims(sysparams, bounds, X, po
         otherwise,      bLabel = char(bounds);
     end
 
+     
     % Plot policy test volume trajectories for each reservoir
     plotPolicyTestVolumes(tt, V_opt, V_sim, Vmin, Vmax, bLabel, policyLabel);
     %}
