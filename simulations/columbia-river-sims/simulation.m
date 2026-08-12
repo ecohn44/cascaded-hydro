@@ -29,7 +29,7 @@ N = 20;             % number of sub-intervals for piecewise linear approx
 % ========================================================================
 
 % Initialize settings (season, drought, linear approximation, uncertainty, bounds)
-simSettings = initSimSettings("dry", "constant", "pwl", "ddu", "jcc-bon");
+simSettings = initSimSettings("dry", "constant", "pwl", "det", "det", "none");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -48,12 +48,12 @@ end_date   = sim_center_date + hours(T/2 - 1);
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
 
 % Extract historic inflow timeseries [m3/hr]
-% q = [inflow_s.bon_inflow_m3hr];
+q = [inflow_s.bon_inflow_m3hr];
 
 % Synthetic Inflows
-q0 = inflow_s.bon_inflow_m3hr(1);      % your baseline level
+% q0 = inflow_s.bon_inflow_m3hr(1);      % your baseline level
 % q = makeInflowPulse(q0, T, lag, t0, amp1, amp2, w1, w2, modelparams.season);
-q = q0*ones(T+1,1);
+% q = q0*ones(T+1,1);
 
 fprintf('Data loading complete.\n');
 

@@ -1,0 +1,191 @@
+%% Author: Eliza Cohn
+% Date: August 2026
+% Description: Main driver for cascaded hydropower simulations 
+
+tic; 
+clear; clc; close all;
+
+addpath('/Library/gurobi1202/macos_universal2/matlab');
+addpath(genpath('/Users/elizacohn/Documents/YALMIP-master'))
+
+% Add shared functions to file path 
+thisFilePath = fileparts(mfilename('fullpath'));
+addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
+
+%% ========================================================================
+% SECTION 1: DATA LOADING AND PARAMETER DEFINITION
+% ========================================================================
+
+% Toggle for creating folder and plotting
+make_dir = false;
+printplot = false; 
+save_mat = false; 
+save_streamflow = false;
+
+% Static parameters 
+eta = .9;           % efficiency of release-energy conversion
+rho_w = 1000;       % density of water [kg/m^3]
+g = 9.8;            % acceleration due to gravity [m/s^2]
+c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
+N = 40;             % number of sub-intervals for piecewise linear approx
+n = 3;              % number of units in cascaded network 
+eps = 0.05;         % risk tolerance 
+
+% Load inflow data 
+[inflow, modelparams, sysparams] = dataload(n, N);
+
+%% ========================================================================
+% SECTION 2: SIMULATION SETTINGS
+% ========================================================================
+
+% Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
+simSettings = initSimSettings("dry", "constant", "pwl", "det", "det", "none");
+
+% Extract forecasting coefficients 
+modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
+
+% Date range settings            
+D = 2;                       % Number of simulation days 
+T = 24*D;                    % Number of simulation hours
+lag = 1;                     % Travel time between units (hrs)
+year = 2022;
+
+% Load price data
+LMP = ones(T, n); % simulatePrice(T, n, true);
+
+% Create path to store results  
+if simSettings.bounds == "jcc-ssh"
+    results_dir = "./resultsSSH/" + modelparams.season + "/";
+elseif simSettings.bounds == "jcc-bon"
+    results_dir = "./resultsBonferroni/" + modelparams.season + "/";
+else 
+    warning('Results directory does not exist');
+end 
+
+fprintf('Data loading complete.\n');
+
+%% ========================================================================
+% SECTION 3: STREAMFLOW BEHAVIOR
+% ========================================================================
+
+% Compute simulation daterange and inflow series
+sim_center_date = datetime(year, 1, 1) + days(modelparams.center_day - 1);
+start_date = sim_center_date - hours(T/2) - hours(lag);
+end_date   = sim_center_date + hours(T/2 - 1);
+inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
+
+% Extract historic inflow timeseries [m3/hr]
+q = [inflow_s.bon_inflow_m3hr];
+% q = (q - modelparams.inflow_mean) ./  modelparams.inflow_std;
+
+% Plot streamflow profiles
+plotStreamflows(q)
+
+% Offline DIU covariance and std devs
+sigma_diu                 = modelparams.AR_std*ones(n,1);   % n×1 std devs
+modelparams.sigma_diu     = sigma_diu;        
+modelparams.Sigma_diu     = diag(sigma_diu.^2);             % n×n covariance (DIU)
+
+% Offline correlation matrix
+modelparams.Rcorr         = estimateR(T, n, lag, q, modelparams); % n×n correlation
+
+% Check PD-ness for covariance matrix 
+if isPD(modelparams.Sigma_diu)
+    disp('Σ is PD');
+else
+    warning('Σ is NOT PD');
+end 
+
+% Check PD-ness for correlation matrix 
+if isPD(modelparams.Rcorr)
+    disp('R is PD');
+else
+    warning('R is NOT PD');
+end 
+
+%% ========================================================================
+% SECTION 4: OPTIMIZATION FRAMEWORK
+% ========================================================================
+
+
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals, dx_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
+    simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
+
+
+%% ========================================================================
+% SECTION 5: PLOTTING
+% ========================================================================
+
+% Make plot directory for current simulation run 
+if make_dir
+    dir_path = "./plots/";
+    stamp = datestr(now,'mm-dd-yyyy HH.MM.SS');
+    path = fullfile(dir_path, stamp + " " + simSettings.season + " " ...
+        + simSettings.framework + ...
+        " T=" + string(T));
+    mkdir(path)
+end
+
+% Plot simulation behavior for all units
+simPlots(path, X, sysparams, T, c, printplot);
+
+% Plot SSH algorithm behavior 
+if simSettings.bounds == "jcc-ssh"
+    plotSSH(phi_vals, alpha_vals, eps, upper(simSettings.framework));
+end 
+
+% Save results 
+if save_mat
+    for i = 1:numel(sysparams)
+        sp = sysparams(i);
+        fname = sprintf('results_unit%d_%s.mat', ...
+            sp.unit, lower(simSettings.framework));
+    
+        season = simSettings.season;  
+    
+        save(fullfile(results_dir, fname), ...
+            'X', 'V_eff', 'std_hat', 'q', 'sysparams', ...
+            'T', 'c', 'lag', 'season', '-v7');
+    end
+end 
+
+if save_streamflow
+    
+    q_save = q(1+lag:T+lag, :);
+
+    save('floodFlow.mat', 'q_save')
+end
+
+fprintf('Simulation complete.\n');
+fprintf('Total runtime: %.2f seconds.\n', toc);
+
+
+function plotStreamflows(q)
+    % q: T+lag x n matrix, each column is a streamflow time series
+
+    [T, n] = size(q);
+    t = (1:T)';        
+
+    figure;
+    for i = 1:n
+        subplot(n, 1, i);
+        plot(t, q(:, i), 'LineWidth', 3);
+        ylim([0 1.1*max(q(:,i))]); 
+        xlim([1, T]);
+        
+        ylabel(sprintf('q_%d', i), 'FontSize', 16);
+        set(gca, 'FontSize', 16); 
+
+        if i == 1
+            title('Streamflow Time Series', 'FontSize', 20);
+        end
+        if i == n
+            xlabel('Time (hour)', 'FontSize', 16);
+        else
+            set(gca, 'XTickLabel', []);  % hide x labels for middle plots
+        end
+
+        grid on;
+    end
+end
+
