@@ -28,7 +28,7 @@ rho_w = 1000;       % density of water [kg/m^3]
 g = 9.8;            % acceleration due to gravity [m/s^2]
 c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
 N = 40;             % number of sub-intervals for piecewise linear approx
-n = 2;              % number of units in cascaded network 
+n = 3;              % number of units in cascaded network 
 eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
@@ -40,12 +40,12 @@ eps = 0.05;         % risk tolerance
 
 % Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
 simSettings = initSimSettings("dry", "constant", "pwl", "det", "det", "none");
- 
+
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 10;                      % Number of simulation days 
+D = 90;                      % Number of simulation days 
 T = 24*D;                    % Number of simulation hours
 lag = 1;                     % Travel time between units (hrs)
 year = 2022;
@@ -70,13 +70,13 @@ fprintf('Data loading complete.\n');
 
 % Compute simulation daterange and inflow series
 sim_center_date = datetime(year, 1, 1) + days(modelparams.center_day - 1);
-start_date = sim_center_date - hours(T/2);
+start_date = sim_center_date - hours(T/2) - hours(lag);
 end_date   = sim_center_date + hours(T/2 - 1);
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
 
 % Extract historic inflow timeseries [m3/hr]
 q = [inflow_s.bon_inflow_m3hr];
-q = ((q - min(q)) ./ (max(q) - min(q)))./2;
+q = (q - min(q)) ./ (max(q) - min(q));
 
 % Plot streamflow profiles
 plotStreamflows(q)
@@ -86,7 +86,8 @@ plotStreamflows(q)
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-[model, obj, X] = oracle(T, c, q, sysparams);
+[model, obj, X, std_hat, V_eff, phi_vals, alpha_vals, dx_vals] = genOptimization(T, N, c, q, LMP, lag, 1, ...
+    simSettings.framework, simSettings.bounds, modelparams, sysparams, eps, simSettings.volPrice);
 
 %% ========================================================================
 % SECTION 5: PLOTTING
@@ -125,6 +126,11 @@ if save_mat
     end
 end 
 
+if save_streamflow
+    
+    q_save = q(1+lag:T+lag, :);
+    save('floodFlow.mat', 'q_save')
+end
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
