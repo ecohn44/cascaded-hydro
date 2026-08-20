@@ -43,7 +43,7 @@ function simPlots(path, X, sysparams, T, c, printplot)
         subplot(2,3,2);
         plot(1:T, p, 'LineWidth', 2, 'DisplayName','Generation'); hold on;
         yline(sp.F, '--r', 'LineWidth', 1.5);
-        plot(1:T, p_max, '--k', 'DisplayName','P_{max}');
+        % plot(1:T, p_max, '--k', 'DisplayName','P_{max}');
         xlabel('Hour','FontSize',xfont); ylabel('MWh');
         title('Hydropower Generation','FontSize',font); 
         xlim([1, T]);

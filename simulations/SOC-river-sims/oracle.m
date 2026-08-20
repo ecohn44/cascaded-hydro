@@ -2,7 +2,7 @@
 % =======================================================================
 % Author: Eliza Cohn
 % Description: Solves a single forward simulation/optimization loop over T time steps
-% (non-anticipatory) with DIU/DDU/DET inflow models and JCC volume bounds.
+%              with DIU/DDU/DET inflow models and JCC volume bounds.
 % INPUTS
 %   T           : Number of time periods in optimization horizon.
 %   c           : Power conversion coefficient (unitless or W·s/m³ per your scaling).
@@ -17,7 +17,7 @@
 % -------------------------------------------------------------------------
 
 
-function [model, obj, X] = oracle(T, c, q, s)
+function [model, obj, X] = oracle(T, c, I, lag, s)
 
 
     % Number of units
@@ -42,7 +42,7 @@ function [model, obj, X] = oracle(T, c, q, s)
     cons = [];
 
     % Maximizing Power 
-    Objective = sum(p) - sum(sp);
+    Objective = sum(p(:)) - 1e-4*sum(sp(:));
 
     %% Static Constraints
     for i = 1:n
@@ -65,10 +65,10 @@ function [model, obj, X] = oracle(T, c, q, s)
         if t == 1
             % Initial conditions
             for i = 1:n
-                % Mass balance: V_i + u_i + s_i = V0_i + q(i)
-                cons = [cons, V(i,t) + u(i,t) + sp(i,t) == s(i).V0 + q(t)];
+                % Mass balance
+                cons = [cons, V(i,t) == s(i).V0 + I(i,t) - u(i,t) - sp(i,t)];
     
-                % Initial ramp: fix at min_ut
+                % Initial ramp rates
                 cons = [cons, u(i,t) == s(i).min_ut];
     
                 % Power production (head at initial volume)
@@ -79,37 +79,30 @@ function [model, obj, X] = oracle(T, c, q, s)
 
         else
             for i = 1:n
-    
-                % Mass balance
-                cons = [cons, V(i,t) + u(i,t) + sp(i,t) == V(i,t-1) + q(t)];
-    
                 % Ramp rates
                 cons = [cons, s(i).RR_dn <= u(i,t) - u(i,t-1) <= s(i).RR_up];
     
-                % Power production 
-                uL = s(i).min_ut;
-                uU = s(i).max_ut;
-            
-                hL = s(i).a * s(i).min_V^s(i).b;
-                hU = s(i).a * s(i).max_V^s(i).b;
+                % Power production
+                u_min = s(i).min_ut; u_max = s(i).max_ut;
+                h_min = s(i).a * s(i).min_V^s(i).b; 
+                h_max = s(i).a * s(i).max_V^s(i).b;
                 
-                % Lower bound 1
-                cons = [cons, ...
-                    p(i,t)/c >= uL*h(i,t) + hL*u(i,t) - uL*hL];
-        
-                % Lower bound 2
-                cons = [cons, ...
-                    p(i,t)/c >= uU*h(i,t) + hU*u(i,t) - uU*hU];
-        
-                % Upper bound 1
-                cons = [cons, ...
-                    p(i,t)/c <= uU*h(i,t) + hL*u(i,t) - uU*hL];
-        
-                % Upper bound 2
-                cons = [cons, ...
-                    p(i,t)/c <= uL*h(i,t) + hU*u(i,t) - uL*hU];
-                   
-            end
+                % Calculate hydraulic head 
+                cons = [cons, h(i,t) == s(i).a * V(i,t)^s(i).b]; 
+
+                % Set bounds 
+                cons = [cons, p(i,t)/c >= h_min*u(i,t) + u_min*h(i,t) - h_min*u_min];
+                cons = [cons, p(i,t)/c >= h_max*u(i,t) + u_max*h(i,t) - h_max*u_max];
+                cons = [cons, p(i,t)/c <= h_max*u(i,t) + u_min*h(i,t) - h_max*u_min];
+                cons = [cons, p(i,t)/c <= h_min*u(i,t) + u_max*h(i,t) - h_min*u_max];
+                
+                % Mass balance 
+                if i == 1 || t <= lag
+                    cons = [cons, V(i,t) == V(i,t-1) + I(i,t) - u(i,t) - sp(i,t)];
+                else
+                    cons = [cons, V(i,t) == V(i,t-1) + I(i,t) + u(i-1,t-lag) + sp(i-1,t-lag) - u(i,t) - sp(i,t)];
+                end
+            end 
         end
 
     end
@@ -118,13 +111,26 @@ function [model, obj, X] = oracle(T, c, q, s)
     options = sdpsettings('solver','gurobi','verbose',0 , 'gurobi.Seed', 1, 'gurobi.Threads', 1);
     model = optimize(cons, -Objective, options);
 
+    disp(model.problem)
+    disp(model.info)
+
     V_opt  = value(V);
     p_opt  = value(p);
     u_opt  = value(u);
     sp_opt = value(sp);
 
+    % Save recorded inflow conditions 
+    q = I;
+    
+    % For all downstream units 
+    for i = 2:n
+        for t = lag+1:T
+            q(i,t) = I(i,t) + u_opt(i-1,t-lag) + sp_opt(i-1,t-lag);
+        end
+    end
+
     for i = 1:n
-        X = [X, V_opt(i,:)', p_opt(i,:)', u_opt(i,:)', sp_opt(i,:)', q];
+        X = [X, V_opt(i,:)', p_opt(i,:)', u_opt(i,:)', sp_opt(i,:)', q(i,:)'];
     end
     
     obj = sum(p_opt(:));

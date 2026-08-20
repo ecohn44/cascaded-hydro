@@ -2,19 +2,11 @@
 % =======================================================================
 % Author: Eliza Cohn
 % Description: Solves a single forward simulation/optimization loop over T time steps
-% (non-anticipatory) with DIU/DDU/DET inflow models and JCC volume bounds.
+%              with DIU/DDU/DET inflow models and JCC volume bounds.
 % INPUTS
 %   T           : Number of time periods in optimization horizon.
-%   N           : Number of segments in the PWL head approximation (for reporting).
 %   c           : Power conversion coefficient (unitless or W·s/m³ per your scaling).
 %   q           : Exogenous inflow series (T + lag × n).
-%   R           : Covariance (DIU) or correlation (DDU) matrix 
-%   lag         : Lag length for inflow forecasting (typically 1).
-%   scale       : Scaling factor for chance-constraint z-value.
-%   framework   : Uncertainty type: "det", "diu", or "ddu".
-%   bounds      : Volume bound type: "det" or "jcc-bon".
-%   params      : Struct of uncertainty model parameters 
-%                 (AR const/coef/std for DIU; omega/alpha/gamma for DDU).
 %   s           : Struct array of system parameters for each unit i=1..n:
 % 
 % OUTPUTS
@@ -22,19 +14,17 @@
 %
 %   obj         : Total generation over the horizon (sum of p_i).
 % 
-%
 % -------------------------------------------------------------------------
 
 
-function [model, obj, X] = oracle(T, c, q, s)
+function [model, obj, X] = oracle(T, c, I, lag, s)
 
 
     % Number of units
     n = numel(s);
 
     % Initialize storage
-    X          = zeros(T, 5*n);
-    obj        = 0; 
+    X = [];
 
     % YALMIP reset
     yalmip('clear');
@@ -46,12 +36,13 @@ function [model, obj, X] = oracle(T, c, q, s)
     V  = sdpvar(n,T);
     p  = sdpvar(n,T);
     u  = sdpvar(n,T);
-    sp = sdpvar(n,T);  % spill
+    sp = sdpvar(n,T);  
+    h  = sdpvar(n,T);  
 
     cons = [];
 
     % Maximizing Power 
-    Objective = sum(p) - sum(sp);
+    Objective = sum(p(:)) - 1e-4*sum(sp(:));
 
     %% Static Constraints
     for i = 1:n
@@ -74,10 +65,10 @@ function [model, obj, X] = oracle(T, c, q, s)
         if t == 1
             % Initial conditions
             for i = 1:n
-                % Mass balance: V_i + u_i + s_i = V0_i + q(i)
-                cons = [cons, V(i,t) + u(i,t) + sp(i,t) == s(i).V0 + q(i,t)];
+                % Mass balance
+                cons = [cons, V(i,t) == s(i).V0 + I(i,t) - u(i,t) - sp(i,t)];
     
-                % Initial ramp: fix at min_ut
+                % Initial ramp rates
                 cons = [cons, u(i,t) == s(i).min_ut];
     
                 % Power production (head at initial volume)
@@ -85,37 +76,57 @@ function [model, obj, X] = oracle(T, c, q, s)
                 cons = [cons, p(i,t) == c*u(i,t)*h0];
 
             end
-        end
 
-        for i = 1:n
+        else
+            for i = 1:n
+                % Ramp rates
+                cons = [cons, s(i).RR_dn <= u(i,t) - u(i,t-1) <= s(i).RR_up];
+    
+                % Power production
+                u_min = s(i).min_ut; u_max = s(i).max_ut;
+                h_min = s(i).a * s(i).min_V^s(i).b; 
+                h_max = s(i).a * s(i).max_V^s(i).b;
 
-            % Mass balance
-            cons = [cons, V(i,t) + u(i,t) + sp(i,t) == V(i,t-1) + q(t)];
-
-            % Ramp rates
-            cons = [cons, s(i).RR_dn <= u(i,t) - u(i,t-1) <= s(i).RR_up];
-
-            % Power production 
-            h0 = s(i).a * (s(i).V0^s(i).b);
-            cons = [cons, p(i,t) == c*u(i,t)*h0];
-       
+                % cons = [cons, p(i,t) == c*u(i,t)*h0];
+                
+                % Mass balance 
+                if i == 1 || t <= lag
+                    cons = [cons, V(i,t) == V(i,t-1) + I(i,t) - u(i,t) - sp(i,t)];
+                else
+                    cons = [cons, V(i,t) == V(i,t-1) + I(i,t) + u(i-1,t-lag) + sp(i-1,t-lag) - u(i,t) - sp(i,t)];
+                end
+            end 
         end
 
     end
-    
         
     % Solve optimization 
     options = sdpsettings('solver','gurobi','verbose',0 , 'gurobi.Seed', 1, 'gurobi.Threads', 1);
     model = optimize(cons, -Objective, options);
+
+    disp(model.problem)
+    disp(model.info)
+
+    V_opt  = value(V);
+    p_opt  = value(p);
+    u_opt  = value(u);
+    sp_opt = value(sp);
+
+    % Save recorded inflow conditions 
+    q = I;
     
-    % Abort early on infeasible/numerical issues
-    if model.problem ~= 0
-        fprintf('\n*** Solver issue at t = %d ***\n', t);
-        fprintf('  problem code : %d\n', model.problem);
-        fprintf('  yalmiperror  : %s\n', yalmiperror(model.problem));
-        fprintf('  model.info   : %s\n', model.info);
-        error('Stopping after first solver error at t=%d.', t);
+    % For all downstream units 
+    for i = 2:n
+        for t = lag+1:T
+            q(i,t) = I(i,t) + u_opt(i-1,t-lag) + sp_opt(i-1,t-lag);
+        end
     end
+
+    for i = 1:n
+        X = [X, V_opt(i,:)', p_opt(i,:)', u_opt(i,:)', sp_opt(i,:)', q(i,:)'];
+    end
+    
+    obj = sum(p_opt(:));
     
     fprintf('Optimization complete.\n');
 

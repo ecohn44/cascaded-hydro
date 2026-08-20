@@ -25,9 +25,7 @@ function [inflow, params, sysparams] = dataload(n, N)
     
     % Load Dalles inflow data
     % Convert kcfs to m3/s (kcfs -> cfs -> m3/s -> m3/hr)
-    tda_inflow_m3hr_raw = 1000 * cfs_to_m3s(inflow.inflow_kcfs) * 3600;
-    inflow.tda_inflow_m3hr = (tda_inflow_m3hr_raw - mean(tda_inflow_m3hr_raw)
-    
+    inflow.tda_inflow_m3hr = 1000 * cfs_to_m3s(inflow.inflow_kcfs) * 3600;
     
     % Load Bonneville inflow data
     bon_inflow = readtable(bon_inflow_path);
@@ -36,6 +34,9 @@ function [inflow, params, sysparams] = dataload(n, N)
     %% Seasonal Forecasting Parameters
     params(1) = struct( ...
         'season',   'dry', ...    % Hydrology season
+        'center_day', 275, ...
+        'inflow_mean', 1.06e7, ...
+        'inflow_std', 2.47e6, ...
         'constant', 0.0020, ...   % DDU Params 
         'coef1',    0.950,  ...   % DDU inflow_lag1 [m3/hr] 
         'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
@@ -48,6 +49,9 @@ function [inflow, params, sysparams] = dataload(n, N)
 
     params(2) = struct( ...
         'season',   'wet', ...    % Hydrology season
+        'center_day', 157, ...
+        'inflow_mean', 2.58e7, ...
+        'inflow_std', 9.21e6, ...
         'constant', 0.00, ...     % DDU Params
         'coef1',    0.995,  ...   % DDU inflow_lag1 [m3/hr]
         'coef2',    0,  ...       % DDU outflow_lag [m3/hr] 
@@ -73,8 +77,8 @@ function [inflow, params, sysparams] = dataload(n, N)
         'max_V',  1, ...
         'RR_dn',  -0.015, ...
         'RR_up',  0.01, ...
-        'F',      1, ...
-        'SOC',    0.5);       % Initial start of charge
+        'F',      2, ...
+        'SOC',    0.3);       % Initial start of charge
 
 
     %% Build sysparams for n units
@@ -88,24 +92,6 @@ function [inflow, params, sysparams] = dataload(n, N)
         sysparams(i).name = sprintf('Unit %02d', i); 
     end
 
-
-    %% Compute Piecewise Linear Approximation and initial volume V0
-    for i = 1:numel(sysparams)
-        % Compute derived parameters for this unit
-        d = sysparams(i);
-        
-        % Create sub-intervals and midpoints
-        [lb, rb, ref] = create_intervals_and_references(d.min_h, d.max_h, N);
-        
-        % Store in the struct
-        sysparams(i).h_lbounds = lb;
-        sysparams(i).h_rbounds = rb;
-        sysparams(i).h_refvals = ref;
-
-        % Calculate initial volume from SOC
-        sysparams(i).V0 = d.SOC*(d.max_V - d.min_V) + d.min_V;
-    end
-
 end
 
 
@@ -115,16 +101,3 @@ function m3s = cfs_to_m3s(cfs)
     m3s = cfs * conversion_factor;
 end
 
-
-% Function to create N sub-intervals and midpoint references for PWL
-function [left_bounds, right_bounds, reference_values] = create_intervals_and_references(min_h, max_h, N)
-    % Create N+1 breakpoints to define N intervals
-    breakpoints = linspace(min_h, max_h, N+1);  % vector of breakpoints
-
-    % Create interval bounds
-    left_bounds  = breakpoints(1:end-1);  % first N points
-    right_bounds = breakpoints(2:end);    % last N points
-
-    % Create reference vector with midpoints
-    reference_values = (left_bounds + right_bounds) / 2;
-end

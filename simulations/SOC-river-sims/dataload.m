@@ -2,7 +2,7 @@
 % DATALOAD FUNCTIONS
 % ========================================================================
 
-function [inflow, params, sysparams] = dataload(n, N)
+function [inflow, params, sysparams] = dataload(n)
     % Load and process hydro simulation data from multiple CSV files
     %
     % Inputs:
@@ -78,7 +78,7 @@ function [inflow, params, sysparams] = dataload(n, N)
         'RR_dn',  -0.015, ...
         'RR_up',  0.01, ...
         'F',      1, ...
-        'SOC',    0.3);       % Initial start of charge
+        'V0',     0.3);       % Initial start of charge
 
 
     %% Build sysparams for n units
@@ -92,24 +92,6 @@ function [inflow, params, sysparams] = dataload(n, N)
         sysparams(i).name = sprintf('Unit %02d', i); 
     end
 
-
-    %% Compute Piecewise Linear Approximation and initial volume V0
-    for i = 1:numel(sysparams)
-        % Compute derived parameters for this unit
-        d = sysparams(i);
-        
-        % Create sub-intervals and midpoints
-        [lb, rb, ref] = create_intervals_and_references(d.min_h, d.max_h, N);
-        
-        % Store in the struct
-        sysparams(i).h_lbounds = lb;
-        sysparams(i).h_rbounds = rb;
-        sysparams(i).h_refvals = ref;
-
-        % Calculate initial volume from SOC
-        sysparams(i).V0 = d.SOC*(d.max_V - d.min_V) + d.min_V;
-    end
-
 end
 
 
@@ -119,16 +101,3 @@ function m3s = cfs_to_m3s(cfs)
     m3s = cfs * conversion_factor;
 end
 
-
-% Function to create N sub-intervals and midpoint references for PWL
-function [left_bounds, right_bounds, reference_values] = create_intervals_and_references(min_h, max_h, N)
-    % Create N+1 breakpoints to define N intervals
-    breakpoints = linspace(min_h, max_h, N+1);  % vector of breakpoints
-
-    % Create interval bounds
-    left_bounds  = breakpoints(1:end-1);  % first N points
-    right_bounds = breakpoints(2:end);    % last N points
-
-    % Create reference vector with midpoints
-    reference_values = (left_bounds + right_bounds) / 2;
-end

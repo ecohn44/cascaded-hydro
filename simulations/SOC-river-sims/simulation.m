@@ -27,12 +27,11 @@ eta = .9;           % efficiency of release-energy conversion
 rho_w = 1000;       % density of water [kg/m^3]
 g = 9.8;            % acceleration due to gravity [m/s^2]
 c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
-N = 40;             % number of sub-intervals for piecewise linear approx
 n = 2;              % number of units in cascaded network 
 eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
-[inflow, modelparams, sysparams] = dataload(n, N);
+[inflow, modelparams, sysparams] = dataload(n);
 
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
@@ -45,13 +44,10 @@ simSettings = initSimSettings("dry", "constant", "pwl", "det", "det", "none");
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 10;                      % Number of simulation days 
-T = 24*D;                    % Number of simulation hours
-lag = 1;                     % Travel time between units (hrs)
+D = 40;                      % Number of simulation days 
+T = D*24;                    % Number of simulation hours
+lag = 2;                     % Travel time between units (hrs)
 year = 2022;
-
-% Load price data
-LMP = ones(T, n); % simulatePrice(T, n, true);
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -74,19 +70,22 @@ start_date = sim_center_date - hours(T/2);
 end_date   = sim_center_date + hours(T/2 - 1);
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
 
-% Extract historic inflow timeseries [m3/hr]
-q = [inflow_s.bon_inflow_m3hr];
-q = ((q - min(q)) ./ (max(q) - min(q)))./2;
+% Extract and normalize historic inflow timeseries [m3/hr]
+I_raw = [inflow_s.tda_inflow_m3hr, inflow_s.bon_inflow_m3hr];
+I_min = min(I_raw); I_max = max(I_raw);
+I_norm = (I_raw - I_min) ./ (I_max - I_min); scale = 0.05;
+I = scale*I_norm;
 
 % Plot streamflow profiles
-plotStreamflows(q)
+plotStreamflows(I)
 
 
 %% ========================================================================
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-[model, obj, X] = oracle(T, c, q, sysparams);
+%[model, obj, X] = oracle(T, c, I', lag, sysparams);
+[model, obj, X] = oracleNonlinear(T, c, I', lag, sysparams);
 
 %% ========================================================================
 % SECTION 5: PLOTTING
@@ -120,7 +119,7 @@ if save_mat
         season = simSettings.season;  
     
         save(fullfile(results_dir, fname), ...
-            'X', 'V_eff', 'std_hat', 'q', 'sysparams', ...
+            'X', 'V_eff', 'std_hat', 'I', 'sysparams', ...
             'T', 'c', 'lag', 'season', '-v7');
     end
 end 
