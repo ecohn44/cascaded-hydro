@@ -23,8 +23,8 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
 
     n = numel(sys);
     X = [];
-    alpha = model.coef1;
-    beta = model.coef2;
+    alpha = model.coef_1;
+    beta = model.coef_2;
 
     % =====================================================================
     % Decisions Variables
@@ -139,7 +139,7 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
                 rhs   = [rhs;   sys(i).RR_up        ];
                 sense = [sense; '<'];
 
-                % Power production via McCormick Envelopes: p(i,t) = c * a * v(i,t)^b * u(i,t)
+                % Power production via McCormick Envelopes: p(i,t) = c * h(i,t) * u(i,t)
                 h_min = sys(i).min_h;
                 h_max = sys(i).max_h;
                 u_min = sys(i).min_ut;
@@ -209,15 +209,17 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
     for i = 1:n
         for t = 2:T
             k = k + 1;
-            genconpow(k).xvar = idx_V(i,t);   % index of V(i,t)
-            genconpow(k).yvar = idx_z(i,t);   % index of z(i,t)
-            genconpow(k).a    = sys(i).b;     % exponent in (0,1)
+            genconpow(k).xvar = idx_V(i,t);   % 0-based index of V(i,t)
+            genconpow(k).yvar = idx_z(i,t);   % 0-based index of z(i,t)
+            genconpow(k).a    = sys(i).b;        % exponent in (0,1)
         end
     end
 
-    % Gurobi Optimization Model
-    grb_model.modelsense = 'min';          
-    grb_model.obj        = obj_coeff;      
+    % =====================================================================
+    %% Assemble Gurobi Model
+    % =====================================================================
+    grb_model.modelsense = 'min';          % Gurobi always minimizes
+    grb_model.obj        = obj_coeff;      % -p + 1e-4*sp
     grb_model.A          = A;
     grb_model.rhs        = rhs;
     grb_model.sense      = sense;
@@ -228,17 +230,25 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
         grb_model.genconpow = genconpow;
     end
 
-    % Gurobi Parameters
-    params.OutputFlag    = 1; % Print Gurobi log to console
-    params.Seed          = 1; % Fix random seed for reproducibility
-    params.Threads       = 1; % Single thread (set higher for production runs)
-    params.FuncNonlinear = 1; % Spatial B&B for genconpow constraints
+    % =====================================================================
+    %% Gurobi Parameters
+    % FuncNonlinear = 1 : use spatial branch-and-bound (exact, globally
+    %                     optimal) instead of static PWL approximation.
+    % =====================================================================
+    params.OutputFlag    = 1;
+    params.Seed          = 1;
+    params.Threads       = 1;
+    params.FuncNonlinear = 1;
 
-    % Solve
+    % =====================================================================
+    %% Solve
+    % =====================================================================
     result = gurobi(grb_model, params);
     fprintf('Optimization status: %s\n', result.status);
 
-    % Store Solution
+    % =====================================================================
+    %% Extract Solution
+    % =====================================================================
     if strcmp(result.status, 'OPTIMAL') || strcmp(result.status, 'SUBOPTIMAL')
         x = result.x;
 

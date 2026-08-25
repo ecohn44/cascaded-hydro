@@ -43,7 +43,7 @@ simSettings = initSimSettings("dry", "det", "det");
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 40;                      % Number of simulation days 
+D = 30;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
 year = 2022;
@@ -81,7 +81,7 @@ plotStreamflows(I)
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-[model, obj, X] = oracleGurobi(T, c, I', lag, sysparams);
+[model, obj, X] = oracleGurobi(T, c, I', lag, sysparams, modelparams);
 
 %% ========================================================================
 % SECTION 5: PLOTTING
