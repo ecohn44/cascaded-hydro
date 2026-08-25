@@ -3,16 +3,8 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, s)
 %
 % Solves the hydropower dispatch over T time steps using the Gurobi
 % MATLAB API directly. Replaces YALMIP because YALMIP cannot translate
-% the nonlinear head-storage relationship:
+% the nonlinear head-storage relationship
 %
-%   h(i,t) = a_i * V(i,t)^b_i   (b_i in (0,1), V(i,t) > 0)
-%
-% to Gurobi. Instead, we introduce an auxiliary variable:
-%
-%   z(i,t) = V(i,t)^b_i   [Gurobi POW general constraint]
-%
-% and substitute h(i,t) = a_i * z(i,t) into all linear constraints,
-% eliminating h as a decision variable entirely.
 %
 % FuncNonlinear=1 activates Gurobi's spatial branch-and-bound, which
 % provides an EXACT (globally optimal) solution.

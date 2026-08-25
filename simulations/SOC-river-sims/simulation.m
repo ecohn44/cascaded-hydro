@@ -27,18 +27,17 @@ eta = .9;           % efficiency of release-energy conversion
 rho_w = 1000;       % density of water [kg/m^3]
 g = 9.8;            % acceleration due to gravity [m/s^2]
 c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
-n = 2;              % number of units in cascaded network 
 eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
-[inflow, modelparams, sysparams] = dataload(n);
+[inflow, modelparams, sysparams] = dataload();
 
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "constant", "pwl", "det", "det", "none");
+% Initialize settings (season, chance constrained solution, uncertainty form)
+simSettings = initSimSettings("dry", "det", "det");
  
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -51,9 +50,11 @@ year = 2022;
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
-    results_dir = "./resultsSSH/" + modelparams.season + "/";
+    results_dir = "./resultsSSH/";
 elseif simSettings.bounds == "jcc-bon"
-    results_dir = "./resultsBonferroni/" + modelparams.season + "/";
+    results_dir = "./resultsBonferroni/";
+elseif simSettings.bounds == "det"
+    results_dir = "./resultsOracle/";
 else 
     warning('Results directory does not exist');
 end 
@@ -65,16 +66,12 @@ fprintf('Data loading complete.\n');
 % ========================================================================
 
 % Compute simulation daterange and inflow series
-sim_center_date = datetime(year, 1, 1) + days(modelparams.center_day - 1);
-start_date = sim_center_date - hours(T/2);
-end_date   = sim_center_date + hours(T/2 - 1);
+start_date = datetime(year, 1, 1) + days(modelparams.start_day-1);
+end_date   = start_date + hours(T); % lenght = T + 1 for lagged structure 
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
 
-% Extract and normalize historic inflow timeseries [m3/hr]
-I_raw = [inflow_s.tda_inflow_m3hr, inflow_s.bon_inflow_m3hr];
-I_min = min(I_raw); I_max = max(I_raw);
-I_norm = (I_raw - I_min) ./ (I_max - I_min); scale = 0.05;
-I = scale*I_norm;
+% Extract and normalize historic inflow timeseries 
+I = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
 
 % Plot streamflow profiles
 plotStreamflows(I)
@@ -84,8 +81,7 @@ plotStreamflows(I)
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-%[model, obj, X] = oracle(T, c, I', lag, sysparams);
-[model, obj, X] = oracleNonlinear(T, c, I', lag, sysparams);
+[model, obj, X] = oracleGurobi(T, c, I', lag, sysparams);
 
 %% ========================================================================
 % SECTION 5: PLOTTING
@@ -127,34 +123,4 @@ end
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
-
-
-function plotStreamflows(q)
-    % q: T+lag x n matrix, each column is a streamflow time series
-
-    [T, n] = size(q);
-    t = (1:T)';        
-
-    figure;
-    for i = 1:n
-        subplot(n, 1, i);
-        plot(t, q(:, i), 'LineWidth', 3);
-        ylim([0 1.1*max(q(:,i))]); 
-        xlim([1, T]);
-        
-        ylabel(sprintf('q_%d', i), 'FontSize', 16);
-        set(gca, 'FontSize', 16); 
-
-        if i == 1
-            title('Streamflow Time Series', 'FontSize', 20);
-        end
-        if i == n
-            xlabel('Time (hour)', 'FontSize', 16);
-        else
-            set(gca, 'XTickLabel', []);  % hide x labels for middle plots
-        end
-
-        grid on;
-    end
-end
 
