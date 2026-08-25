@@ -43,7 +43,7 @@ simSettings = initSimSettings("dry", "det", "det");
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 30;                      % Number of simulation days 
+D = 85;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
 year = 2022;
@@ -67,7 +67,7 @@ fprintf('Data loading complete.\n');
 
 % Compute simulation daterange and inflow series
 start_date = datetime(year, 1, 1) + days(modelparams.start_day-1);
-end_date   = start_date + hours(T); % lenght = T + 1 for lagged structure 
+end_date   = start_date + hours(T-1); 
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
 
 % Extract and normalize historic inflow timeseries 
