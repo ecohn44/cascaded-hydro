@@ -17,9 +17,9 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir = false;
+make_dir = true;
 printplot = false; 
-save_mat = false; 
+save_mat = true; 
 save_streamflow = false;
 
 % Static parameters 
@@ -46,8 +46,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 D = 30;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
-year = 2022;                 % Simulation year 
-theta = 1;                 % Storage tarcking penalty
+years = [2021,2025];           % Simulation years
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -60,73 +59,67 @@ else
     warning('Results directory does not exist');
 end 
 
-fprintf('Data loading complete.\n');
-
-%% ========================================================================
-% SECTION 3: STREAMFLOW BEHAVIOR
-% ========================================================================
-
-% Compute simulation daterange and input time series
-start_date = datetime(year, 1, 1) + days(modelparams.start_day-1);
-end_date   = start_date + hours(T-1); 
-inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
-soc_s = soc(soc.datetime >= start_date & soc.datetime <= end_date, :);
-
-% Extract and normalize historic inflow timeseries 
-I = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
-SOC = [soc_s.mcn_soc, soc_s.jda_soc, soc_s.tda_soc, soc_s.bon_soc];
-
-% Plot streamflow profiles
-plotStreamflows(I);
-
-% Plot SOC reference trajectories 
-plotSOCs(SOC);
-
-
-%% ========================================================================
-% SECTION 4: OPTIMIZATION FRAMEWORK
-% ========================================================================
-
-[model, obj, X] = oracleGurobi(T, c, I', SOC', theta, sysparams, modelparams);
-
-%% ========================================================================
-% SECTION 5: PLOTTING
-% ========================================================================
-
-% Make plot directory for current simulation run 
-if make_dir
-    dir_path = "./plots/";
-    stamp = datestr(now,'mm-dd-yyyy HH.MM.SS');
-    path = fullfile(dir_path, stamp + " " + simSettings.season + " " ...
-        + simSettings.framework + ...
-        " T=" + string(T));
-    mkdir(path)
-end
-
-% Plot simulation behavior for all units
-simPlots(path, X, SOC, sysparams, T, c, printplot);
-
-% Plot SSH algorithm behavior 
-if simSettings.bounds == "jcc-ssh"
-    plotSSH(phi_vals, alpha_vals, eps, upper(simSettings.framework));
-end 
-
-% Save results 
-if save_mat
-    for i = 1:numel(sysparams)
-        sp = sysparams(i);
-        fname = sprintf('results_unit%d_%s.mat', ...
-            sp.unit, lower(simSettings.framework));
+for y = 1:length(years)
+    year = years(y);
+    fprintf('Running simulation for year: %d\n', year);
     
-        season = simSettings.season;  
+    stamp = string(year) + "_" + simSettings.season + "_" + simSettings.framework + "_T" + string(T);
     
-        save(fullfile(results_dir, fname), ...
-            'X', 'V_eff', 'std_hat', 'I', 'sysparams', ...
-            'T', 'c', 'lag', 'season', '-v7');
+    % Make plot directory for current simulation run 
+    if make_dir
+        path = fullfile(results_dir, stamp);
+        if ~exist(path, 'dir')
+            mkdir(path)
+        end
     end
-end 
+    
+    fprintf('Data loading complete.\n');
+    
+    %% ========================================================================
+    % SECTION 3: STREAMFLOW BEHAVIOR
+    % ========================================================================
+    
+    % Compute simulation daterange and input time series
+    start_date = datetime(year, 1, 1) + days(modelparams.start_day-1);
+    end_date   = start_date + hours(T-1); 
+    inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
+    soc_s = soc(soc.datetime >= start_date & soc.datetime <= end_date, :);
+    
+    % Extract and normalize historic inflow timeseries 
+    I = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
+    SOC = [soc_s.mcn_soc, soc_s.jda_soc, soc_s.tda_soc, soc_s.bon_soc];
+    
+    % Plot streamflow profiles
+    plotStreamflows(I);
 
+    % Plot SOC reference trajectories 
+    plotSOCs(SOC);
+    
+    
+    %% ========================================================================
+    % SECTION 4: OPTIMIZATION FRAMEWORK
+    % ========================================================================
+    
+    thetas = [1.0, 0.1, 0.01];  %Storage tracking penalty
+    
+    for i = 1:length(thetas)
+        theta = thetas(i);
+        fprintf('Running simulation for theta: %d\n', theta);
 
-fprintf('Simulation complete.\n');
-fprintf('Total runtime: %.2f seconds.\n', toc);
-
+        [model, obj, X] = oracleGurobi(T, c, I', SOC', theta, sysparams);
+    
+        % Plot simulation behavior for all units
+        % simPlots(path, X, SOC, sysparams, T, c, printplot);
+        
+        % Save results 
+        if save_mat
+            fname = sprintf('results_theta%d.mat', round(100*theta));
+            savepath = results_dir + "/" + stamp + "/";
+            save(fullfile(savepath, fname), 'X', 'sysparams', 'T', 'theta');
+        end 
+        
+        
+        fprintf('Simulation complete.\n');
+        fprintf('Total runtime: %.2f seconds.\n', toc);
+    end 
+end

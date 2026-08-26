@@ -1,4 +1,4 @@
-function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys, model)
+function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys)
 % ORACLE  Generalized n-unit Hydropower Optimization Model
 %
 % Solves the hydropower dispatch over T time steps using the Gurobi
@@ -23,8 +23,6 @@ function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys, model)
 
     n = numel(sys);
     X = [];
-    alpha = model.coef1;
-    beta = model.coef2;
 
     % =====================================================================
     % Decisions Variables
@@ -300,6 +298,12 @@ function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys, model)
             h_exact = sys(i).a .* V_opt(i,2:T).^sys(i).b;
             p_physical(i,2:T) = c .* h_exact .* u_opt(i,2:T);
         end
+
+        % Print total power generation and system spill 
+        p_total = sum(sum(p_physical));
+        sp_total = sum(sum(sp_opt));
+        fprintf('System Power Generation:   %.2f\n', p_total);
+        fprintf('System Spill:              %.2f\n', sp_total);
         
         % McCormick relaxation error
         p_error = p_opt - p_physical;
@@ -312,22 +316,20 @@ function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys, model)
         fprintf('\nMaximum-error location:\n');
         fprintf('Unit:                      %d\n', i_max);
         fprintf('Time:                      %d\n', t_max);
-        fprintf('Volume:                    %.6f\n', V_opt(i_max,t_max));
-        fprintf('Release:                   %.6f\n', u_opt(i_max,t_max));
-        fprintf('Relaxed power:             %.6f\n', p_opt(i_max,t_max));
-        fprintf('Physical power:            %.6f\n', p_physical(i_max,t_max));
-        fprintf('Signed error:              %.6f\n', p_error(i_max,t_max));
+        fprintf('Relaxed power:             %.2f\n', p_opt(i_max,t_max));
+        fprintf('Physical power:            %.2f\n', p_physical(i_max,t_max));
+        fprintf('Error:                     %.2f\n', p_error(i_max,t_max));
         
         obj_relaxed  = sum(p_opt, 'all');
         obj_physical = sum(p_physical, 'all');
         obj_error_pct = 100 * (obj_relaxed - obj_physical) / max(abs(obj_physical), 1e-8);
         
         fprintf('\nMcCormick relaxation error:\n');
-        fprintf('Maximum absolute power error: %.6f\n', max_abs_error);
-        fprintf('Mean absolute power error:    %.6f\n', mean_abs_error);
-        fprintf('Relaxed objective:            %.6f\n', obj_relaxed);
-        fprintf('Physical objective:           %.6f\n', obj_physical);
-        fprintf('Objective overstatement:      %.4f%%\n', obj_error_pct);
+        fprintf('Maximum absolute power error: %.2f\n', max_abs_error);
+        fprintf('Mean absolute power error:    %.2f\n', mean_abs_error);
+        fprintf('Relaxed objective:            %.2f\n', obj_relaxed);
+        fprintf('Physical objective:           %.2f\n', obj_physical);
+        fprintf('Objective overstatement:      %.2f%%\n', obj_error_pct);
 
         % Reference Tracking Error 
         normalized_tracking_error = zeros(n, T);
