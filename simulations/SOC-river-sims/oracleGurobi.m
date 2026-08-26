@@ -1,4 +1,4 @@
-function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
+function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
 % ORACLE  Generalized n-unit Hydropower Optimization Model
 %
 % Solves the hydropower dispatch over T time steps using the Gurobi
@@ -56,6 +56,7 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
 
     for i = 1:n
         for t = 1:T
+
             % Set volume lower and upper bounds 
             lb(idx_V(i,t)+1)  = sys(i).min_V;
             ub(idx_V(i,t)+1)  = sys(i).max_V;
@@ -146,6 +147,12 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
                 u_max = sys(i).max_ut;
                 a_i   = sys(i).a;
 
+                % Tighten relaxation at t = T
+                if t == T
+                    v_min_t = max(sys(i).min_V, sys(i).V0);
+                    h_min = sys(i).a * v_min_t^sys(i).b;
+                end
+
                 % Constraint 1: -p/c + h_min*u + u_min*a*z <= h_min*u_min
                 row = row + 1;
                 rows  = [rows;  row;             row;            row          ];
@@ -179,22 +186,22 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
                 sense = [sense; '<'];
 
                 % Mass balance: V(i,t) - V(i,t-1) + u(i,t) + sp(i,t) = I(i,t)
-                if i == 1 || t <= lag
-                    row = row + 1;
-                    rows  = [rows;  row;            row;             row;            row            ];
-                    cols  = [cols;  idx_V(i,t)+1;   idx_V(i,t-1)+1;  idx_u(i,t)+1;  idx_sp(i,t)+1  ];
-                    vals  = [vals;  1;              -1;              1;              1              ];
-                    rhs   = [rhs;   I(i,t)          ];
-                    sense = [sense; '='];
+                row = row + 1;
+                rows  = [rows;  row;            row;             row;            row            ];
+                cols  = [cols;  idx_V(i,t)+1;   idx_V(i,t-1)+1;  idx_u(i,t)+1;  idx_sp(i,t)+1  ];
+                vals  = [vals;  1;              -1;              1;              1              ];
+                rhs   = [rhs;   I(i,t)          ];
+                sense = [sense; '='];
 
-                else % Mass balance: V(i,t) = V(i,t-1) + alpha*I(i,t) + beta*[u(i-1,t-lag) + sp(i-1,t-lag)] - (u(i,t) + sp(i,t))
+                if t == T
+                    % Terminal Conditions: V(i,T) = V0 
                     row = row + 1;
-                    rows  = [rows;  row; row; row; row; row; row];
-                    cols  = [cols;  idx_V(i,t)+1; idx_V(i,t-1)+1; idx_u(i,t)+1; idx_sp(i,t)+1; idx_u(i-1,t-lag)+1; idx_sp(i-1,t-lag)+1];
-                    vals  = [vals;  1; -1; 1; 1; -beta; -beta];
-                    rhs   = [rhs;   alpha*I(i,t)];
-                    sense = [sense; '='];
-                end
+                    rows  = [rows;  row];                            
+                    cols  = [cols;  idx_V(i,t)+1]; 
+                    vals  = [vals;  1];                              
+                    rhs   = [rhs;   sys(i).V0];                       
+                    sense = [sense; '>'];      
+                end 
 
             end  
         end 
@@ -209,8 +216,8 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
     for i = 1:n
         for t = 2:T
             k = k + 1;
-            genconpow(k).xvar = idx_V(i,t);   % index of V(i,t)
-            genconpow(k).yvar = idx_z(i,t);   % index of z(i,t)
+            genconpow(k).xvar = idx_V(i,t) + 1;   % index of V(i,t)
+            genconpow(k).yvar = idx_z(i,t) + 1;   % index of z(i,t)
             genconpow(k).a    = sys(i).b;     % exponent in (0,1)
         end
     end
@@ -231,7 +238,7 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
     % Gurobi Parameters
     params.OutputFlag    = 1; % Print Gurobi log to console
     params.Seed          = 1; % Fix random seed for reproducibility
-    params.Threads       = 1; % Single thread (set higher for production runs)
+    params.Threads       = 1; % Thread usage
     params.FuncNonlinear = 1; % Spatial B&B for genconpow constraints
 
     % Solve
@@ -256,19 +263,50 @@ function [result, obj, X] = oracleGurobi(T, c, I, lag, sys, model)
             end
         end
 
-        % Reconstruct effective inflow (natural + cascade upstream)
-        q = I;
-        for i = 2:n
-            for t = lag+1:T
-                q(i,t) = I(i,t) + u_opt(i-1,t-lag) + sp_opt(i-1,t-lag);
-            end
-        end
-
         for i = 1:n
-            X = [X, V_opt(i,:)', p_opt(i,:)', u_opt(i,:)', sp_opt(i,:)', q(i,:)'];
+            X = [X, V_opt(i,:)', p_opt(i,:)', u_opt(i,:)', sp_opt(i,:)', I(i,:)'];
         end
 
         obj = sum(p_opt(:));
+
+        % Evaluate physical power at the optimized V and u
+        p_physical = p_opt;  % t = 1 does not use the McCormick relaxation
+        for i = 1:n
+            h_exact = sys(i).a .* V_opt(i,2:T).^sys(i).b;
+            p_physical(i,2:T) = c .* h_exact .* u_opt(i,2:T);
+        end
+        
+        % McCormick relaxation error
+        p_error = p_opt - p_physical;
+
+        % Locate maximum McCormick error
+        [max_error, linear_idx] = max(abs(p_error(:)));
+        [i_max, t_max] = ind2sub(size(p_error), linear_idx);
+
+        fprintf('\nMaximum-error location:\n');
+        fprintf('Unit:                      %d\n', i_max);
+        fprintf('Time:                      %d\n', t_max);
+        fprintf('Volume:                    %.6f\n', V_opt(i_max,t_max));
+        fprintf('Release:                   %.6f\n', u_opt(i_max,t_max));
+        fprintf('Relaxed power:             %.6f\n', p_opt(i_max,t_max));
+        fprintf('Physical power:            %.6f\n', p_physical(i_max,t_max));
+        fprintf('Signed error:              %.6f\n', p_error(i_max,t_max));
+        
+        max_abs_error  = max(abs(p_error), [], 'all');
+        mean_abs_error = mean(abs(p_error), 'all');
+        
+        obj_relaxed  = sum(p_opt, 'all');
+        obj_physical = sum(p_physical, 'all');
+        
+        obj_error_pct = 100 * (obj_relaxed - obj_physical) / max(abs(obj_physical), 1e-8);
+        
+        fprintf('\nMcCormick relaxation error:\n');
+        fprintf('Maximum absolute power error: %.6f\n', max_abs_error);
+        fprintf('Mean absolute power error:    %.6f\n', mean_abs_error);
+        fprintf('Relaxed objective:            %.6f\n', obj_relaxed);
+        fprintf('Physical objective:           %.6f\n', obj_physical);
+        fprintf('Objective overstatement:      %.4f%%\n', obj_error_pct);
+
     else
         warning('Gurobi did not find an optimal solution. Status: %s', result.status);
         obj = NaN;

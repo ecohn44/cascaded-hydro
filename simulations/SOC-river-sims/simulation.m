@@ -30,7 +30,7 @@ c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
 eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
-[inflow, modelparams, sysparams] = dataload();
+[inflow, soc, modelparams, sysparams] = dataload();
 
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
@@ -43,7 +43,7 @@ simSettings = initSimSettings("dry", "det", "det");
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 85;                      % Number of simulation days 
+D = 30;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
 year = 2022;
@@ -65,23 +65,28 @@ fprintf('Data loading complete.\n');
 % SECTION 3: STREAMFLOW BEHAVIOR
 % ========================================================================
 
-% Compute simulation daterange and inflow series
+% Compute simulation daterange and input time series
 start_date = datetime(year, 1, 1) + days(modelparams.start_day-1);
 end_date   = start_date + hours(T-1); 
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
+soc_s = soc(soc.datetime >= start_date & soc.datetime <= end_date, :);
 
 % Extract and normalize historic inflow timeseries 
 I = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
+SOC = [soc_s.mcn_soc, soc_s.jda_soc, soc_s.tda_soc, soc_s.bon_soc];
 
 % Plot streamflow profiles
-plotStreamflows(I)
+plotStreamflows(I);
+
+% Plot SOC reference trajectories 
+plotSOCs(SOC);
 
 
 %% ========================================================================
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-[model, obj, X] = oracleGurobi(T, c, I', lag, sysparams, modelparams);
+[model, obj, X] = oracleGurobi(T, c, I', sysparams, modelparams);
 
 %% ========================================================================
 % SECTION 5: PLOTTING
