@@ -1,4 +1,4 @@
-function simPlots(path, X, sysparams, T, c, printplot)
+function simPlots(path, X, SOC, sysparams, T, c, printplot)
     % simPlots: Create one figure per unit and save as PNG
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1,
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2, ...
@@ -15,6 +15,7 @@ function simPlots(path, X, sysparams, T, c, printplot)
 
         % Extract decision variables for this unit
         V = X(:, base+1);
+        soc = SOC(:,i);
         p = X(:, base+2);
         u = X(:, base+3);
         s = X(:, base+4);
@@ -58,6 +59,7 @@ function simPlots(path, X, sysparams, T, c, printplot)
         % Subplot 4: Volume
         subplot(2,3,4);
         plot(1:T, V, 'LineWidth', 2, 'DisplayName', 'Volume'); hold on;
+        plot(1:T, soc, '--g', 'LineWidth', 1, 'DisplayName', 'Ref. Volume')
         yline(sp.max_V, '--r','LineWidth', 1.5);
         yline(sp.min_V, '--r','LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('m^3');

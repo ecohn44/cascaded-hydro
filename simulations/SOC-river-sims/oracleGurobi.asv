@@ -1,4 +1,4 @@
-function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
+function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys, model)
 % ORACLE  Generalized n-unit Hydropower Optimization Model
 %
 % Solves the hydropower dispatch over T time steps using the Gurobi
@@ -37,14 +37,15 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
     %
     % =====================================================================
     % Total number of constraints 
-    nVars = 4*n*T + n*(T-1);
+    nVars = 5*n*T + n*(T-1);
 
     % Mapping functions from unit and time index to linear constraint index 
     idx_V  = @(i,t)  (i-1)*T + (t-1);          
     idx_p  = @(i,t)  n*T + (i-1)*T + (t-1); 
     idx_u  = @(i,t)  2*n*T + (i-1)*T + (t-1); 
     idx_sp = @(i,t)  3*n*T + (i-1)*T + (t-1); 
-    idx_z  = @(i,t)  4*n*T + (i-1)*(T-1) + (t-2); 
+    idx_d =  @(i,t)  4*n*T + (i-1)*T + (t-1);
+    idx_z  = @(i,t)  5*n*T + (i-1)*(T-1) + (t-2); 
 
     % =====================================================================
     % Static Constraints and Objective Coefficients
@@ -52,7 +53,7 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
     % =====================================================================
     lb        = -inf(nVars, 1); % lower bound array
     ub        =  inf(nVars, 1); % upper bound array
-    obj_coeff =  zeros(nVars, 1); % objective coefficients (-1, 1E-4)
+    obj_coeff =  zeros(nVars, 1); % objective coefficients 
 
     for i = 1:n
         for t = 1:T
@@ -73,6 +74,12 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
             % Enforce non-negativity for spill 
             lb(idx_sp(i,t)+1) = 0;
             obj_coeff(idx_sp(i,t)+1) = 1e-4;
+
+            % Volume tracking error 
+            lb(idx_d(i,t)+1) = 0;
+            ub(idx_d(i,t)+1) = inf;
+            volume_range = sys(i).max_V - sys(i).min_V;
+            obj_coeff(idx_d(i,t)+1) = theta_V / volume_range;
 
             % Define helper variable for nonlinear hydraulic head 
             if t >= 2
@@ -147,6 +154,12 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
                 u_max = sys(i).max_ut;
                 a_i   = sys(i).a;
 
+                % Tighten relaxation at t = T
+                if t == T
+                    v_min_t = max(sys(i).min_V, sys(i).V0);
+                    h_min = sys(i).a * v_min_t^sys(i).b;
+                end
+
                 % Constraint 1: -p/c + h_min*u + u_min*a*z <= h_min*u_min
                 row = row + 1;
                 rows  = [rows;  row;             row;            row          ];
@@ -187,6 +200,22 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
                 rhs   = [rhs;   I(i,t)          ];
                 sense = [sense; '='];
 
+                % Tracking error: d(i,t) >= V(i,t) - V_hist(i,t)
+                row = row + 1;
+                rows = [rows; row; row];
+                cols = [cols; idx_V(i,t)+1; idx_d(i,t)+1];
+                vals = [vals; 1; -1];
+                rhs   = [rhs; V_hist(i,t)];
+                sense = [sense; '<'];
+
+                % Tracking error: d(i,t) >= V_hist(i,t) - V(i,t)
+                row = row + 1;
+                rows = [rows; row; row];
+                cols = [cols; idx_V(i,t)+1; idx_d(i,t)+1];
+                vals = [vals; 1; -1];
+                rhs   = [rhs; V_hist(i,t)];
+                sense = [sense; '<'];
+
                 if t == T
                     % Terminal Conditions: V(i,T) = V0 
                     row = row + 1;
@@ -210,8 +239,8 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
     for i = 1:n
         for t = 2:T
             k = k + 1;
-            genconpow(k).xvar = idx_V(i,t);   % index of V(i,t)
-            genconpow(k).yvar = idx_z(i,t);   % index of z(i,t)
+            genconpow(k).xvar = idx_V(i,t) + 1;   % index of V(i,t)
+            genconpow(k).yvar = idx_z(i,t) + 1;   % index of z(i,t)
             genconpow(k).a    = sys(i).b;     % exponent in (0,1)
         end
     end

@@ -46,7 +46,8 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 D = 30;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
-year = 2022;
+year = 2022;                 % Simulation year 
+theta = 1;                 % Storage tarcking penalty
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -86,7 +87,7 @@ plotSOCs(SOC);
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-[model, obj, X] = oracleGurobi(T, c, I', sysparams, modelparams);
+[model, obj, X] = oracleGurobi(T, c, I', SOC', theta, sysparams, modelparams);
 
 %% ========================================================================
 % SECTION 5: PLOTTING
@@ -103,7 +104,7 @@ if make_dir
 end
 
 % Plot simulation behavior for all units
-simPlots(path, X, sysparams, T, c, printplot);
+simPlots(path, X, SOC, sysparams, T, c, printplot);
 
 % Plot SSH algorithm behavior 
 if simSettings.bounds == "jcc-ssh"

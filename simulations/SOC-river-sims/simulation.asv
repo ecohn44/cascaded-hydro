@@ -30,28 +30,32 @@ c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
 eps = 0.05;         % risk tolerance 
 
 % Load inflow data 
-[inflow, modelparams, sysparams] = dataload();
+[inflow, soc, modelparams, sysparams] = dataload();
+
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, drought type, lin a, pprox, uncertainty, sln alg, volume price)
-simSettings = initSimSettings("dry", "constant", "pwl", "det", "det", "none");
+% Initialize settings (season, chance constrained solution, uncertainty form)
+simSettings = initSimSettings("dry", "det", "det");
  
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 40;                      % Number of simulation days 
+D = 30;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
-year = 2022;
+year = 2022;                 % Simulation year 
+theta = .01;                 % Storage tarcking penalty
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
-    results_dir = "./resultsSSH/" + modelparams.season + "/";
+    results_dir = "./resultsSSH/";
 elseif simSettings.bounds == "jcc-bon"
-    results_dir = "./resultsBonferroni/" + modelparams.season + "/";
+    results_dir = "./resultsBonferroni/";
+elseif simSettings.bounds == "det"
+    results_dir = "./resultsOracle/";
 else 
     warning('Results directory does not exist');
 end 
@@ -62,24 +66,28 @@ fprintf('Data loading complete.\n');
 % SECTION 3: STREAMFLOW BEHAVIOR
 % ========================================================================
 
-% Compute simulation daterange and inflow series
+% Compute simulation daterange and input time series
 start_date = datetime(year, 1, 1) + days(modelparams.start_day-1);
-end_date   = start_date + hours(T); % lenght = T + 1 for lagged structure 
+end_date   = start_date + hours(T-1); 
 inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
+soc_s = soc(soc.datetime >= start_date & soc.datetime <= end_date, :);
 
 % Extract and normalize historic inflow timeseries 
-I = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bo_inflow];
+I = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
+SOC = [soc_s.mcn_soc, soc_s.jda_soc, soc_s.tda_soc, soc_s.bon_soc];
 
 % Plot streamflow profiles
-plotStreamflows(I)
+plotStreamflows(I);
+
+% Plot SOC reference trajectories 
+plotSOCs(SOC);
 
 
 %% ========================================================================
 % SECTION 4: OPTIMIZATION FRAMEWORK
 % ========================================================================
 
-%[model, obj, X] = oracle(T, c, I', lag, sysparams);
-[model, obj, X] = oracleNonlinear(T, c, I', lag, sysparams);
+[model, obj, X] = oracleGurobi(T, c, I', SOC', theta, sysparams, modelparams);
 
 %% ========================================================================
 % SECTION 5: PLOTTING
@@ -96,7 +104,7 @@ if make_dir
 end
 
 % Plot simulation behavior for all units
-simPlots(path, X, sysparams, T, c, printplot);
+simPlots(path, X, SOC, sysparams, T, c, printplot);
 
 % Plot SSH algorithm behavior 
 if simSettings.bounds == "jcc-ssh"
@@ -121,34 +129,4 @@ end
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
-
-
-function plotStreamflows(q)
-    % q: T+lag x n matrix, each column is a streamflow time series
-
-    [T, n] = size(q);
-    t = (1:T)';        
-
-    figure;
-    for i = 1:n
-        subplot(n, 1, i);
-        plot(t, q(:, i), 'LineWidth', 3);
-        ylim([0 1.1*max(q(:,i))]); 
-        xlim([1, T]);
-        
-        ylabel(sprintf('q_%d', i), 'FontSize', 16);
-        set(gca, 'FontSize', 16); 
-
-        if i == 1
-            title('Streamflow Time Series', 'FontSize', 20);
-        end
-        if i == n
-            xlabel('Time (hour)', 'FontSize', 16);
-        else
-            set(gca, 'XTickLabel', []);  % hide x labels for middle plots
-        end
-
-        grid on;
-    end
-end
 

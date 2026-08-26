@@ -1,4 +1,4 @@
-function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
+function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys, model)
 % ORACLE  Generalized n-unit Hydropower Optimization Model
 %
 % Solves the hydropower dispatch over T time steps using the Gurobi
@@ -37,14 +37,15 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
     %
     % =====================================================================
     % Total number of constraints 
-    nVars = 4*n*T + n*(T-1);
+    nVars = 5*n*T + n*(T-1);
 
     % Mapping functions from unit and time index to linear constraint index 
     idx_V  = @(i,t)  (i-1)*T + (t-1);          
     idx_p  = @(i,t)  n*T + (i-1)*T + (t-1); 
     idx_u  = @(i,t)  2*n*T + (i-1)*T + (t-1); 
     idx_sp = @(i,t)  3*n*T + (i-1)*T + (t-1); 
-    idx_z  = @(i,t)  4*n*T + (i-1)*(T-1) + (t-2); 
+    idx_d =  @(i,t)  4*n*T + (i-1)*T + (t-1);
+    idx_z  = @(i,t)  5*n*T + (i-1)*(T-1) + (t-2); 
 
     % =====================================================================
     % Static Constraints and Objective Coefficients
@@ -52,7 +53,7 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
     % =====================================================================
     lb        = -inf(nVars, 1); % lower bound array
     ub        =  inf(nVars, 1); % upper bound array
-    obj_coeff =  zeros(nVars, 1); % objective coefficients (-1, 1E-4)
+    obj_coeff =  zeros(nVars, 1); % objective coefficients 
 
     for i = 1:n
         for t = 1:T
@@ -73,6 +74,12 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
             % Enforce non-negativity for spill 
             lb(idx_sp(i,t)+1) = 0;
             obj_coeff(idx_sp(i,t)+1) = 1e-4;
+
+            % Volume tracking error 
+            lb(idx_d(i,t)+1) = 0;
+            ub(idx_d(i,t)+1) = inf;
+            volume_range = sys(i).max_V - sys(i).min_V;
+            obj_coeff(idx_d(i,t)+1) = theta / volume_range;
 
             % Define helper variable for nonlinear hydraulic head 
             if t >= 2
@@ -102,7 +109,7 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
                 rows  = [rows;  row; row; row];                             % Increment constraint row index
                 cols  = [cols;  idx_V(i,1)+1; idx_u(i,1)+1; idx_sp(i,1)+1]; % Add nonzero variables to LHS constraint matrix 
                 vals  = [vals;  1;   1;   1];                               % Constraint coefficients 
-                rhs   = [rhs;   sys(i).V0 + I(i,1)];                        % Define RHS constraint matrix
+                rhs   = [rhs;   SOC(i,1) + I(i,1)];                        % Define RHS constraint matrix
                 sense = [sense; '='];                                       % Constraint type 
 
                 % Initial turbine release:
@@ -114,7 +121,7 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
                 sense = [sense; '='];
 
                 % Initial power generation: 
-                h0 = sys(i).a * (sys(i).V0^sys(i).b);
+                h0 = sys(i).a * (SOC(i,1)^sys(i).b);
                 row = row + 1;
                 rows  = [rows;  row;            row           ];
                 cols  = [cols;  idx_p(i,1)+1;   idx_u(i,1)+1  ];
@@ -149,8 +156,10 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
 
                 % Tighten relaxation at t = T
                 if t == T
-                    v_min_t = max(sys(i).min_V, sys(i).V0);
+                    v_min_t = SOC(i,T);
+                    v_max_t = SOC(i,T);
                     h_min = sys(i).a * v_min_t^sys(i).b;
+                    h_max = sys(i).a * v_max_t^sys(i).b;
                 end
 
                 % Constraint 1: -p/c + h_min*u + u_min*a*z <= h_min*u_min
@@ -193,14 +202,30 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
                 rhs   = [rhs;   I(i,t)          ];
                 sense = [sense; '='];
 
+                % Tracking error: d(i,t) >= V(i,t) - V_hist(i,t)
+                row = row + 1;
+                rows = [rows; row; row];
+                cols = [cols; idx_V(i,t)+1; idx_d(i,t)+1];
+                vals = [vals; 1; -1];
+                rhs   = [rhs; SOC(i,t)];
+                sense = [sense; '<'];
+
+                % Tracking error: d(i,t) >= V_hist(i,t) - V(i,t)
+                row = row + 1;
+                rows = [rows; row; row];
+                cols = [cols; idx_V(i,t)+1; idx_d(i,t)+1];
+                vals = [vals; -1; -1];
+                rhs   = [rhs; -SOC(i,t)];
+                sense = [sense; '<'];
+
                 if t == T
                     % Terminal Conditions: V(i,T) = V0 
                     row = row + 1;
                     rows  = [rows;  row];                            
                     cols  = [cols;  idx_V(i,t)+1]; 
                     vals  = [vals;  1];                              
-                    rhs   = [rhs;   sys(i).V0];                       
-                    sense = [sense; '>'];      
+                    rhs   = [rhs;   SOC(i,T)];                       
+                    sense = [sense; '='];      
                 end 
 
             end  
@@ -280,7 +305,8 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
         p_error = p_opt - p_physical;
 
         % Locate maximum McCormick error
-        [max_error, linear_idx] = max(abs(p_error(:)));
+        [max_abs_error, linear_idx] = max(abs(p_error(:)));
+        mean_abs_error = mean(abs(p_error), 'all');
         [i_max, t_max] = ind2sub(size(p_error), linear_idx);
 
         fprintf('\nMaximum-error location:\n');
@@ -292,12 +318,8 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
         fprintf('Physical power:            %.6f\n', p_physical(i_max,t_max));
         fprintf('Signed error:              %.6f\n', p_error(i_max,t_max));
         
-        max_abs_error  = max(abs(p_error), [], 'all');
-        mean_abs_error = mean(abs(p_error), 'all');
-        
         obj_relaxed  = sum(p_opt, 'all');
         obj_physical = sum(p_physical, 'all');
-        
         obj_error_pct = 100 * (obj_relaxed - obj_physical) / max(abs(obj_physical), 1e-8);
         
         fprintf('\nMcCormick relaxation error:\n');
@@ -306,6 +328,14 @@ function [result, obj, X] = oracleGurobi(T, c, I, sys, model)
         fprintf('Relaxed objective:            %.6f\n', obj_relaxed);
         fprintf('Physical objective:           %.6f\n', obj_physical);
         fprintf('Objective overstatement:      %.4f%%\n', obj_error_pct);
+
+        % Reference Tracking Error 
+        normalized_tracking_error = zeros(n, T);
+        for i = 1:n
+            volume_range = sys(i).max_V - sys(i).min_V;
+            normalized_tracking_error(i,:) = abs(V_opt(i,:) - SOC(i,:)) / volume_range;
+        end  
+        fprintf('\nMean normalized volume tracking error: %.4f\n', mean(normalized_tracking_error, 'all'));
 
     else
         warning('Gurobi did not find an optimal solution. Status: %s', result.status);
