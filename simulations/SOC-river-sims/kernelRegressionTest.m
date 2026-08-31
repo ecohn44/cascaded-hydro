@@ -2,7 +2,9 @@
 % Date: August 2026
 % Description: Tuning kernel regression parameters using historical data
 
-years = 2018:2025;  
+clear all; close all;
+
+years = 2018:2024;  
 theta = 1;
 T = 2160;
 
@@ -29,8 +31,8 @@ for k = 1:length(years)
 end
 
 % Hyperparamter grid sweep
-W_grid = [24 72 168 336];
-sigma_grid = 0.01:0.01:0.10;
+W_grid = 24; %[24 72]; %[ 168 336];
+sigma_grid = 1; %[0.05 0.1 0.25 0.5 1 2 5]; %0.01:0.01:0.10;
 
 % Test kernel regression 
-[best_W, best_sigma, mean_rmse, fold_rmse] = kernelRegressionTuning(inflow_norm, soc_ref, W_grid, sigma_grid);
+[best_W, best_sigma, mean_rmse, fold_rmse] = kernelRegressionTuning(inflow_norm, soc_ref, W_grid, sigma_grid, years);
