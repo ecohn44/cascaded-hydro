@@ -39,7 +39,7 @@ function [best_W, best_sigma, mean_rmse, fold_rmse] = kernelRegressionTuning(inf
 
                 % Average of the six training trajectories
                 soc_average = mean(soc_ref(:, :, train), 3);
-                error_avg = soc_average(:, 2:end) - soc_ref(:, 2:end, test);
+                error_avg = soc_average(:, 2:end) - soc_hat(:, 2:end);
                 avg_rmse(i, j, test) = sqrt(mean(error_avg(:).^2));
 
                 % Calcuate test error 
@@ -68,7 +68,7 @@ function [best_W, best_sigma, mean_rmse, fold_rmse] = kernelRegressionTuning(inf
     fprintf('Best W = %g, best sigma = %.4g, mean RMSE = %.4f\n', ...
         best_W, best_sigma, mean_rmse(i, j));
 
-    fprintf('Average SOC RMSE: %.4f\n', mean(average_rmse));
+    fprintf('Average SOC RMSE: %.4f\n', mean(avg_rmse));
 
 end
 
@@ -79,26 +79,24 @@ function plotSOCs(soc_hat, soc_s, soc_avg, year)
     t = (1:T)';        
 
     figure;
+    tl = tiledlayout(n, 1, 'TileSpacing', 'compact');
+    
     for i = 1:n
-        subplot(n, 1, i);
-        plot(t, soc_hat(i, :), 'LineWidth', 3); hold on 
-        plot(t, soc_s(i, :), 'r--', 'LineWidth', 2); hold on 
-        plot(t, soc_avg(i, :), 'g--', 'LineWidth', 2);
-        xlim([1, T]);
-        
-        ylabel(sprintf('V_%d', i), 'FontSize', 16);
-        set(gca, 'FontSize', 16); 
-
-        if i == 1
-            title('SOC Trajectories ' + string(year), 'FontSize', 20);
-        end
-        if i == n
-            xlabel('Time (hour)', 'FontSize', 16);
-        else
-            set(gca, 'XTickLabel', []);  % hide x labels for middle plots
-        end
-
+        nexttile;
+    
+        p1 = plot(t, soc_hat(i,:), 'LineWidth', 3); hold on
+        p2 = plot(t, soc_s(i,:), 'r--', 'LineWidth', 2); hold on 
+        p3 = plot(t, soc_avg(i, :), 'g', 'LineWidth', 1);
+    
+        ylabel(sprintf('V_%d', i));
+        xlim([1 T]);
         grid on;
     end
     
+    xlabel(tl, 'Time (hour)');
+    title(tl, "SOC Trajectories " + string(year));
+    
+    lgd = legend([p1 p2 p3], {'Generated SOC', 'Historical SOC', 'Average SOC'});
+    lgd.Layout.Tile = 'east';
+        
 end

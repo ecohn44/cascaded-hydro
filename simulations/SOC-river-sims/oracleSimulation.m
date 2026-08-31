@@ -17,9 +17,9 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir = true;
+make_dir = false;
 printplot = false; 
-save_mat = true; 
+save_mat = false; 
 save_streamflow = false;
 
 % Static parameters 
@@ -43,10 +43,10 @@ simSettings = initSimSettings("dry", "det", "det");
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 90;                      % Number of simulation days 
+D = 30;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
-years = 2018:2025;           % Simulation years 
+years = 2022;                % Simulation years  2018:2025;
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -88,7 +88,7 @@ for y = 1:length(years)
     % Extract and normalize historic inflow timeseries 
     I_kcfs = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
     q_min = min(I_kcfs,[],'all');   q_max = max(I_kcfs,[],'all');
-    I = (I_kcfs - q_min) / (q_max - q_min);
+    I = (I_kcfs - q_min) / (q_max - q_min); % can set this to the 90 day reference min max 
     SOC = [soc_s.mcn_soc, soc_s.jda_soc, soc_s.tda_soc, soc_s.bon_soc];
     
     % Plot streamflow profiles
@@ -102,7 +102,7 @@ for y = 1:length(years)
     % SECTION 4: OPTIMIZATION FRAMEWORK
     % ========================================================================
     
-    thetas = [1.0, 0.1, 0.01];  %Storage tracking penalty
+    thetas = 1; %[1.0, 0.1, 0.01];  %Storage tracking penalty
     
     for i = 1:length(thetas)
         theta = thetas(i);
