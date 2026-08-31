@@ -45,7 +45,7 @@ $$
 where $W$ is `window`. Vectorize and concatenate the observed inflow and SOC histories:
 
 $$
-\mathbf x_t = [ \mathbf \tilde{q}^{RT}, \mathbf v^{RT}  ]_{\mathcal{W_t}}
+\mathbf x_t = [ \mathbf \tilde{q}^{RT}, \mathbf v^{RT}  ]_{\mathcal W_t}
 $$
  
 For every historical scenario $s\in\{1,\ldots,S\}$, construct the corresponding training vector
@@ -130,36 +130,6 @@ For each candidate pair and each held-out scenario, the tuning function:
 
 `mean_rmse(i,j)` is the average validation RMSE for `W_grid(i)` and `sigma_grid(j)`. `fold_rmse(i,j,s)` is the RMSE for held-out scenario `s` and should be inspected to ensure one year is not dominating the average.
 
-## Historical Test Before Real-Time Dispatch
-
-Reserve one complete scenario as the final test. For example, if scenario 8 is 2025:
-
-```matlab
-final_test = 8;
-train = setdiff(1:size(inflow_norm, 3), final_test);
-
-[best_W, best_sigma] = tune_kernel_parameters( ...
-    inflow_norm(:, :, train), soc_ref(:, :, train), ...
-    W_grid, sigma_grid);
-
-[T, n, ~] = size(inflow_norm);
-soc_test = zeros(T, n);
-soc_test(1, :) = soc_ref(1, :, final_test);
-
-for t = 1:T-1
-    soc_test(t + 1, :) = kernel_soc_reference( ...
-        inflow_norm(:, :, train), soc_ref(:, :, train), ...
-        inflow_norm(1:t, :, final_test), soc_test(1:t, :), ...
-        best_W, best_sigma);
-end
-
-test_error = soc_test(2:end, :) - soc_ref(2:end, :, final_test);
-test_rmse = sqrt(mean(test_error(:).^2));
-```
-
-First compare `soc_test` with the held-out oracle trajectory visually and calculate both total RMSE and RMSE for each unit. The kernel result should also be compared with the simple historical-mean reference; otherwise the added kernel weighting has not demonstrated value.
-
-Next run the real-time dispatch model on each held-out historical year. Pass the SOC produced by the dispatch simulation, rather than the held-out oracle SOC, into `kernel_soc_reference`. Record reference RMSE, terminal SOC error, SOC and flow constraint violations, generation, spill, and objective value. Do not feed the held-out oracle SOC history into the online function because that would make the backtest optimistic.
 
 ## Numerical Fallback
 
