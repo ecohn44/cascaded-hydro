@@ -1,11 +1,11 @@
 %% Author: Eliza Cohn
 % Date: August 2026
-% Description: Main driver for cascaded hydropower simulations 
+% Description: Main driver for oracle multi-period cascaded hydropower simulations 
 
 tic; 
 clear; clc; close all;
 
-addpath('/Library/gurobi1202/macos_universal2/matlab');
+addpath('/Library/gurobi1303/macos_universal2/matlab');
 addpath(genpath('/Users/elizacohn/Documents/YALMIP-master'))
 
 % Add shared functions to file path 
@@ -43,10 +43,10 @@ simSettings = initSimSettings("dry", "det", "det");
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 30;                      % Number of simulation days 
+D = 90;                      % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 2;                     % Travel time between units (hrs)
-years = [2021,2025];           % Simulation years
+years = 2018:2025;           % Simulation years 
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -80,13 +80,15 @@ for y = 1:length(years)
     % ========================================================================
     
     % Compute simulation daterange and input time series
-    start_date = datetime(year, 1, 1) + days(modelparams.start_day-1);
+    start_date = datetime(year, 9, 7);
     end_date   = start_date + hours(T-1); 
     inflow_s = inflow(inflow.datetime >= start_date & inflow.datetime <= end_date, :);
     soc_s = soc(soc.datetime >= start_date & soc.datetime <= end_date, :);
     
     % Extract and normalize historic inflow timeseries 
-    I = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
+    I_kcfs = [inflow_s.mcn_inflow, inflow_s.jda_inflow, inflow_s.tda_inflow, inflow_s.bon_inflow];
+    q_min = min(I_kcfs,[],'all');   q_max = max(I_kcfs,[],'all');
+    I = (I_kcfs - q_min) / (q_max - q_min);
     SOC = [soc_s.mcn_soc, soc_s.jda_soc, soc_s.tda_soc, soc_s.bon_soc];
     
     % Plot streamflow profiles

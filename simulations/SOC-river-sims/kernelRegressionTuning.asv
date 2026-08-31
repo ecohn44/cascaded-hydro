@@ -1,0 +1,53 @@
+function [best_W, best_sigma, mean_rmse, fold_rmse] = kernelRegressionTuning(inflow_norm, soc_ref, W_grid, sigma_grid)
+% Tune W and sigma by leave-one-scenario-out cross-validation.
+
+    % Extract problem dimensions
+    [T, n, S] = size(inflow_norm);
+    fold_rmse = zeros(numel(W_grid), numel(sigma_grid), S);
+
+    % For each window size 
+    for i = 1:numel(W_grid)
+        % For each smoothness parameter
+        for j = 1:numel(sigma_grid)
+            for test = 1:S
+
+                % Get training year indices
+                train = setdiff(1:S, test);
+
+                % Extract test inflow and reshape to T x n
+                inflow_test = reshape(inflow_norm(:, :, test), T, n);
+
+                % Extract test SOC reference 
+                soc_hat = zeros(T, n);
+
+                % Initialize with inital volume state 
+                soc_hat(1, :) = soc_ref(1, :, test);
+
+                % Generate reference for t = 2:T
+                for t = 1:T-1
+                    % Calculate next best SOC state from training data 
+                    soc_hat(t + 1, :) = kernelRegression( ...
+                        inflow_norm(:, :, train), ...
+                        soc_ref(:, :, train), ...
+                        inflow_test(1:t, :), ...
+                        soc_hat(1:t, :), ...
+                        W_grid(i), sigma_grid(j));
+                end
+
+                % Calcuate test error 
+                error = soc_hat(2:end, :) - soc_ref(2:end, :, test);
+                fold_rmse(i, j, test) = sqrt(mean(error(:).^2));
+            end
+        end
+    end
+
+    % Average RMSE over all years to get mean RMSE for each parameter pair
+    mean_rmse = mean(fold_rmse, 3);
+    [~, k] = min(mean_rmse(:));
+    [i, j] = ind2sub(size(mean_rmse), k);
+    best_W = W_grid(i);
+    best_sigma = sigma_grid(j);
+
+    fprintf('Best W = %g, best sigma = %.4g, mean RMSE = %.4f\n', ...
+        best_W, best_sigma, mean_rmse(i, j));
+end

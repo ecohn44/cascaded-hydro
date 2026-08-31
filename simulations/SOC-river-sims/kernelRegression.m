@@ -1,4 +1,4 @@
-function [soc_next, weights] = kernel_soc_reference(inflow_norm, soc_ref, inflow_history, soc_history, window, sigma)
+function [soc_next, weights] = kernelRegression(inflow_norm, soc_ref, inflow_history, soc_history, window, sigma)
 
 % Historical data:
 %   inflow_norm  T x n x S   normalized inflow for S scenarios

@@ -1,10 +1,12 @@
 function plotYearVolumes(results_folder)
+% plotYearVolumes("resultsOracle")
 
 close all;
 plot_years = false;
 
-years  = [2018 2019 2021 2022 2023 2025];
+years = 2018:2025; 
 thetas = [0.01 0.1 1];
+T = 2160;
 
 for a = 1:length(thetas)
 
@@ -13,7 +15,7 @@ for a = 1:length(thetas)
     % Load each year
     for k = 1:length(years)
         folder = fullfile(results_folder, ...
-            sprintf('%d_dry_det_T720',years(k)));
+            sprintf('%d_dry_det_T%d',years(k),T));
 
         file = fullfile(folder, ...
             sprintf('results_theta%d.mat',round(100*theta)));
