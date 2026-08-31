@@ -17,15 +17,20 @@ function [soc_next, weights] = kernel_soc_reference(inflow_norm, soc_ref, inflow
 
     assert(t < T, 'No t+1 reference exists when t >= T.');
 
-
+    % Create look back window 
     idx = max(1, t - window + 1):t;
+
+    % Real time look back window 
     x = [reshape(inflow_history(idx, :), [], 1); reshape(soc_history(idx, :), [], 1)];
 
     similarity = zeros(S, 1);
+    % For each historical scenario s in S
     for s = 1:S
-        y = [reshape(inflow_norm(idx, :, s), [], 1); ...
-             reshape(soc_ref(idx, :, s), [], 1)];
+        % Create historical look back window 
+        y = [reshape(inflow_norm(idx, :, s), [], 1); reshape(soc_ref(idx, :, s), [], 1)];
+        % Calculate the squared distance for similarity measure
         distance2 = sum((x - y).^2);
+        % Calculate the similarity for the current scenario
         similarity(s) = exp(-distance2 / (2 * sigma^2 * numel(x)));
     end
 

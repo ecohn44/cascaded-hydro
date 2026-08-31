@@ -52,7 +52,7 @@ $$
 For every historical scenario $s\in\{1,\ldots,S\}$, construct the corresponding training vector
 
 $$
-\mathbf y_{s,t}= \left[ \mathbf \tilde{q}^{(s)}, \mathbf v^{*,(s)}  \right]_{\mathcal W_t}
+\mathbf y_{s,t}= \left[ \mathbf \tilde{q}^{(s)}, \mathbf v^{(s)}  \right]_{\mathcal W_t}
 $$
 
 Here, $\tilde{\mathbf q}$ is normalized inflow, $\mathbf v$ is measured online SOC, and $\mathbf v^{*,(s)}$ is the hindsight-optimal SOC trajectory for scenario $s$.
@@ -60,7 +60,7 @@ Here, $\tilde{\mathbf q}$ is normalized inflow, $\mathbf v$ is measured online S
 The feature-vector dimension is
 
 $$
-d_t=2n|\mathcal W_t|.
+d_t=2n|\mathcal I_t|.
 $$
 
 The Gaussian similarity between the online history and scenario $s$ is
