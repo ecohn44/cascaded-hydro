@@ -15,7 +15,7 @@ function simPlots(path, X, SOC, sysparams, T, c, printplot)
 
         % Extract decision variables for this unit
         V = X(:, base+1);
-        soc = SOC(:,i);
+        soc = SOC(i, :);
         p = X(:, base+2);
         u = X(:, base+3);
         s = X(:, base+4);
