@@ -1,0 +1,286 @@
+function [result, p_out, u_out, V_out, sp_out] = realtimeGurobi(t, c, I_t, V_prev, u_prev, V_ref, theta, sys)
+% =========================================================================
+% INPUTS
+%   t        : Current time period index 
+%   c        : Power conversion coefficient (scalar)
+%   I_t      : Inflow vector for this period (n x 1)
+%   V_prev   : Measured storage at start of this period (n x 1) 
+%   u_prev   : Turbine release in previous period (n x 1) 
+%   V_ref    : Reference storage target from long-term planner (n x 1)
+%   theta    : Weight on the volume-tracking penalty term (scalar)
+%   sys      : Struct array of per-unit physical parameters:
+%
+% OUTPUTS
+%   result   : Gurobi result struct (full solver output)
+%   p_out    : Power output this period (n x 1)
+%   u_out    : Turbine release this period (n x 1)
+%   V_out    : End-of-period storage (n x 1)
+%   sp_out   : Spill this period (n x 1)
+% =========================================================================
+
+    n = numel(sys);
+
+    % 1: Define Decision Variables 
+    nVars  = 6 * n;
+    idx_V  = @(i)  (i - 1);
+    idx_p  = @(i)  n     + (i - 1);
+    idx_u  = @(i)  2*n   + (i - 1);
+    idx_sp = @(i)  3*n   + (i - 1);
+    idx_d  = @(i)  4*n   + (i - 1);
+    idx_w  = @(i)  5*n   + (i - 1);
+
+    % 2: Define Variable Bounds and Objective Coefficients
+    [lb, ub, obj_coeff, ~, ~] = buildVariables(n, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, idx_w, V_prev, I_t, theta, sys);
+
+    % 3: Linear Constraints
+    [A, rhs, sense] = buildLinearConstraints(n, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, V_prev, u_prev, I_t, V_ref, c, sys);
+
+    % 4: Nonlinear Constraints 
+    genconstrnl = buildNonlinearConstraints(n, idx_V, idx_u, idx_w, sys);
+
+    % 5: Solve Gurobi Model
+    result = solveModel(n, nVars, obj_coeff, A, rhs, sense, lb, ub, genconstrnl, t);
+
+    % 6: Extract Solution
+    [p_out, u_out, V_out, sp_out] = extractSolution(result, n, idx_V, idx_p, idx_u, idx_sp, V_prev, I_t, V_ref, c, t, sys);
+
+end
+
+
+% Helper: Define upper and lower bounds on decision variables & obj. coefs
+function [lb, ub, obj_coeff, V_lb, V_ub] = buildVariables(n, nVars, ...
+        idx_V, idx_p, idx_u, idx_sp, idx_d, idx_w, ...
+        V_prev, I_t, theta, sys)
+
+    lb        = zeros(nVars, 1);
+    ub        =  inf(nVars, 1);
+    obj_coeff =  zeros(nVars, 1);
+
+    V_lb = zeros(n, 1);
+    V_ub = zeros(n, 1);
+
+    for i = 1:n
+               
+        % Volume Bounds 
+        V_lb(i) = max(sys(i).min_V, V_prev(i) + I_t(i) - sys(i).max_ut);
+        V_ub(i) = min(sys(i).max_V, V_prev(i) + I_t(i) - sys(i).min_ut);
+
+        % Check for infeasibility 
+        if V_lb(i) > V_ub(i)
+            V_lb(i) = sys(i).min_V; V_ub(i) = sys(i).max_V;
+        end
+
+        % B1: Storage V(i)
+        lb(idx_V(i)+1)  = V_lb(i);
+        ub(idx_V(i)+1)  = V_ub(i);
+
+        % B2: Power output p(i)
+        lb(idx_p(i)+1)  = 0;
+        ub(idx_p(i)+1)  = sys(i).F;
+        obj_coeff(idx_p(i)+1) = -1;
+
+        % B3: Turbine release u(i)
+        lb(idx_u(i)+1)  = sys(i).min_ut;
+        ub(idx_u(i)+1)  = sys(i).max_ut;
+
+        % B4: Spill sp(i)
+        lb(idx_sp(i)+1) = 0;
+        ub(idx_sp(i)+1) = inf;
+        obj_coeff(idx_sp(i)+1) = 1e-4;
+
+        % B5: Tracking error d(i) 
+        lb(idx_d(i)+1)  = 0;
+        ub(idx_d(i)+1)  = inf;
+        obj_coeff(idx_d(i)+1) = theta / (sys(i).max_V - sys(i).min_V);
+
+        % B6: Auxiliary nonlinear variable w(i) = V(i)^b * u(i)
+        lb(idx_w(i)+1)  = V_lb(i)^sys(i).b * sys(i).min_ut;
+        ub(idx_w(i)+1)  = V_ub(i)^sys(i).b * sys(i).max_ut;
+    end
+end
+
+
+% Helper: Define linear constraints 
+function [A, rhs, sense] = buildLinearConstraints(n, nVars, ...
+        idx_V, idx_p, idx_u, idx_sp, idx_d, ...
+        V_prev, u_prev, I_t, V_ref, c, sys)
+
+    rows  = [];
+    cols  = [];
+    vals  = [];
+    rhs   = [];
+    sense = '';
+    row   = 0;
+
+    for i = 1:n
+        a_i = sys(i).a;
+
+        % (C1) Mass balance: V(i) + u(i) + sp(i) = V_prev(i) + I_t(i)
+        row = row + 1;
+        rows  = [rows;  row;          row;           row          ];
+        cols  = [cols;  idx_V(i)+1;   idx_u(i)+1;    idx_sp(i)+1  ];
+        vals  = [vals;  1;            1;             1            ];
+        rhs   = [rhs;   V_prev(i) + I_t(i)                        ];
+        sense = [sense; '='                                        ];
+
+        % (C2) Ramp-rate lower bound:  u(i) >= u_prev(i) - RR_dn
+        row = row + 1;
+        rows  = [rows;  row          ];
+        cols  = [cols;  idx_u(i)+1   ];
+        vals  = [vals;  -1           ];
+        rhs   = [rhs;   -(u_prev(i) - sys(i).RR_dn)];
+        sense = [sense; '<'          ];
+
+        % (C3) Ramp-rate upper bound:  u(i) <= u_prev(i) + RR_up
+        row = row + 1;
+        rows  = [rows;  row          ];
+        cols  = [cols;  idx_u(i)+1   ];
+        vals  = [vals;  1            ];
+        rhs   = [rhs;   u_prev(i) + sys(i).RR_up];
+        sense = [sense; '<'          ];
+
+        % (C4) Exact power output: p(i) = c * a_i * w(i)
+        row = row + 1;
+        rows  = [rows;  row;          row          ];
+        cols  = [cols;  idx_p(i)+1;   idx_w(i)+1   ];
+        vals  = [vals;  1;            -c * a_i     ];
+        rhs   = [rhs;   0                           ];
+        sense = [sense; '='                         ];
+
+        % (C5) Tracking error upper:  V(i) - d(i) <= V_ref(i)
+        row = row + 1;
+        rows  = [rows;  row;          row          ];
+        cols  = [cols;  idx_V(i)+1;   idx_d(i)+1   ];
+        vals  = [vals;  1;            -1           ];
+        rhs   = [rhs;   V_ref(i)                    ];
+        sense = [sense; '<'                         ];
+
+        % (C6) Tracking error lower: -V(i) - d(i) <= -V_ref(i)
+        row = row + 1;
+        rows  = [rows;  row;          row          ];
+        cols  = [cols;  idx_V(i)+1;   idx_d(i)+1   ];
+        vals  = [vals;  -1;           -1           ];
+        rhs   = [rhs;   -V_ref(i)                   ];
+        sense = [sense; '<'                         ];
+
+    end  
+
+    nCons = row;
+    A = sparse(rows, cols, vals, nCons, nVars);
+end
+
+% Helper: Build nonconvex bilinear constraint 
+function genconstrnl = buildNonlinearConstraints(n, idx_V, idx_u, idx_w, sys)
+
+    % Opcode constants (Gurobi 13.0 reference manual)
+    OPC_CONSTANT = int32(0);
+    OPC_VARIABLE = int32(1);
+    OPC_MULTIPLY = int32(4);
+    OPC_POW      = int32(12);
+
+    genconstrnl = struct('resvar', {}, 'opcode', {}, 'data', {}, 'parent', {});
+
+    for i = 1:n
+
+        genconstrnl(i).resvar = idx_w(i) + 1;      % 1-based index of w(i)
+
+        genconstrnl(i).opcode = int32([ ...
+            OPC_MULTIPLY; ...   % node 0: root
+            OPC_POW;      ...   % node 1: V^b sub-expression
+            OPC_VARIABLE; ...   % node 2: V(i) leaf
+            OPC_CONSTANT; ...   % node 3: b_i leaf
+            OPC_VARIABLE  ...   % node 4: u(i) leaf
+        ]);
+
+        genconstrnl(i).data = double([ ...
+            -1.0;               ...   % node 0: MULTIPLY  (no aux data, use -1.0)
+            -1.0;               ...   % node 1: POW       (no aux data, use -1.0)
+            double(idx_V(i));   ...   % node 2: 0-based index of V(i)
+            sys(i).b;           ...   % node 3: exponent b_i
+            double(idx_u(i))    ...   % node 4: 0-based index of u(i)
+        ]);
+
+        genconstrnl(i).parent = int32([ ...
+            -1; ...   % node 0: root has no parent
+             0; ...   % node 1: child of MULTIPLY (node 0)
+             1; ...   % node 2: child of POW      (node 1)
+             1; ...   % node 3: child of POW      (node 1)
+             0  ...   % node 4: child of MULTIPLY (node 0)
+        ]);
+
+    end  % for i
+end
+
+
+% Helper: Solve Gurobi model for the current period.
+function result = solveModel(n, nVars, obj_coeff, A, rhs, sense, lb, ub, genconstrnl, t_period)
+
+    grb_model.modelname  = sprintf('hydroRT_t%d', t_period);
+    grb_model.modelsense = 'min';
+    grb_model.obj        = obj_coeff;
+    grb_model.A          = A;
+    grb_model.rhs        = rhs;
+    grb_model.sense      = sense;
+    grb_model.lb         = lb;
+    grb_model.ub         = ub;
+    grb_model.vtype      = repmat('C', nVars, 1);
+
+    if ~isempty(genconstrnl)
+        grb_model.genconstrnl = genconstrnl;
+    end
+
+    % Solver parameters
+    params.OutputFlag    = 0;
+    params.Seed          = 1;
+    params.NonConvex     = 2;      % REQUIRED: non-convex genconstrnl
+    params.FuncNonlinear = 1;      % spatial B&B for w(i) = V(i)^b * u(i)
+    params.MIPGap        = 1e-4;
+    params.TimeLimit     = 10;
+    params.Threads       = 0;      % 1
+
+    result = gurobi(grb_model, params);
+end
+
+
+% Helper: Extracts the decision variable values 
+function [p_out, u_out, V_out, sp_out] = extractSolution(result, n, idx_V, idx_p, idx_u, idx_sp, V_prev, I_t, V_ref, c, t_period, sys)
+
+    p_out  = zeros(n, 1);
+    u_out  = zeros(n, 1);
+    V_out  = zeros(n, 1);
+    sp_out = zeros(n, 1);
+
+    if strcmp(result.status, 'OPTIMAL') || strcmp(result.status, 'SUBOPTIMAL')
+        x = result.x;
+
+        for i = 1:n
+            V_out(i)  = x(idx_V(i)+1);
+            p_out(i)  = x(idx_p(i)+1);
+            u_out(i)  = x(idx_u(i)+1);
+            sp_out(i) = x(idx_sp(i)+1);
+        end
+
+        % Physical power verification: p_exact = c * a_i * V^b * u
+        p_physical = zeros(n, 1);
+        for i = 1:n
+            h_exact       = sys(i).a * V_out(i)^sys(i).b;
+            p_physical(i) = c * h_exact * u_out(i);
+        end
+
+        % Volume tracking error (normalised by reservoir operating range)
+        tracking_err = zeros(n, 1);
+        for i = 1:n
+            vol_range       = sys(i).max_V - sys(i).min_V;
+            tracking_err(i) = abs(V_out(i) - V_ref(i)) / vol_range;
+        end
+
+        % Per-period diagnostic summary
+        p_error = p_out - p_physical;
+        fprintf('[t=%3d]  Power: %7.3f  Spill: %6.3f  ', t_period, sum(p_out), sum(sp_out));
+        fprintf('PhysErr: %+.2e  TrackErr: %.4f\n', max(abs(p_error)), mean(tracking_err));
+
+    else
+        warning('[t=%d] Gurobi status: %s. Returning zeros.', ...
+            t_period, result.status);
+    end
+end
