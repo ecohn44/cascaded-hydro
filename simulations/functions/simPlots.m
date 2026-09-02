@@ -6,6 +6,8 @@ function simPlots(path, X, SOC, sysparams, T, c, printplot)
     font = 10;
     xfont = 8;
 
+    tt = [2,T]; % Xlim array 
+    
     n_units = numel(sysparams);
     figs = gobjects(1, n_units);
 
@@ -22,8 +24,9 @@ function simPlots(path, X, SOC, sysparams, T, c, printplot)
         q = X(:, base+5);
 
         % Compute nonlinear and nonapproximated head and max power
-        head = sp.a .* (V.^sp.b);
-        p_max = (c * u .* head);
+        V_norm = (V - sp.min_V) / (sp.max_V - sp.min_V);
+        head = sp.min_h + (sp.max_h - sp.min_h) * V_norm.^sp.b;
+        % head = sp.a .* (V.^sp.b);
 
         % Create new figure for this unit 
         figs(i) = figure('Position',[100 100 1200 600]);
@@ -37,24 +40,23 @@ function simPlots(path, X, SOC, sysparams, T, c, printplot)
         yline(sp.max_ut, '--r', 'LineWidth', 1.5);
         yline(sp.min_ut, '--r', 'LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
-        xlim([1, T]);
+        xlim(tt);
         title('Generation Outflow','FontSize',font); 
 
         % Subplot 2: Generation
         subplot(2,3,2);
         plot(1:T, p, 'LineWidth', 2, 'DisplayName','Generation'); hold on;
         yline(sp.F, '--r', 'LineWidth', 1.5);
-        % plot(1:T, p_max, '--k', 'DisplayName','P_{max}');
         xlabel('Hour','FontSize',xfont); ylabel('MWh');
         title('Hydropower Generation','FontSize',font); 
-        xlim([1, T]);
+        xlim(tt);
 
         % Subplot 3: Spill
         subplot(2,3,3);
         plot(1:T, s, 'LineWidth', 2, 'DisplayName', 'Spill');
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
         title('Spill Outflow','FontSize',font);
-        xlim([1, T]);
+        xlim(tt);
 
         % Subplot 4: Volume
         subplot(2,3,4);
@@ -64,14 +66,14 @@ function simPlots(path, X, SOC, sysparams, T, c, printplot)
         yline(sp.min_V, '--r','LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('m^3');
         title('Reservoir Volume','FontSize',font);
-        xlim([1, T]);
+        xlim(tt);
 
         % Subplot 5: Inflow
         subplot(2,3,5);
         plot(1:T, q, 'LineWidth', 2, 'DisplayName', 'Inflow'); hold on
         xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
         title('Inflow','FontSize',font);
-        xlim([1, T]);
+        xlim(tt);
         ylim([0, 1.1*max(q)])
 
         % Subplot 6: Forebay Elevation 
@@ -81,7 +83,7 @@ function simPlots(path, X, SOC, sysparams, T, c, printplot)
         yline(sp.min_h, '--r','LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('Elevation (m)');
         title('Forebay Elevation','FontSize',font); 
-        xlim([1, T]);
+        xlim(tt);
 
         if printplot
             % Save figure with unit number 

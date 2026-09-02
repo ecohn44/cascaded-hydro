@@ -34,13 +34,13 @@ function [result, obj, X] = realtimeGurobi(t, c, I_t, V_prev, u_prev, V_ref, the
     [lb, ub, obj_coeff] = buildVariables(t, n, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, theta, sys);
 
     % 4: Linear Constraints 
-    [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, V_prev, u_prev, q_t, V_ref, c, sys);
+    [A, rhs, sense] = buildLinearConstraints(t, n, lag, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, V_prev, u_prev, q_t, V_ref, c, sys);
 
     % 5: Solve Gurobi Model
     result = solveModel(nVars, obj_coeff, A, rhs, sense, lb, ub, t);
 
     % 6: Extract Solution
-    [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys);
+    [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, I_t, V_ref, up_release, sys, model);
 
 end
 
@@ -87,7 +87,7 @@ end
 
 
 % Helper: Define linear constraints
-function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, V_prev, u_prev, q_t, V_ref, c, sys)
+function [A, rhs, sense] = buildLinearConstraints(t, n, lag, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, V_prev, u_prev, q_t, V_ref, c, sys)
 
     rows  = [];
     cols  = [];
@@ -98,13 +98,25 @@ function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx
 
     for i = 1:n
 
-        % (C1) Mass balance: V(i) + u(i) + sp(i) = V_prev(i) + q_t(i)
-        row = row + 1;
-        rows  = [rows;  row;        row;          row         ];
-        cols  = [cols;  idx_V(i)+1; idx_u(i)+1;   idx_sp(i)+1 ];
-        vals  = [vals;  1;          1;            1           ];
-        rhs   = [rhs;   V_prev(i) + q_t(i)                    ];
-        sense = [sense; '='                                   ];
+        if i > 1 && t > lag
+            up_i = up(i-1);                          % up(i) = u(i-1) + sp(i-1) at t-lag
+            mu_i = m.coef1*I_t(i) + m.coef2*up_i;    % inflow mean forecast
+            
+            % (C1) Mass balance: V(i) + u(i) + sp(i) = V_prev(i) + mu(i) 
+            row = row + 1;
+            rows  = [rows;  row;        row;          row         ];
+            cols  = [cols;  idx_V(i)+1; idx_u(i)+1;   idx_sp(i)+1 ];
+            vals  = [vals;  1;          1;            1           ];
+            rhs   = [rhs;   V_prev(i) + mu_i                      ];
+            sense = [sense; '='                                   ];
+        else
+            % (C1) Mass balance: V(i) + u(i) + sp(i) = V_prev(i) + q_t(i)
+            row = row + 1;
+            rows  = [rows;  row;        row;          row         ];
+            cols  = [cols;  idx_V(i)+1; idx_u(i)+1;   idx_sp(i)+1 ];
+            vals  = [vals;  1;          1;            1           ];
+            rhs   = [rhs;   V_prev(i) + q_t(i)                    ];
+            sense = [sense; '='                                   ];
         
 
         if t > 1
@@ -127,7 +139,6 @@ function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx
 
         % (C4) Power Production: p(i) = c * h(i) * u(i) 
         V_norm = (V_prev(i) - sys(i).min_V) / (sys(i).max_V - sys(i).min_V);
-        V_norm = min(1,max(0,V_norm)); % smooth tolerance 
         h = sys(i).min_h + (sys(i).max_h - sys(i).min_h) * V_norm^sys(i).b;
         row = row + 1;
         rows  = [rows; row;         row        ];
@@ -197,27 +208,28 @@ end
 
 
 % Helper: Extracts the decision variable values
-function [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys)
+function [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, I_t, V_ref, up, sys, m)
 
     obj = NaN;
     X   = zeros(n, 5);   % [V, p, u, sp, q] per unit
 
-    % Check solver status
-    has_solution = ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result,'x') && ~isempty(result.x);
-
-    if has_solution
+    if strcmp(result.status, 'OPTIMAL') || strcmp(result.status, 'SUBOPTIMAL')
         x = result.x;
 
         V_out  = zeros(n, 1);
         p_out  = zeros(n, 1);
         u_out  = zeros(n, 1);
         sp_out = zeros(n, 1);
+        q_out = I_t;
 
         for i = 1:n
             V_out(i)  = x(idx_V(i)+1);
             p_out(i)  = x(idx_p(i)+1);
             u_out(i)  = x(idx_u(i)+1);
             sp_out(i) = x(idx_sp(i)+1);
+            if t > lag && i > 1
+                q_out(i) = m.coef1*I_t(i) +  m.coef2 * up(i-1);
+            end
         end
 
         % Normalised volume tracking error
@@ -234,7 +246,7 @@ function [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q
 
         % Store Results: X = [V, p, u, sp, q]
         for i = 1:n
-            X(i,:) = [V_out(i), p_out(i), u_out(i), sp_out(i), q_t(i)];
+            X(i,:) = [V_out(i), p_out(i), u_out(i), sp_out(i), q_out(i)];
         end
 
     else

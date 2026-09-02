@@ -13,7 +13,6 @@ function [result, obj, X] = oracleGurobi(T, c, I, SOC, theta, sys)
 %   T   : Number of time periods in optimization horizon
 %   c   : Power conversion coefficient
 %   I   : Exogenous inflow matrix (n x T)
-%   lag : Cascade travel lag (integer, time steps)
 %   s   : Struct array of per-unit parameters:
 %
 % OUTPUTS

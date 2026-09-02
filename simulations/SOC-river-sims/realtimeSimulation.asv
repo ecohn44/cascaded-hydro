@@ -120,10 +120,10 @@ for t = 1:T
     if t > lag
         up_release = u_history(:,t-lag) + sp_history(:,t-lag);
     else
-        up_release = zeros(n_units,1);
+        up_release = 0;
     end
 
-    [result, ~, X_t] = realtimeGurobi(t, c, I(:,t), V_prev, u_prev, SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams);
+    [result, ~, X_t] = realtimeGurobi(t, c, I(:,t), V_prev, u_prev, SOC_ref(:,t), theta, lag, sysparams, modelparams);
 
     if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x)
         V_history(:,t)  = X_t(:,1);
