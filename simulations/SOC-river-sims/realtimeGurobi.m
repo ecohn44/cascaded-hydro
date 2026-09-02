@@ -1,4 +1,4 @@
-function [result, obj, X] = realtimeGurobi(t, c, I_t, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model)
+function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework)
 % =========================================================================
 % INPUTS
 %   t        : Current time period index 
@@ -13,7 +13,7 @@ function [result, obj, X] = realtimeGurobi(t, c, I_t, V_prev, u_prev, V_ref, the
 
     n = numel(sys);
 
-    % 1:  Calculate inflow forecast 
+    % 1:  Forecast inflow and estimate error
     q_t = I_t(:);
     if t > lag
         for i = 2:n
@@ -21,8 +21,34 @@ function [result, obj, X] = realtimeGurobi(t, c, I_t, V_prev, u_prev, V_ref, the
             q_t(i) = model.coef0 + model.coef1 * I_t(i) + model.coef2 * up_release(i-1);
         end
     end
+    std_hat = forecast_error(t, q_error, up_release, framework, model, sys);
 
-    % 2: Define Decision Variables
+    % 2: Calculate volume shift 
+    switch bounds
+        case {"det", "jcc-ssh"}
+            % Deterministic: No shifts
+            % Supporting hyerplane: Shifts calculated by grad cuts
+            for i = 1:n
+                sys(i).V_eff_max = sys(i).max_V;
+                sys(i).V_eff_min = sys(i).min_V;
+            end
+    
+        case {"jcc-bon"}
+            % Bonferroni z-score
+            z = norminv(1 - (eps/(2*n)));
+    
+            % Use safety-scaled std for all units
+            V_min_shift =  z .* std_hat;
+            V_max_shift = -z .* std_hat;
+    
+            % Store effective bounds and apply shift in constraints
+            for i = 1:n
+                sys(i).V_eff_max = sys(i).max_V + V_max_shift(i);
+                sys(i).V_eff_min = sys(i).min_V + V_min_shift(i);
+            end
+    end
+
+    % 3: Define Decision Variables
     nVars  = 5 * n;
     idx_V  = @(i)  (i - 1);
     idx_p  = @(i)  n     + (i - 1);
@@ -30,18 +56,46 @@ function [result, obj, X] = realtimeGurobi(t, c, I_t, V_prev, u_prev, V_ref, the
     idx_sp = @(i)  3*n   + (i - 1);
     idx_d  = @(i)  4*n   + (i - 1);
 
-    % 3: Define Variable Bounds and Objective Coefficients
+    % 4: Define Variable Bounds and Objective Coefficients
     [lb, ub, obj_coeff] = buildVariables(t, n, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, theta, sys);
 
-    % 4: Linear Constraints 
+    % 5: Linear Constraints 
     [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx_u, idx_sp, idx_d, V_prev, u_prev, q_t, V_ref, c, sys);
 
-    % 5: Solve Gurobi Model
+    % 6: Solve Gurobi Model
     result = solveModel(nVars, obj_coeff, A, rhs, sense, lb, ub, t);
 
-    % 6: Extract Solution
+    % 7: Extract Solution
     [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys);
 
+end
+
+% Helper: Construct inflow forecast error 
+function std_hat = forecast_error(t, q_error, up_release, framework, model, sys)
+    
+    n = numel(sys);
+    std_hat = zeros(1,n);    % estimated forecast variance 
+
+    % Calculate inflow for each unit
+    for i = 1:n
+       
+        if framework == "diu"
+
+           % Static error estimation
+           std_hat = model.AR_std*ones(1,n);
+
+        elseif framework == "ddu"
+            if i == 1 || t == 1
+                % No upstream operator to condition on (DIU)
+                 std_hat(i) = model.AR_std;
+
+            else
+                % Forecast conditional variance using GARCH-X
+                var_hat_norm =  model.omega + model.alpha*(q_error(i)^2) + model.gamma*(up_release(i)); 
+                std_hat(i) = sqrt(var_hat_norm);
+            end
+        end
+    end
 end
 
 
@@ -55,8 +109,8 @@ function [lb, ub, obj_coeff] = buildVariables(t, n, nVars, idx_V, idx_p, idx_u, 
     for i = 1:n
 
         % B1: Storage V(i)
-        lb(idx_V(i)+1)  = sys(i).min_V;
-        ub(idx_V(i)+1)  = sys(i).max_V;
+        lb(idx_V(i)+1)  = sys(i).V_eff_min;
+        ub(idx_V(i)+1)  = sys(i).V_eff_max;
 
         % B2: Power output p(i)
         lb(idx_p(i)+1)  = 0;
@@ -242,3 +296,4 @@ function [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q
             t, result.status);
     end
 end
+

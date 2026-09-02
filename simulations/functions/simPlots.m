@@ -25,6 +25,7 @@ function simPlots(path, X, SOC, sysparams, T, c, printplot)
 
         % Compute nonlinear and nonapproximated head and max power
         V_norm = (V - sp.min_V) / (sp.max_V - sp.min_V);
+        V_norm = min(1,max(0,V_norm)); % smooth tolerance 
         head = sp.min_h + (sp.max_h - sp.min_h) * V_norm.^sp.b;
         % head = sp.a .* (V.^sp.b);
 

@@ -62,8 +62,8 @@ end
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, chance constrained solution, uncertainty form)
-simSettings = initSimSettings("dry", "det", "det");
+% Initialize settings (season, uncertainty form, chance constrained solution)
+simSettings = initSimSettings("dry", "ddu", "jcc-bon");
  
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -73,7 +73,7 @@ D = 7;                       % Number of simulation days
 T = D*24;                    % Number of simulation hours
 lag = 1;                     % Travel time between units (hrs)
 year = 2023;                 % Simulation year
-theta = 10;                 % Real time tracking coefficient 
+theta = 0;                 % Real time tracking coefficient 
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -113,24 +113,39 @@ p_history  = zeros(n_units, T);
 u_history  = zeros(n_units, T);
 V_history  = zeros(n_units, T);
 sp_history = zeros(n_units, T);
-q_history  = zeros(n_units, T);
+q_forecast_history  = zeros(n_units, T);
+std_hat    = zeros(n_units, T);
 
 for t = 1:T
 
+    % Calculate upstream release at lagged time step
     if t > lag
         up_release = u_history(:,t-lag) + sp_history(:,t-lag);
     else
         up_release = zeros(n_units,1);
     end
 
-    [result, ~, X_t] = realtimeGurobi(t, c, I(:,t), V_prev, u_prev, SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams);
+    % Calculate previous forecast error
+    if t > 1
+        I_prev = I(:,t-1);
+        q_error = I_prev - q_forecast_history(:,t-1);
+    else
+        q_error = zeros(n_units,1);
+        I_prev = I(:,1);
+    end
+
+    [result, obj, X_t, std_hat(:,t)] = realtimeGurobi(t, c, eps, I_prev, q_error, V_prev, u_prev, ...
+        SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams, ...
+        simSettings.bounds, simSettings.framework);
 
     if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x)
-        V_history(:,t)  = X_t(:,1);
         p_history(:,t)  = X_t(:,2);
         u_history(:,t)  = X_t(:,3);
         sp_history(:,t) = X_t(:,4);
-        q_history(:,t)  = X_t(:,5);
+        q_forecast_history(:,t)  = X_t(:,5);
+        % Volume calculated based on actual inflow not forecasted X_t(:,1)
+        % V_history(:,t) = V_prev + I(:,t) - u_history(:,t) - sp_history(:,t); 
+        V_history(:,t) = X_t(:,1);
     else
         warning('[t=%d] Solver returned %s. Applying fallback.', t, result.status);
         u_history(:,t)  = u_prev;
@@ -148,22 +163,26 @@ end
 % Store Results 
 X = [];
 for i = 1:n_units
-    X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_history(i,:)'];
+    X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_forecast_history(i,:)'];
 end
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS
 % ========================================================================
 
+% Reference tracking error
 track_error = zeros(n_units, T);
 for i = 1:n_units
     track_error(i,:) = abs(V_history(i,:) - SOC_ref(i,:)) / (sysparams(i).max_V - sysparams(i).min_V);
 end
 
+% Volume bounds error
+V_min = [sysparams.min_V]';
+lower_violation = max(0, V_min - V_history);
 
 total_power = sum(p_history(:));
 fprintf('\nSystem Power Generation:          %.2f\n', total_power);
-fprintf('Mean normalised tracking error:   %.4f\n',  mean(track_error(:)));
+fprintf('Mean normalized tracking error:   %.4f\n',  mean(track_error(:)));
 
 
 %% ========================================================================

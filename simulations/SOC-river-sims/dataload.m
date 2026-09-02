@@ -27,7 +27,7 @@ function [inflow, soc, params, sysparams] = dataload()
     soc.datetime = datetime(soc.datetime, 'InputFormat', 'yyyy-MM-dd HH:mm:ss');
 
     s = 4.5;  % power capacity 
-    s2 = 0.1; % ramp rate up
+    s2 = .5;  % ramp rate up
     hmin = 5; hmax = 10;
     
     % Seasonal Forecasting Parameters
