@@ -159,7 +159,7 @@ for m = 1:M
         for s = 1:S
             
             % Initialize previous states
-            V_prev = SOC_init; %arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
+            V_prev = SOC_mean(:,1); %arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
             u_prev = arrayfun(@(s) s.min_ut, sysparams(:), 'UniformOutput', true);
             
             % Initialize histories
@@ -198,20 +198,19 @@ for m = 1:M
                     SOC_ref(:,t), SOC_p10(:,t), SOC_p90(:,t), theta, lag, up_release, sysparams, modelparams, ...
                     simSettings.bounds, framework, simSettings.ref);
     
-                if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x) 
-                    % Calculate realized flow 
-                    sigma_ddu = forecast_error(t, error_prev, up_release, "ddu", modelparams, sysparams);
-                    q_mean(:,t) = X_t(:,5);
-                    q_real(:,t) = q_mean(:,t) + kappa(k)*sigma_ddu(:).*Z(:,t,s);
-
+                % Calculate realized flow 
+                sigma_ddu = forecast_error(t, error_prev, up_release, "ddu", modelparams, sysparams);
+                q_mean(:,t) = X_t(:,5);
+                q_real = q_mean(:,t) + kappa(k)*sigma_ddu(:).*Z(:,t,s);
+            
+                if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x)
                     p_history(:,t)  = X_t(:,2);
                     u_history(:,t)  = X_t(:,3);
                     sp_history(:,t) = X_t(:,4);
-                    V_history(:,t) = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t); % volume updated with realized inflow
+                    V_history(:,t) = V_prev + q_real - u_history(:,t) - sp_history(:,t); % volume updated with realized inflow
                 else
                     warning('[t=%d] Solver returned %s. Exiting.', t, result.status);
                     failed(m,k,s) = true;
-                    failure_time(m,k,s) = t;
                     break
                 end
 
@@ -228,7 +227,7 @@ for m = 1:M
 
                 V_prev = V_history(:,t);
                 u_prev = u_history(:,t);
-                q_error(:,t) = q_real(:,t) - q_mean(:,t);
+                q_error(:,t) = q_real - q_mean(:,t);
             
             end
 
@@ -237,7 +236,7 @@ for m = 1:M
             results.p(:,:,m,k,s)   = p_history;
             results.u(:,:,m,k,s)   = u_history;
             results.sp(:,:,m,k,s)  = sp_history;
-            results.q(:,:,m,k,s)   = q_real;
+            results.q(:,:,m,k,s)   = q_real_history;
             results.std(:,:,m,k,s) = std_hat;
         end
     end
