@@ -1,4 +1,4 @@
-function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework)
+function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_prev, u_prev, V_ref, V_p10, V_p90, theta, lag, up_release, sys, model, bounds, framework, tracking)
 % =========================================================================
 % INPUTS
 %   t        : Current time period index 
@@ -45,6 +45,8 @@ function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_p
             for i = 1:n
                 sys(i).V_eff_max = sys(i).max_V + V_max_shift(i);
                 sys(i).V_eff_min = sys(i).min_V + V_min_shift(i);
+                %sys(i).V_eff_max = V_p90(i) + V_max_shift(i);
+                %sys(i).V_eff_min = V_p10(i) + V_min_shift(i);
             end
     end
 
@@ -66,7 +68,7 @@ function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_p
     result = solveModel(nVars, obj_coeff, A, rhs, sense, lb, ub, t);
 
     % 7: Extract Solution
-    [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys);
+    [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys, tracking);
 
 end
 
@@ -74,22 +76,17 @@ end
 function std_hat = forecast_error(t, q_error, up_release, framework, model, sys)
     
     n = numel(sys);
-    std_hat = zeros(1,n);    % estimated forecast variance 
+    std_hat = model.AR_std*ones(1,n);    % estimated forecast variance 
 
     % Calculate inflow for each unit
     for i = 1:n
        
-        if framework == "diu"
-
-           % Static error estimation
-           std_hat = model.AR_std*ones(1,n);
+        if framework == "det"
+           % No error estimation
+           std_hat =  zeros(1,n);
 
         elseif framework == "ddu"
-            if i == 1 || t == 1
-                % No upstream operator to condition on (DIU)
-                 std_hat(i) = model.AR_std;
-
-            else
+            if i > 1 && t > 1
                 % Forecast conditional variance using GARCH-X
                 var_hat_norm =  model.omega + model.alpha*(q_error(i)^2) + model.gamma*(up_release(i)); 
                 std_hat(i) = sqrt(var_hat_norm);
@@ -190,21 +187,24 @@ function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx
         rhs   = [rhs;  0                       ];
         sense = [sense; '='                    ];
 
-        % (C5) Tracking error upper:  V(i) - d(i) <= V_ref(i)
+        % (C5) Tracking error upper: V(i) - V_upper_ref(i) <= d(i)
+        V_upper = V_ref(1:n); 
         row = row + 1;
-        rows  = [rows;  row;         row         ];
-        cols  = [cols;  idx_V(i)+1;  idx_d(i)+1  ];
-        vals  = [vals;  1;          -1           ];
-        rhs   = [rhs;   V_ref(i)                 ];
+        rows  = [rows; row;         row        ];
+        cols  = [cols; idx_V(i)+1;  idx_d(i)+1 ];
+        vals  = [vals; 1;           -1         ];
+        rhs   = [rhs; V_upper(i)                 ];
+        sense = [sense; '<'                      ];
+        
+        % (C6) Tracking error lower: V_lower_ref(i) - V(i) <= d(i)
+        V_lower = V_ref(n+1:2*n);
+        row = row + 1;
+        rows  = [rows; row;         row        ];
+        cols  = [cols; idx_V(i)+1;  idx_d(i)+1 ];
+        vals  = [vals; -1;          -1         ];
+        rhs   = [rhs; -V_lower(i)                ];
         sense = [sense; '<'                      ];
 
-        % (C6) Tracking error lower: -V(i) - d(i) <= -V_ref(i)
-        row = row + 1;
-        rows  = [rows;  row;         row         ];
-        cols  = [cols;  idx_V(i)+1;  idx_d(i)+1  ];
-        vals  = [vals;  -1;         -1           ];
-        rhs   = [rhs;  -V_ref(i)                 ];
-        sense = [sense; '<'                      ];
 
     end
 
@@ -251,7 +251,7 @@ end
 
 
 % Helper: Extracts the decision variable values
-function [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys)
+function [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys, tracking)
 
     obj = NaN;
     X   = zeros(n, 5);   % [V, p, u, sp, q] per unit
@@ -274,11 +274,24 @@ function [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q
             sp_out(i) = x(idx_sp(i)+1);
         end
 
-        % Normalised volume tracking error
-        track_err = zeros(n, 1);
-        for i = 1:n
-            vol_range    = sys(i).max_V - sys(i).min_V;
-            track_err(i) = abs(V_out(i) - V_ref(i)) / vol_range;
+        % Normalized volume tracking error
+        track_err = zeros(n,1);
+        switch tracking
+            case "mean"
+                for i = 1:n
+                    vol_range = sys(i).max_V - sys(i).min_V;
+                    track_err(i) = abs(V_out(i) - V_ref(i)) / vol_range;
+                end
+        
+            case "envelope"
+                V_lower = V_ref(1:n);
+                V_upper = V_ref(n+1:2*n);
+        
+                for i = 1:n
+                    vol_range = sys(i).max_V - sys(i).min_V;
+                    track_err(i) = max([V_lower(i) - V_out(i), ...
+                                        V_out(i) - V_upper(i), 0]) / vol_range;
+                end
         end
 
         fprintf('[t=%3d]  Power: %7.3f  Spill: %6.3f  TrackErr: %.4f\n', ...

@@ -61,13 +61,13 @@ function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
         subplot(2,3,4);
         plot(1:T, V, 'LineWidth', 2, 'DisplayName', 'Volume'); hold on;
         plot(1:T, mean(i, :), '--k', 'LineWidth', 1, 'DisplayName', 'Mean Reference')
-        plot(1:T, p10(i, :), 'Color', [0.7 0.9 1], 'LineWidth', 1.5, 'DisplayName', 'Upper Ref')
-        plot(1:T, p90(i, :), 'Color', [0.7 0.9 1], 'LineWidth', 1.5, 'DisplayName', 'Lower Ref')
+        plot(1:T, p10(i, :), '--g', 'LineWidth', 1, 'DisplayName', '10th percentile Ref')
+        plot(1:T, p90(i, :), '--r', 'LineWidth', 1, 'DisplayName', '90th percentile Ref')
         yline(sp.max_V, '--r','LineWidth', 1.5);
         yline(sp.min_V, '--r','LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('m^3');
         title('Reservoir Volume','FontSize',font);
-        %legend('Location','best');
+        legend('Location','best');
         xlim(tt);
 
         % Subplot 5: Inflow

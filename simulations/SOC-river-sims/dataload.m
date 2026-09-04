@@ -42,7 +42,7 @@ function [inflow, soc, params, sysparams] = dataload()
         'AR_std',   0.006, ...    % DIU residual variance % 0.0028
         'omega',    0.0001,  ...  % GARCH-X params  % (0.006^2),
         'alpha',    0.008,   ...  % GARCH-X params % 0.8, 0.008
-        'gamma',    0.003);       % GARCH-X params % 6.6e-4 0.003
+        'gamma',    0.004);       % GARCH-X params % 6.6e-4 0.003
 
 
     % Hydropower "Per-Unit" Parameters

@@ -33,7 +33,7 @@ eps = 0.05;         % risk tolerance
 [inflow, soc, modelparams, sysparams] = dataload();
 
 % Load reference trajectories 
-years = 2018:2024;  
+years = 2018:2025;  
 theta_ref = 1;  % Select which SOC trajectory to pull
 T = 2160;
 results_folder = "resultsOracle";
@@ -62,8 +62,8 @@ end
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, uncertainty form, chance constrained solution)
-simSettings = initSimSettings("dry", "ddu", "jcc-bon");
+% Initialize settings (season, uncertainty form, solution alg, tracking reference)
+simSettings = initSimSettings("dry", "det", "jcc-bon", "mean");
  
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -73,7 +73,7 @@ D = 7;                       % Number of simulation days
 T = D*24;                    % Number of simulation hours
 lag = 1;                     % Travel time between units (hrs)
 year = 2023;                 % Simulation year
-theta = 0;                 % Real time tracking coefficient 
+theta = 100;                   % Real time tracking coefficient 
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -91,14 +91,30 @@ fprintf('Running simulation for year: %d\n', year);
 % Extract mean SOC reference trajectory, inflow, and initial conditions  
 year_idx   = find(years == year, 1);
 I          = I_hist(:, 1:T, year_idx);
-SOC_ref    = mean(SOC_hist(:, 1:T, :),3);
+SOC_mean   = mean(SOC_hist(:, 1:T, :),3);
+SOC_p10    = prctile(SOC_hist(:, 1:T, :),10,3);
+SOC_p90    = prctile(SOC_hist(:, 1:T, :),90,3);
 SOC_init   = SOC_hist(:, 1, year_idx);
+
+% Set long-term reference 
+switch simSettings.ref
+    case "mean"
+        SOC_lower = SOC_mean;
+        SOC_upper = SOC_mean;
+
+    case "envelope"
+        SOC_lower = SOC_p10;
+        SOC_upper = SOC_p90;
+end
+
+% Store lower and upper SOC references 
+SOC_ref = [SOC_lower; SOC_upper];
 
 % Plot streamflow profiles
 plotStreamflows(I');
 
 % Plot SOC reference trajectories 
-plotSOCs(SOC_ref');
+plotSOCs(SOC_mean');
     
     
 %% ========================================================================
@@ -106,7 +122,7 @@ plotSOCs(SOC_ref');
 % ========================================================================
 
 % Initialize previous states
-V_prev = arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
+V_prev = SOC_mean(:,1); %arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
 u_prev = arrayfun(@(s) s.min_ut, sysparams(:), 'UniformOutput', true);
 
 p_history  = zeros(n_units, T);
@@ -135,8 +151,8 @@ for t = 1:T
     end
 
     [result, obj, X_t, std_hat(:,t)] = realtimeGurobi(t, c, eps, I_prev, q_error, V_prev, u_prev, ...
-        SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams, ...
-        simSettings.bounds, simSettings.framework);
+        SOC_ref(:,t), SOC_p10(:,t), SOC_p90(:,t), theta, lag, up_release, sysparams, modelparams, ...
+        simSettings.bounds, simSettings.framework, simSettings.ref);
 
     if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x)
         p_history(:,t)  = X_t(:,2);
@@ -144,8 +160,8 @@ for t = 1:T
         sp_history(:,t) = X_t(:,4);
         q_forecast_history(:,t)  = X_t(:,5);
         % Volume calculated based on actual inflow not forecasted X_t(:,1)
-        % V_history(:,t) = V_prev + I(:,t) - u_history(:,t) - sp_history(:,t); 
-        V_history(:,t) = X_t(:,1);
+        V_history(:,t) = V_prev + I(:,t) - u_history(:,t) - sp_history(:,t); 
+        % V_history(:,t) = X_t(:,1);
     else
         warning('[t=%d] Solver returned %s. Applying fallback.', t, result.status);
         u_history(:,t)  = u_prev;
@@ -173,7 +189,7 @@ end
 % Reference tracking error
 track_error = zeros(n_units, T);
 for i = 1:n_units
-    track_error(i,:) = abs(V_history(i,:) - SOC_ref(i,:)) / (sysparams(i).max_V - sysparams(i).min_V);
+    track_error(i,:) = abs(V_history(i,:) - SOC_mean(i,:)) / (sysparams(i).max_V - sysparams(i).min_V);
 end
 
 % Volume bounds error
@@ -189,7 +205,7 @@ fprintf('Mean normalized tracking error:   %.4f\n',  mean(track_error(:)));
 % SECTION 5: PLOTTING AND SAVING
 % ========================================================================
 
-simPlots(results_dir, X, SOC_ref, sysparams, T, c, printplot);
+simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
 
 if save_mat
     if make_dir && ~exist(results_dir, 'dir'); mkdir(results_dir); end
