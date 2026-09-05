@@ -20,7 +20,6 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 make_dir = false;
 printplot = false; 
 save_mat = false; 
-save_streamflow = false;
 
 % Static parameters 
 eta = .9;           % efficiency of release-energy conversion
@@ -29,8 +28,11 @@ g = 9.8;            % acceleration due to gravity [m/s^2]
 c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
 eps = 0.05;         % risk tolerance 
 
-% Load inflow data 
+% Load inflow and system data 
 [inflow, soc, modelparams, sysparams] = dataload();
+V_min = [sysparams.min_V]';
+V_max = [sysparams.max_V]';
+
 
 % Load reference trajectories 
 years = 2018:2025;  
@@ -63,17 +65,15 @@ end
 % ========================================================================
 
 % Initialize settings (season, uncertainty form, solution alg, tracking reference)
-simSettings = initSimSettings("dry", "det", "jcc-bon", "mean");
+simSettings = initSimSettings("dry", "ddu", "jcc-bon", "mean");
  
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 7;                       % Number of simulation days 
+D = 2;                       % Number of simulation days 
 T = D*24;                    % Number of simulation hours
-lag = 1;                     % Travel time between units (hrs)
-year = 2023;                 % Simulation year
-theta = 100;                 % Real time tracking coefficient 
+lag = 3;                     % Travel time between units (hrs)
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -86,31 +86,195 @@ else
     warning('Results directory does not exist');
 end 
 
-fprintf('Running simulation for year: %d\n', year);
-
-% Extract mean SOC reference trajectory, inflow, and initial conditions  
-year_idx   = find(years == year, 1);
-I          = I_hist(:, 1:T, year_idx);
-SOC_mean   = mean(SOC_hist(:, 1:T, :),3);
-SOC_p10    = prctile(SOC_hist(:, 1:T, :),10,3);
-SOC_p90    = prctile(SOC_hist(:, 1:T, :),90,3);
-SOC_init   = SOC_hist(:, 1, year_idx);
-V_min = [sysparams.min_V]';
-V_max = [sysparams.max_V]';
+    
+%% ========================================================================
+% SECTION 3: OPTIMIZATION FRAMEWORK
+% =========================================================================
 
 % Monte Carlo Settings
-S = 1; %32;
-kappa = 1; [0.5 1 1.5 2];
-frameworks = ["diu","ddu"];
+S = 32;                        % Monte Carlo simulations per year 
+kappa = [0.5 1 1.5 2];         % Forecast error
+frameworks = ["diu", "ddu"];   % Uncertainty representation 
+thetas = 0; %[0, 10, 100];         % Real time tracking coefficient 
+
+% Prepare to save results
+M = length(frameworks);
+K = length(kappa);
+Y = length(years);
+H = length(thetas);
+
+for i = 1:n_units
+    sysparams(i).min_ut = 0;
+end
 
 % Generate common random draws
 rng(1);
 R = eye(n_units); % Temp - To replace with AR mean model R estimations 
-Z = zeros(n_units,T,S);
-for s = 1:S
-    Z(:,:,s) = mvnrnd(zeros(1,n_units),R,T)';
+Z = zeros(n_units,T,S,Y,H);
+for y = 1:Y
+    for s = 1:S
+        Z(:,:,s,y) = mvnrnd(zeros(1,n_units),R,T)';
+    end
 end
 
+results.V     = nan(n_units,T,Y,H,M,K,S);
+results.p     = nan(n_units,T,Y,H,M,K,S);
+results.u     = nan(n_units,T,Y,H,M,K,S);
+results.sp    = nan(n_units,T,Y,H,M,K,S);
+results.q     = nan(n_units,T,Y,H,M,K,S);
+results.std   = nan(n_units,T,Y,H,M,K,S);
+results.SOC_mean = nan(n_units,T,Y);
+
+% Track infeasible outcomes 
+failed = false(Y, H, M, K, S);
+failure_time = nan(Y, H, M, K, S);
+
+for y = 1:Y
+
+    year = years(y);
+    fprintf('Running simulation for year: %d\n', year);
+    
+    % Hydrograph and initial conditions
+    I          = I_hist(:, 1:T, y);
+    SOC_init   = SOC_hist(:, 1, y);
+
+    % Generate reference trajectory from trainin data
+    train_years = setdiff(1:Y,y);
+    SOC_mean   = mean(SOC_hist(:, 1:T, train_years),3);
+    SOC_p10    = prctile(SOC_hist(:, 1:T, train_years),10,3);
+    SOC_p90    = prctile(SOC_hist(:, 1:T, train_years),90,3);
+    SOC_ref = [SOC_mean; SOC_mean];
+    
+    for h = 1:H
+        theta = thetas(h);
+        fprintf('Tracking Coefficient: %d\n', theta);
+
+        for m = 1:M
+            framework = frameworks(m);
+            fprintf('Uncertainty Framework: %s\n', framework);
+            
+            for k = 1:K
+                fprintf('Forecast Error Level: %d\n', kappa(k));
+
+                for s = 1:S
+                    disp(s)
+                    % Initialize previous states
+                    V_prev = SOC_init; %arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
+                    u_prev  = zeros(n_units,1); %arrayfun(@(s) s.min_ut, sysparams(:), 'UniformOutput', true);
+                    
+                    % Initialize histories
+                    V_history = nan(n_units,T);
+                    p_history = nan(n_units,T);
+                    u_history = nan(n_units,T);
+                    sp_history = nan(n_units,T);
+                    q_mean     = zeros(n_units, T);
+                    std_hat    = zeros(n_units, T);
+                    q_error    = zeros(n_units, T);
+                    q_real     = nan(n_units, T);
+                                     
+                    for t = 1:T
+                    
+                        % Calculate upstream release at lagged time step
+                        if t > lag
+                            up_release = u_history(:,t-lag) + sp_history(:,t-lag);
+                        else
+                            up_release = zeros(n_units,1);
+                        end
+                    
+                        % Calculate previous forecast error
+                        if t > 1
+                            error_prev = q_error(:,t-1);
+                            I_prev = q_real(:,t-1);
+                        else
+                            error_prev = zeros(n_units,1);
+                            I_prev = I(:,1);
+                        end
+        
+                        % Use historical inflow for the first reservoir
+                        I_prev(1) = I(1,max(t-1,1));
+                                    
+                        [result, obj, X_t, std_hat(:,t)] = realtimeGurobi(t, c, eps, I_prev, error_prev, V_prev, u_prev, ...
+                            SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams, ...
+                            simSettings.bounds, framework, simSettings.ref);
+            
+                        if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x) 
+                            % Calculate realized flow 
+                            sigma_ddu = forecast_error(t, error_prev, up_release, "ddu", modelparams, sysparams);
+                            q_mean(:,t) = X_t(:,5);
+                            q_real(:,t) = q_mean(:,t) + kappa(k)*sigma_ddu(:).*Z(:,t,s,y);
+        
+                            p_history(:,t)  = X_t(:,2);
+                            u_history(:,t)  = X_t(:,3);
+                            sp_history(:,t) = X_t(:,4);
+                            V_history(:,t) = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t); % volume updated with realized inflow
+                        else
+                            warning('[t=%d] Solver returned %s. Exiting.', t, result.status);
+                            failed(y,h,m,k,s) = true;
+                            failure_time(y,h,m,k,s) = t;
+                            break
+                        end
+        
+        
+                        % Check if still within bounds after real time volume updates 
+                        if any(V_history(:,t) < V_min | V_history(:,t) > V_max)
+                            warning("Volume out of bounds")
+                            failed(y,h,m,k,s) = true;
+                            failure_time(y,h,m,k,s) = t;
+
+                            % Water available without going below V_min
+                            available = max(V_prev + q_real(:,t) - V_min,0);
+                            
+                            % Correct turbine release and spill
+                            u_history(:,t) = min(u_history(:,t), available);
+                            sp_history(:,t) = min(sp_history(:,t), available-u_history(:,t));
+                            
+                            % Update volume using corrected releases
+                            V_history(:,t) = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t);
+
+                            excess = max(V_history(:,t)-V_max,0);
+                            sp_history(:,t) = sp_history(:,t) + excess;
+                            V_history(:,t) = V_history(:,t) - excess;
+                        end
+        
+                        V_prev = V_history(:,t);
+                        u_prev = u_history(:,t);
+                        q_error(:,t) = q_real(:,t) - q_mean(:,t);
+                    
+                    end
+        
+                    % Store scenario results
+                    results.V(:,:,y,h,m,k,s)   = V_history;
+                    results.p(:,:,y,h,m,k,s)   = p_history;
+                    results.u(:,:,y,h,m,k,s)   = u_history;
+                    results.sp(:,:,y,h,m,k,s)  = sp_history;
+                    results.q(:,:,y,h,m,k,s)   = q_real;
+                    results.std(:,:,y,h,m,k,s) = std_hat;
+        
+                end
+            end
+        end
+    end
+end
+
+% Store final results 
+results.failed = failed;
+results.failure_time = failure_time;
+
+results.frameworks = frameworks;
+results.kappa = kappa;
+results.SOC_mean(:,:,y) = SOC_mean;
+results.SOC_p10 = SOC_p10;
+results.SOC_p90 = SOC_p90;
+results.sysparams = sysparams;
+results.mean_inflow(y) = mean(I(1,:));
+
+save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
+
+%% ========================================================================
+% SECTION 4: DIAGNOSTICS
+% ========================================================================
+
+%{
 % Set long-term reference 
 switch simSettings.ref
     case "mean"
@@ -122,160 +286,20 @@ switch simSettings.ref
         SOC_upper = SOC_p90;
 end
 
-% Store lower and upper SOC references 
-SOC_ref = [SOC_lower; SOC_upper];
-
 % Plot streamflow profiles
 plotStreamflows(I');
 
 % Plot SOC reference trajectories 
 plotSOCs(SOC_mean');
-    
-    
-%% ========================================================================
-% SECTION 3: OPTIMIZATION FRAMEWORK
-% =========================================================================
 
-% Prepare to save results
-M = length(frameworks);
-K = length(kappa);
-
-results.V     = nan(n_units,T,M,K,S);
-results.p     = nan(n_units,T,M,K,S);
-results.u     = nan(n_units,T,M,K,S);
-results.sp    = nan(n_units,T,M,K,S);
-results.q     = nan(n_units,T,M,K,S);
-results.std   = nan(n_units,T,M,K,S);
-
-% Track infeasible outcomes 
-failed = false(M, K, S);
-failure_time = nan(M, K, S);
-IVI = zeros(M,K,S);
-
-for m = 1:M
-    framework = frameworks(m);
-    
-    for k = 1:K
-        for s = 1:S
-            
-            % Initialize previous states
-            V_prev = SOC_init; %arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
-            u_prev = arrayfun(@(s) s.min_ut, sysparams(:), 'UniformOutput', true);
-            
-            % Initialize histories
-            V_history = nan(n_units,T);
-            p_history = nan(n_units,T);
-            u_history = nan(n_units,T);
-            sp_history = nan(n_units,T);
-            q_mean     = zeros(n_units, T);
-            std_hat    = zeros(n_units, T);
-            q_error    = zeros(n_units, T);
-            q_real     = nan(n_units, T);
-    
-                        
-            for t = 1:T
-            
-                % Calculate upstream release at lagged time step
-                if t > lag
-                    up_release = u_history(:,t-lag) + sp_history(:,t-lag);
-                else
-                    up_release = zeros(n_units,1);
-                end
-            
-                % Calculate previous forecast error
-                if t > 1
-                    error_prev = q_error(:,t-1);
-                    I_prev = q_real(:,t-1);
-                else
-                    error_prev = zeros(n_units,1);
-                    I_prev = I(:,1);
-                end
-
-                % Use historical inflow for the first reservoir
-                I_prev(1) = I(1,t);
-                            
-                [result, obj, X_t, std_hat(:,t)] = realtimeGurobi(t, c, eps, I_prev, error_prev, V_prev, u_prev, ...
-                    SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams, ...
-                    simSettings.bounds, framework, simSettings.ref);
-    
-                if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x) 
-                    % Calculate realized flow 
-                    sigma_ddu = forecast_error(t, error_prev, up_release, "ddu", modelparams, sysparams);
-                    q_mean(:,t) = X_t(:,5);
-                    q_real(:,t) = q_mean(:,t) + kappa(k)*sigma_ddu(:).*Z(:,t,s);
-
-                    p_history(:,t)  = X_t(:,2);
-                    u_history(:,t)  = X_t(:,3);
-                    sp_history(:,t) = X_t(:,4);
-                    V_history(:,t) = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t); % volume updated with realized inflow
-                else
-                    warning('[t=%d] Solver returned %s. Exiting.', t, result.status);
-                    failed(m,k,s) = true;
-                    failure_time(m,k,s) = t;
-                    break
-                end
-
-                % Calculate IVI outside operating envelope
-                env_error = max(SOC_p10(:,t)-V_history(:,t),0) + max(V_history(:,t)-SOC_p90(:,t),0);
-                IVI(m,k,s) = IVI(m,k,s) + sum(env_error);
-            
-                % Check if still within bounds after real time volume updates 
-                if any(V_history(:,t) < V_min | V_history(:,t) > V_max)
-                    failed(m,k,s) = true;
-                    failure_time(m,k,s) = t;
-                    break
-                end
-
-                V_prev = V_history(:,t);
-                u_prev = u_history(:,t);
-                q_error(:,t) = q_real(:,t) - q_mean(:,t);
-            
-            end
-
-            % Store scenario results
-            results.V(:,:,m,k,s)   = V_history;
-            results.p(:,:,m,k,s)   = p_history;
-            results.u(:,:,m,k,s)   = u_history;
-            results.sp(:,:,m,k,s)  = sp_history;
-            results.q(:,:,m,k,s)   = q_real;
-            results.std(:,:,m,k,s) = std_hat;
-
-            X = [];
-            for i = 1:n_units
-                X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
-            end
-            
-            simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
-
-
-        end
-    end
-end
-
-% Store final results 
-results.failed = failed;
-results.failure_time = failure_time;
-results.IVI = IVI;
-
-results.frameworks = frameworks;
-results.kappa = kappa;
-results.SOC_mean = SOC_mean;
-results.SOC_p10 = SOC_p10;
-results.SOC_p90 = SOC_p90;
-results.sysparams = sysparams;
-
-save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
-
-%% ========================================================================
-% SECTION 4: DIAGNOSTICS
-% ========================================================================
-
-%{
 % Store Results 
 X = [];
 for i = 1:n_units
     X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
 end
+
+simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
+
 
 % Reference tracking error
 track_error = zeros(n_units, T);
@@ -283,20 +307,15 @@ for i = 1:n_units
     track_error(i,:) = abs(V_history(i,:) - SOC_mean(i,:)) / (sysparams(i).max_V - sysparams(i).min_V);
 end
 
-% Volume bounds error
-V_min = [sysparams.min_V]';
-lower_violation = max(0, V_min - V_history);
-
 total_power = sum(p_history(:));
 fprintf('\nSystem Power Generation:          %.2f\n', total_power);
 fprintf('Mean normalized tracking error:   %.4f\n',  mean(track_error(:)));
 
 
 %% ========================================================================
-% SECTION 5: PLOTTING AND SAVING
+% SECTION 5: SAVING RESULTS
 % ========================================================================
 
-simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
 
 if save_mat
     if make_dir && ~exist(results_dir, 'dir'); mkdir(results_dir); end

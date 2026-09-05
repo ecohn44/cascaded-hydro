@@ -2,48 +2,56 @@ clear; clc; close all;
 
 load("resultsBonferroni/monteCarloResults.mat","results");
 
-frameworks = results.frameworks;
-kappa = results.kappa;
-T = size(results.V,2);
-M = length(frameworks);
+years = 2018:2025;  
+kappa  = results.kappa;
+failed = results.failed;
+P      = results.p;
 
-%% Number of hours completed by each scenario
-hours_run = T*ones(size(results.failed));
-hours_run(results.failed) = results.failure_time(results.failed);
+h = 1;                         % theta = 0
+Y = length(years);
+K = length(kappa);
+power_increase = nan(Y,K);
 
-%% 1. Physical-bound failure rate
-failure_rate = 100*mean(results.failed,3);
+for y = 1:Y
+    for k = 1:K
+        P_diu = P(:,:,y,h,1,k,:);
+        P_ddu = P(:,:,y,h,2,k,:);
 
-%% 2. Historical-envelope IVI per hour
-IVI_rate = results.IVI./hours_run;
-mean_IVI = mean(IVI_rate,3);
+        E_diu = mean(squeeze(sum(P_diu,[1 2])));
+        E_ddu = mean(squeeze(sum(P_ddu,[1 2])));
 
-%% 3. Generation per hour
-generation = squeeze(sum(results.p,[1 2],"omitnan"));
-generation_rate = generation./hours_run;
-mean_generation = mean(generation_rate,3,"omitnan");
-
-%% Plot
-figure;
-tiledlayout(1,3);
-
-metrics = {failure_rate,mean_IVI,mean_generation};
-titles = {"Physical Failure Rate","Envelope IVI per Hour", ...
-          "Generation per Hour"};
-ylabels = {"Failure Rate (%)","Normalized IVI","Generation"};
-
-for j = 1:3
-    nexttile;
-    hold on;
-
-    for m = 1:M
-        plot(kappa,metrics{j}(m,:),"-o","LineWidth",1.5);
+        power_increase(y,k) = 100*(E_ddu-E_diu)/E_diu;
     end
+end
 
-    xlabel("\kappa");
-    ylabel(ylabels{j});
-    title(titles{j});
+% Order years from driest to wettest
+[~,order] = sort(results.mean_inflow);
+power_increase = power_increase(order,:);
+years = years(order);
+
+% Heatmap
+figure;
+imagesc(kappa,1:Y,power_increase);
+set(gca,"YTick",1:Y,"YTickLabel",years);
+xlabel("Forecast Error Multiplier, \kappa");
+ylabel("Historical Year: Driest to Wettest");
+title("DDU Generation Increase over DIU (%)");
+colorbar;
+
+failure_rate = 100*squeeze(mean(results.failed(:,1,:,:,:),5));
+
+figure;
+tiledlayout(1,2);
+
+for m = 1:2
+    nexttile;
+    plot(years,squeeze(failure_rate(:,m,:)),"-o");
+    title(upper(results.frameworks(m)));
+    xlabel("Year");
+    ylabel("Failure Rate (%)");
+    xticks(years);
+    ylim([0 100]);
     grid on;
 end
 
-legend(frameworks,"Location","eastoutside");
+legend("\kappa = " + string(results.kappa),"Location","eastoutside");
