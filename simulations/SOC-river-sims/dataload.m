@@ -39,7 +39,7 @@ function [inflow, soc, params, sysparams] = dataload()
         'coef2',    0.17,  ...    % Regression coef for outflow_lag  
         'AR_const', 0.0020, ...   % DIU params
         'AR_coef',  0.950, ...    % DIU inflow_lag1
-        'AR_std',   0.006, ...    % DIU residual variance % 0.0028
+        'AR_std',   0.003, ...    % DIU residual variance % 0.0028
         'omega',    0.0001,  ...  % GARCH-X params  % (0.006^2),
         'alpha',    0.008,   ...  % GARCH-X params % 0.8, 0.008
         'gamma',    0.004);       % GARCH-X params % 6.6e-4 0.003

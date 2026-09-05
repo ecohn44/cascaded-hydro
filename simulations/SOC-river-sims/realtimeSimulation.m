@@ -63,17 +63,18 @@ end
 % ========================================================================
 
 % Initialize settings (season, uncertainty form, solution alg, tracking reference)
-simSettings = initSimSettings("dry", "det", "jcc-bon", "mean");
+simSettings = initSimSettings("dry", "ddu", "jcc-bon", "mean");
  
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
-D = 7;                       % Number of simulation days 
+D = 2;                       % Number of simulation days 
 T = D*24;                    % Number of simulation hours
 lag = 1;                     % Travel time between units (hrs)
-year = 2023;                 % Simulation year
-theta = 100;                 % Real time tracking coefficient 
+year = 2022;                 % Simulation year
+theta = 0;                  % Real time tracking coefficient 
+Y = length(years);
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -99,9 +100,9 @@ V_min = [sysparams.min_V]';
 V_max = [sysparams.max_V]';
 
 % Monte Carlo Settings
-S = 32;
+S = 100;
 kappa = [0.5 1 1.5 2];
-frameworks = ["diu","ddu"];
+frameworks = ["diu", "ddu"];
 
 % Generate common random draws
 rng(1);
@@ -111,25 +112,11 @@ for s = 1:S
     Z(:,:,s) = mvnrnd(zeros(1,n_units),R,T)';
 end
 
-% Set long-term reference 
-switch simSettings.ref
-    case "mean"
-        SOC_lower = SOC_mean;
-        SOC_upper = SOC_mean;
-
-    case "envelope"
-        SOC_lower = SOC_p10;
-        SOC_upper = SOC_p90;
-end
 
 % Store lower and upper SOC references 
-SOC_ref = [SOC_lower; SOC_upper];
+SOC_ref = [SOC_mean; SOC_mean];
 
-% Plot streamflow profiles
-plotStreamflows(I');
 
-% Plot SOC reference trajectories 
-plotSOCs(SOC_mean');
     
     
 %% ========================================================================
@@ -156,8 +143,9 @@ for m = 1:M
     framework = frameworks(m);
     
     for k = 1:K
+        disp(k)
         for s = 1:S
-            
+            disp(s)
             % Initialize previous states
             V_prev = SOC_init; %arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
             u_prev = arrayfun(@(s) s.min_ut, sysparams(:), 'UniformOutput', true);
@@ -195,7 +183,7 @@ for m = 1:M
                 I_prev(1) = I(1,t);
                             
                 [result, obj, X_t, std_hat(:,t)] = realtimeGurobi(t, c, eps, I_prev, error_prev, V_prev, u_prev, ...
-                    SOC_ref(:,t), SOC_p10(:,t), SOC_p90(:,t), theta, lag, up_release, sysparams, modelparams, ...
+                    SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams, ...
                     simSettings.bounds, framework, simSettings.ref);
     
                 if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x) 
@@ -221,6 +209,7 @@ for m = 1:M
             
                 % Check if still within bounds after real time volume updates 
                 if any(V_history(:,t) < V_min | V_history(:,t) > V_max)
+                    warning("Out of bounds volume")
                     failed(m,k,s) = true;
                     failure_time(m,k,s) = t;
                     break
@@ -239,6 +228,16 @@ for m = 1:M
             results.sp(:,:,m,k,s)  = sp_history;
             results.q(:,:,m,k,s)   = q_real;
             results.std(:,:,m,k,s) = std_hat;
+
+            %{
+            X = [];
+            for i = 1:n_units
+                X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
+            end
+            
+            simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
+            %}
+
         end
     end
 end
@@ -262,11 +261,31 @@ save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
 % ========================================================================
 
 %{
+% Set long-term reference 
+switch simSettings.ref
+    case "mean"
+        SOC_lower = SOC_mean;
+        SOC_upper = SOC_mean;
+
+    case "envelope"
+        SOC_lower = SOC_p10;
+        SOC_upper = SOC_p90;
+end
+
+% Plot streamflow profiles
+plotStreamflows(I');
+
+% Plot SOC reference trajectories 
+plotSOCs(SOC_mean');
+
 % Store Results 
 X = [];
 for i = 1:n_units
     X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
 end
+
+simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
+
 
 % Reference tracking error
 track_error = zeros(n_units, T);

@@ -1,4 +1,4 @@
-function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_prev, q_error, V_prev, u_prev, V_ref, V_p10, V_p90, theta, lag, up_release, sys, model, bounds, framework, tracking)
+function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_prev, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework, tracking)
 % =========================================================================
 % INPUTS
 %   t        : Current time period index 
