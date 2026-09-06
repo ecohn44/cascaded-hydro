@@ -1,6 +1,6 @@
 clear; clc;
 
-load("resultsBonferroni/monteCarloResults.mat","results");
+load("resultsBonferroni/monteCarloResultsk1.mat","results");
 
 years = results.years;
 thetas = results.thetas;  
