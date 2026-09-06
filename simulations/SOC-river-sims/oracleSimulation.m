@@ -37,7 +37,7 @@ eps = 0.05;         % risk tolerance
 % ========================================================================
 
 % Initialize settings (season, chance constrained solution, uncertainty form)
-simSettings = initSimSettings("dry", "det", "det");
+simSettings = initSimSettings("dry", "det", "det", "mean");
  
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));

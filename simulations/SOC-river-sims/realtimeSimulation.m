@@ -35,7 +35,7 @@ V_max = [sysparams.max_V]';
 
 
 % Load reference trajectories 
-years = 2018:2025;  
+years = 2018:2024;  
 theta_ref = 1;  % Select which SOC trajectory to pull
 T = 2160;
 results_folder = "resultsOracle";
@@ -93,9 +93,9 @@ end
 
 % Monte Carlo Settings
 S = 32;                        % Monte Carlo simulations per year 
-kappa = 0.25:0.25:2;           % Forecast error
+kappa = 0.5:0.5:2;           % Forecast error
 frameworks = ["diu", "ddu"];   % Uncertainty representation 
-thetas = [0, 10, 50, 100];         % Real time tracking coefficient 
+thetas = [0, 5, 10, 15];         % Real time tracking coefficient 
 
 % Prepare to save results
 M = length(frameworks);
@@ -134,7 +134,7 @@ for y = 1:Y
     I          = I_hist(:, 1:T, y);
     SOC_init   = SOC_hist(:, 1, y);
 
-    % Generate reference trajectory from trainin data
+    % Generate reference trajectory from training data
     train_years = setdiff(1:Y,y);
     SOC_mean   = mean(SOC_hist(:, 1:T, train_years),3);
     SOC_p10    = prctile(SOC_hist(:, 1:T, train_years),10,3);
@@ -258,6 +258,7 @@ for y = 1:Y
                     results.std(:,:,y,h,m,k,s) = std_hat;
         
                 end
+
             end
         end
     end
@@ -274,6 +275,7 @@ results.SOC_p10 = SOC_p10;
 results.SOC_p90 = SOC_p90;
 results.sysparams = sysparams;
 results.mean_inflow(y) = mean(I(1,:));
+results.thetas = thetas;
 
 save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
 

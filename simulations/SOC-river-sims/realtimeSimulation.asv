@@ -35,7 +35,7 @@ V_max = [sysparams.max_V]';
 
 
 % Load reference trajectories 
-years = 2018:2025;  
+years = 2018:2024;  
 theta_ref = 1;  % Select which SOC trajectory to pull
 T = 2160;
 results_folder = "resultsOracle";
@@ -93,19 +93,15 @@ end
 
 % Monte Carlo Settings
 S = 32;                        % Monte Carlo simulations per year 
-kappa = [0.5 1 1.5 2];         % Forecast error
+kappa = 0.25:0.25:2;           % Forecast error
 frameworks = ["diu", "ddu"];   % Uncertainty representation 
-thetas = 0; %[0, 10, 100];         % Real time tracking coefficient 
+thetas = [0, 10, 50, 100];         % Real time tracking coefficient 
 
 % Prepare to save results
 M = length(frameworks);
 K = length(kappa);
 Y = length(years);
 H = length(thetas);
-
-for i = 1:n_units
-    sysparams(i).min_ut = 0;
-end
 
 % Generate common random draws
 rng(1);
@@ -138,7 +134,7 @@ for y = 1:Y
     I          = I_hist(:, 1:T, y);
     SOC_init   = SOC_hist(:, 1, y);
 
-    % Generate reference trajectory from trainin data
+    % Generate reference trajectory from training data
     train_years = setdiff(1:Y,y);
     SOC_mean   = mean(SOC_hist(:, 1:T, train_years),3);
     SOC_p10    = prctile(SOC_hist(:, 1:T, train_years),10,3);
@@ -160,16 +156,16 @@ for y = 1:Y
                     disp(s)
                     % Initialize previous states
                     V_prev = SOC_init; %arrayfun(@(s) s.V0, sysparams(:), 'UniformOutput', true);
-                    u_prev  = zeros(n_units,1); %arrayfun(@(s) s.min_ut, sysparams(:), 'UniformOutput', true);
+                    u_prev  = arrayfun(@(s) s.min_ut, sysparams(:), 'UniformOutput', true);
                     
                     % Initialize histories
                     V_history = nan(n_units,T);
                     p_history = nan(n_units,T);
                     u_history = nan(n_units,T);
                     sp_history = nan(n_units,T);
-                    q_mean     = zeros(n_units, T);
-                    std_hat    = zeros(n_units, T);
-                    q_error    = zeros(n_units, T);
+                    q_mean  = nan(n_units,T);
+                    std_hat = nan(n_units,T);
+                    q_error = zeros(n_units,T);
                     q_real     = nan(n_units, T);
                                      
                     for t = 1:T
@@ -201,7 +197,7 @@ for y = 1:Y
                             % Calculate realized flow 
                             sigma_ddu = forecast_error(t, error_prev, up_release, "ddu", modelparams, sysparams);
                             q_mean(:,t) = X_t(:,5);
-                            q_real(:,t) = q_mean(:,t) + kappa(k)*sigma_ddu(:).*Z(:,t,s,y);
+                            q_real(:,t) = max(0,q_mean(:,t) + kappa(k)*sigma_ddu(:).*Z(:,t,s,y));
         
                             p_history(:,t)  = X_t(:,2);
                             u_history(:,t)  = X_t(:,3);
@@ -231,11 +227,22 @@ for y = 1:Y
                             % Update volume using corrected releases
                             V_history(:,t) = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t);
 
+                            % Spill accounting
                             excess = max(V_history(:,t)-V_max,0);
                             sp_history(:,t) = sp_history(:,t) + excess;
                             V_history(:,t) = V_history(:,t) - excess;
+
+                            % Recalculate power using the corrected release
+                            for i = 1:n_units
+                            
+                                V_norm = (V_prev(i)-sysparams(i).min_V) / (sysparams(i).max_V-sysparams(i).min_V);             
+                                V_norm = min(1,max(0,V_norm));              
+                                head = sysparams(i).min_h + (sysparams(i).max_h-sysparams(i).min_h) * V_norm^sysparams(i).b;
+                            
+                                p_history(i,t) = c*head*u_history(i,t);
+                            end
                         end
-        
+                   
                         V_prev = V_history(:,t);
                         u_prev = u_history(:,t);
                         q_error(:,t) = q_real(:,t) - q_mean(:,t);
@@ -275,16 +282,6 @@ save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
 % ========================================================================
 
 %{
-% Set long-term reference 
-switch simSettings.ref
-    case "mean"
-        SOC_lower = SOC_mean;
-        SOC_upper = SOC_mean;
-
-    case "envelope"
-        SOC_lower = SOC_p10;
-        SOC_upper = SOC_p90;
-end
 
 % Plot streamflow profiles
 plotStreamflows(I');
@@ -301,28 +298,11 @@ end
 simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
 
 
-% Reference tracking error
-track_error = zeros(n_units, T);
-for i = 1:n_units
-    track_error(i,:) = abs(V_history(i,:) - SOC_mean(i,:)) / (sysparams(i).max_V - sysparams(i).min_V);
-end
-
 total_power = sum(p_history(:));
 fprintf('\nSystem Power Generation:          %.2f\n', total_power);
 fprintf('Mean normalized tracking error:   %.4f\n',  mean(track_error(:)));
 
 
-%% ========================================================================
-% SECTION 5: SAVING RESULTS
-% ========================================================================
-
-
-if save_mat
-    if make_dir && ~exist(results_dir, 'dir'); mkdir(results_dir); end
-    save(fullfile(results_dir, sprintf('results_rt_year%d_theta%d.mat', ...
-        year, round(100*theta))), 'X', 'sysparams');
-    fprintf('Results saved to %s\n', results_dir);
-end
 %}
 
 fprintf('Simulation complete.\n');
