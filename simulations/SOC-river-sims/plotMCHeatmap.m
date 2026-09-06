@@ -2,8 +2,8 @@ clear; clc;
 
 load("resultsBonferroni/monteCarloResults.mat","results");
 
-years = 2018:2024;
-thetas = [0, 5, 10, 15];  
+years = results.years;
+thetas = results.thetas;  
 
 P = results.p;
 

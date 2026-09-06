@@ -3,8 +3,8 @@ clear; clc; close all;
 load("resultsBonferroni/monteCarloResults.mat","results");
 
 %% Case to inspect
-selected_year  = 2023;
-selected_theta = 15;
+selected_year  = 2022;
+selected_theta = 5;
 selected_kappa = 1;
 
 years  = 2018:2024;
@@ -88,16 +88,16 @@ for i = 1:n_units
     title("Reservoir Volume"); ylabel("Volume"); grid on;
     legend("DIU","DDU","SOC mean","SOC p10","SOC p90", ...
         "Location","best");
-
+    
     nexttile;
     yyaxis left
     plot(t,q_diu(i,:),"Color",diu_color,"LineWidth",1.5); hold on;
-    plot(t,q_ddu(i,:),"Color",ddu_color,"LineWidth",1.5);
+    plot(t,q_ddu(i,:),"Color","black","LineWidth",1.5);
     ylabel("Realized Inflow");
 
     yyaxis right
     plot(t,std_diu(i,:),"--","Color",diu_color,"LineWidth",1.2);
-    plot(t,std_ddu(i,:),"--","Color",ddu_color,"LineWidth",1.2);
+    plot(t,std_ddu(i,:),"Color",ddu_color,"LineWidth",1.2);
     ylabel("Forecast Standard Deviation");
     title("Inflow and Forecast Uncertainty"); grid on;
     legend("DIU inflow","DDU inflow","DIU std","DDU std", ...

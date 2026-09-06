@@ -28,7 +28,7 @@ function [inflow, soc, params, sysparams] = dataload()
 
     s = 4.5;  % power capacity 
     s2 = .5;  % ramp rate up
-    s3 = 0;
+    s3 = .1;
     hmin = 5; hmax = 10;
     
     % Seasonal Forecasting Parameters

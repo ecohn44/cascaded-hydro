@@ -92,10 +92,10 @@ end
 % =========================================================================
 
 % Monte Carlo Settings
-S = 32;                        % Monte Carlo simulations per year 
+S = 50;                        % Monte Carlo simulations per year 
 kappa = 0.5:0.5:2;           % Forecast error
 frameworks = ["diu", "ddu"];   % Uncertainty representation 
-thetas = [0, 5, 10, 15];         % Real time tracking coefficient 
+thetas = 0:1:10; %[0, 5, 10, 15];         % Real time tracking coefficient 
 
 % Prepare to save results
 M = length(frameworks);
@@ -276,6 +276,7 @@ results.SOC_p90 = SOC_p90;
 results.sysparams = sysparams;
 results.mean_inflow(y) = mean(I(1,:));
 results.thetas = thetas;
+results.years = years;
 
 save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
 
