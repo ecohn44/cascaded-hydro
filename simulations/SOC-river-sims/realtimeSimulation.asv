@@ -41,10 +41,10 @@ T = 2160;
 results_folder = "resultsOracle";
 n_units = numel(sysparams);
 
-for k = 1:length(years)
+for k = 1:length(data_years)
     
     % Define scenario file folder 
-    folder = fullfile(results_folder, sprintf('%d_dry_det_T%d',years(k),T));
+    folder = fullfile(results_folder, sprintf('%d_dry_det_T%d',data_years(k),T));
 
     % Load in .mat file 
     file = fullfile(folder, sprintf('results_theta%d.mat',round(100*theta_ref)));
@@ -86,16 +86,26 @@ else
     warning('Results directory does not exist');
 end 
 
+% Development and final test split
+training_years = 2018:2023;
+test_year = 2024;
+test_mode = false;
+
+if test_mode
+    years = test_year;
+else
+    years = training_years;
+end
     
 %% ========================================================================
 % SECTION 3: OPTIMIZATION FRAMEWORK
 % =========================================================================
 
 % Monte Carlo Settings
-S = 50;                        % Monte Carlo simulations per year 
-kappa = 0.5:0.5:2;           % Forecast error
+S = 32;                        % Monte Carlo simulations per year 
+kappa = 1; %0.5:0.5:2;           % Forecast error
 frameworks = ["diu", "ddu"];   % Uncertainty representation 
-thetas = 0:1:10; %[0, 5, 10, 15];         % Real time tracking coefficient 
+thetas = [0, 5, 10, 15];   %0:1:10;    % Real time tracking coefficient 
 
 % Prepare to save results
 M = length(frameworks);
@@ -119,7 +129,10 @@ results.u     = nan(n_units,T,Y,H,M,K,S);
 results.sp    = nan(n_units,T,Y,H,M,K,S);
 results.q     = nan(n_units,T,Y,H,M,K,S);
 results.std   = nan(n_units,T,Y,H,M,K,S);
-results.SOC_mean = nan(n_units,T,Y);
+results.SOC_mean   = nan(n_units,T,Y);
+results.SOC_p10    = nan(n_units,T,Y);
+results.SOC_p90    = nan(n_units,T,Y);
+results.mean_inflow = nan(1,Y);
 
 % Track infeasible outcomes 
 failed = false(Y, H, M, K, S);
@@ -131,15 +144,26 @@ for y = 1:Y
     fprintf('Running simulation for year: %d\n', year);
     
     % Hydrograph and initial conditions
-    I          = I_hist(:, 1:T, y);
-    SOC_init   = SOC_hist(:, 1, y);
+    I          = I_hist(:, 1:T, data_years == year);
+    SOC_init   = SOC_hist(:, 1, data_years == year);
+
+     % Select years used to construct the reference
+    if test_mode
+        train_years = 1:length(training_years);  % 2018–2023
+    else
+        train_years = setdiff(1:length(training_years),y);
+    end
 
     % Generate reference trajectory from training data
-    train_years = setdiff(1:Y,y);
     SOC_mean   = mean(SOC_hist(:, 1:T, train_years),3);
     SOC_p10    = prctile(SOC_hist(:, 1:T, train_years),10,3);
     SOC_p90    = prctile(SOC_hist(:, 1:T, train_years),90,3);
     SOC_ref = [SOC_mean; SOC_mean];
+
+    results.SOC_mean(:,:,y) = SOC_mean;
+    results.SOC_p10(:,:,y) = SOC_p10;
+    results.SOC_p90(:,:,y) = SOC_p90;
+    results.mean_inflow(y)  = mean(I(1,:));
     
     for h = 1:H
         theta = thetas(h);
@@ -267,18 +291,13 @@ end
 % Store final results 
 results.failed = failed;
 results.failure_time = failure_time;
-
 results.frameworks = frameworks;
 results.kappa = kappa;
-results.SOC_mean(:,:,y) = SOC_mean;
-results.SOC_p10 = SOC_p10;
-results.SOC_p90 = SOC_p90;
 results.sysparams = sysparams;
-results.mean_inflow(y) = mean(I(1,:));
 results.thetas = thetas;
 results.years = years;
 
-save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
+save(fullfile(results_dir,'monteCarloResultsTest_no_umin.mat'), 'results','-v7.3');
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS

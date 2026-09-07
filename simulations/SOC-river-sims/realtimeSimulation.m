@@ -238,8 +238,6 @@ for y = 1:Y
                         % Check if still within bounds after real time volume updates 
                         if any(V_history(:,t) < V_min | V_history(:,t) > V_max)
                             warning("Volume out of bounds")
-                            failed(y,h,m,k,s) = true;
-                            failure_time(y,h,m,k,s) = t;
 
                             % Water available without going below V_min
                             available = max(V_prev + q_real(:,t) - V_min,0);
@@ -297,7 +295,7 @@ results.sysparams = sysparams;
 results.thetas = thetas;
 results.years = years;
 
-save(fullfile(results_dir,'monteCarloResultsTestk1.mat'), 'results','-v7.3');
+save(fullfile(results_dir,'monteCarloResultsTest_no_umin.mat'), 'results','-v7.3');
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS
