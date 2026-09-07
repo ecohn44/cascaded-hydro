@@ -125,10 +125,10 @@ the feasible region non-convex and the problem NP-hard in general.
 The classical McCormick relaxation bounds the bilinear product $w = z \cdot u$ by four linear
 inequalities derived from the extreme points of the box $[z^{lo}, z^{hi}] \times [u^{lo}, u^{hi}]$:
 
-$$w \geq z^{lo} u + u^{lo} z - z^{lo} u^{lo} \tag{MC1}$$
-$$w \geq z^{hi} u + u^{hi} z - z^{hi} u^{hi} \tag{MC2}$$
-$$w \leq z^{hi} u + u^{lo} z - z^{hi} u^{lo} \tag{MC3}$$
-$$w \leq z^{lo} u + u^{hi} z - z^{lo} u^{hi} \tag{MC4}$$
+$$w \geq z^{lo} u + u^{lo} z - z^{lo} u^{lo} $$
+$$w \geq z^{hi} u + u^{hi} z - z^{hi} u^{hi} $$
+$$w \leq z^{hi} u + u^{lo} z - z^{hi} u^{lo} $$
+$$w \leq z^{lo} u + u^{hi} z - z^{lo} u^{hi} $$
 
 The envelope tightly wraps the bilinear surface **only at the four corners** of the box. For interior
 points, the gap between the relaxed upper bound (MC3, MC4) and the true product is:
