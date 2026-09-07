@@ -64,7 +64,7 @@ end
 % SECTION 2: SIMULATION SETTINGS
 % ========================================================================
 
-% Initialize settings (season, uncertainty form, solution alg, tracking reference)
+% Initialize settings (season, uncertainty form, solution alg, tracking reference, "solver)
 simSettings = initSimSettings("dry", "ddu", "jcc-bon", "mean");
  
 % Extract forecasting coefficients 
@@ -89,7 +89,7 @@ end
 % Development and final test split
 training_years = 2018:2023;
 test_year = 2024;
-test_mode = true;
+test_mode = false;
 
 if test_mode
     years = test_year;
@@ -102,10 +102,10 @@ end
 % =========================================================================
 
 % Monte Carlo Settings
-S = 10;                        % Monte Carlo simulations per year 
+S = 32;                        % Monte Carlo simulations per year 
 kappa = 1; %0.5:0.5:2;           % Forecast error
 frameworks = ["diu", "ddu"];   % Uncertainty representation 
-thetas = 0; %[0, 5, 10, 15];   %0:1:10;    % Real time tracking coefficient 
+thetas = [0, 5, 10, 15];   %0:1:10;    % Real time tracking coefficient 
 
 % Prepare to save results
 M = length(frameworks);
@@ -213,7 +213,7 @@ for y = 1:Y
                         % Use historical inflow for the first reservoir
                         I_prev(1) = I(1,max(t-1,1));
                                     
-                        [result, obj, X_t, std_hat(:,t)] = realtimeGurobi(t, c, eps, I_prev, error_prev, V_prev, u_prev, ...
+                        [result, obj, X_t, std_hat(:,t)] = realtimeGurobiMC(t, c, eps, I_prev, error_prev, V_prev, u_prev, ...
                             SOC_ref(:,t), theta, lag, up_release, sysparams, modelparams, ...
                             simSettings.bounds, framework, simSettings.ref);
             
@@ -223,10 +223,18 @@ for y = 1:Y
                             q_mean(:,t) = X_t(:,5);
                             q_real(:,t) = max(0,q_mean(:,t) + kappa(k)*sigma_ddu(:).*Z(:,t,s,y));
         
-                            p_history(:,t)  = X_t(:,2);
                             u_history(:,t)  = X_t(:,3);
                             sp_history(:,t) = X_t(:,4);
-                            V_history(:,t) = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t); % volume updated with realized inflow
+                            V_history(:,t)  = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t);
+                            % Calculate actual power production
+                            for i = 1:n_units
+                                V_norm = (V_history(i,t) - sysparams(i).min_V) ...
+                                       / (sysparams(i).max_V  - sysparams(i).min_V);
+                                V_norm = min(1, max(0, V_norm));
+                                head   = sysparams(i).min_h ...
+                                       + (sysparams(i).max_h - sysparams(i).min_h) * V_norm ^ sysparams(i).b;
+                                p_history(i,t) = c * head * u_history(i,t);
+                            end
                         else
                             warning('[t=%d] Solver returned %s. Exiting.', t, result.status);
                             failed(y,h,m,k,s) = true;
@@ -279,7 +287,6 @@ for y = 1:Y
                     results.sp(:,:,y,h,m,k,s)  = sp_history;
                     results.q(:,:,y,h,m,k,s)   = q_real;
                     results.std(:,:,y,h,m,k,s) = std_hat;
-        
                 end
 
             end
@@ -296,7 +303,7 @@ results.sysparams = sysparams;
 results.thetas = thetas;
 results.years = years;
 
-save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
+save(fullfile(results_dir,'monteCarloResultsMC.mat'), 'results','-v7.3');
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS
@@ -323,8 +330,44 @@ total_power = sum(p_history(:));
 fprintf('\nSystem Power Generation:          %.2f\n', total_power);
 fprintf('Mean normalized tracking error:   %.4f\n',  mean(track_error(:)));
 
-
+SOC_ref = [SOC_p10; SOC_p90];
 %}
+
+%% ========================================================================
+% SECTION 5: McCORMICK DIAGNOSTICS
+%
+% results.p now stores PHYSICAL power (computed from realized V and u).
+% p_physical below is independently re-derived from results.V and
+% results.u as a consistency check — the gap should be near zero.
+% ========================================================================
+
+% Derive head coefficient a_i = min_h / min_V^b for each unit
+a_coeff = arrayfun(@(s) s.min_h / (s.min_V ^ s.b), sysparams);
+
+% Re-derive physical power from stored V and u for consistency check
+p_physical = zeros(size(results.V));
+for i = 1:n_units
+    V_norm = min(1, max(0, (results.V(i,:,:,:,:,:,:) - sysparams(i).min_V) ...
+                           / (sysparams(i).max_V - sysparams(i).min_V)));
+    head   = sysparams(i).min_h + (sysparams(i).max_h - sysparams(i).min_h) ...
+             .* V_norm .^ sysparams(i).b;
+    p_physical(i,:,:,:,:,:,:) = c .* head .* results.u(i,:,:,:,:,:,:);
+end
+
+% Residual gap and percentage gap (should be near zero)
+gap          = results.p - p_physical;
+pct_gap      = 100 .* gap ./ max(abs(p_physical), 1e-8);
+gap_temporal = squeeze(mean(gap, [1 3 4 5 6 7], 'omitnan'));
+
+% Print summary
+fprintf('\n--- McCormick Diagnostics ---\n');
+fprintf('Mean residual gap (should be ~0): %.6f\n', mean(gap(:), 'omitnan'));
+fprintf('Max  residual gap:                %.6f\n', max(abs(gap(:)), [], 'omitnan'));
+
+% Plot
+plotMcCormickDiagnostics(gap, pct_gap, gap_temporal, p_physical, results, ...
+    sysparams, thetas, frameworks, years, T, n_units, results_dir, printplot);
+
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
