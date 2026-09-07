@@ -163,7 +163,7 @@ function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx
         sense = [sense; '='                    ];
 
         % (C5) Tracking error upper: V(i) - V_upper_ref(i) <= d(i)
-        V_upper = V_ref(1:n); 
+        V_upper = V_ref(n+1:2*n); 
         row = row + 1;
         rows  = [rows; row;         row        ];
         cols  = [cols; idx_V(i)+1;  idx_d(i)+1 ];
@@ -172,7 +172,7 @@ function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx
         sense = [sense; '<'                      ];
         
         % (C6) Tracking error lower: V_lower_ref(i) - V(i) <= d(i)
-        V_lower = V_ref(n+1:2*n);
+        V_lower = V_ref(1:n);
         row = row + 1;
         rows  = [rows; row;         row        ];
         cols  = [cols; idx_V(i)+1;  idx_d(i)+1 ];

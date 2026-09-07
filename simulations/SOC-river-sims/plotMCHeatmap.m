@@ -1,10 +1,11 @@
 clear; clc; close all;
 
-kappa_case = "range";   % "standard" or "range"
+kappa_case = "standard";   % "standard" or "range"
 
 switch kappa_case
     case "standard"
-        load("resultsBonferroni/monteCarloResultsk1.mat","results");
+        % load("resultsBonferroni/monteCarloResultsk1.mat","results");
+        load("resultsBonferroni/monteCarloResults.mat","results")
 
         years = results.years;
         thetas = results.thetas;

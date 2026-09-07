@@ -26,7 +26,7 @@ eta = .9;           % efficiency of release-energy conversion
 rho_w = 1000;       % density of water [kg/m^3]
 g = 9.8;            % acceleration due to gravity [m/s^2]
 c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
-eps = 0.05;         % risk tolerance 
+eps = 0.1;         % risk tolerance 
 
 % Load inflow and system data 
 [inflow, soc, modelparams, sysparams] = dataload();
@@ -73,7 +73,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 % Date range settings            
 D = 2;                       % Number of simulation days 
 T = D*24;                    % Number of simulation hours
-lag = 3;                     % Travel time between units (hrs)
+lag = 2;                     % Travel time between units (hrs)
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -89,7 +89,7 @@ end
 % Development and final test split
 training_years = 2018:2023;
 test_year = 2024;
-test_mode = false;
+test_mode = true;
 
 if test_mode
     years = test_year;
@@ -102,10 +102,10 @@ end
 % =========================================================================
 
 % Monte Carlo Settings
-S = 32;                        % Monte Carlo simulations per year 
+S = 10;                        % Monte Carlo simulations per year 
 kappa = 1; %0.5:0.5:2;           % Forecast error
 frameworks = ["diu", "ddu"];   % Uncertainty representation 
-thetas = [0, 5, 10, 15];   %0:1:10;    % Real time tracking coefficient 
+thetas = 0; %[0, 5, 10, 15];   %0:1:10;    % Real time tracking coefficient 
 
 % Prepare to save results
 M = length(frameworks);
@@ -238,8 +238,6 @@ for y = 1:Y
                         % Check if still within bounds after real time volume updates 
                         if any(V_history(:,t) < V_min | V_history(:,t) > V_max)
                             warning("Volume out of bounds")
-                            failed(y,h,m,k,s) = true;
-                            failure_time(y,h,m,k,s) = t;
 
                             % Water available without going below V_min
                             available = max(V_prev + q_real(:,t) - V_min,0);
@@ -259,6 +257,7 @@ for y = 1:Y
                             % Recalculate power using the corrected release
                             for i = 1:n_units
                             
+                                % Map volume to forebay elevation 
                                 V_norm = (V_prev(i)-sysparams(i).min_V) / (sysparams(i).max_V-sysparams(i).min_V);             
                                 V_norm = min(1,max(0,V_norm));              
                                 head = sysparams(i).min_h + (sysparams(i).max_h-sysparams(i).min_h) * V_norm^sysparams(i).b;
@@ -297,7 +296,7 @@ results.sysparams = sysparams;
 results.thetas = thetas;
 results.years = years;
 
-save(fullfile(results_dir,'monteCarloResultsTest_no_umin.mat'), 'results','-v7.3');
+save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS

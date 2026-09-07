@@ -1,11 +1,12 @@
 clear; clc; close all;
 
 %% Select plotting case
-plot_case = "subset";     % "all" or "subset"
+plot_case = "all";     % "all" or "subset"
 kappa_value = 1;
 
 results_folder = "resultsBonferroni";
-all_file   = fullfile(results_folder,"monteCarloResultsk1.mat");
+% all_file   = fullfile(results_folder,"monteCarloResultsk1.mat");
+all_file   = fullfile(results_folder,"monteCarloResults.mat");
 train_file = fullfile(results_folder,"monteCarloResultsValidation_no_umin.mat");
 test_file  = fullfile(results_folder,"monteCarloResultsTest_no_umin.mat");
 

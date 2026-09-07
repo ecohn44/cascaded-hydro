@@ -3,7 +3,7 @@ clear; clc; close all;
 load("resultsBonferroni/monteCarloResults.mat","results");
 
 %% Case to inspect
-selected_year  = 2022;
+selected_year  = 2018;
 selected_theta = 5;
 selected_kappa = 1;
 
@@ -35,9 +35,9 @@ q_ddu   = reshape(mean(results.q(:,:,y,h,m_ddu,k,:),7),n_units,T);
 std_diu = reshape(mean(results.std(:,:,y,h,m_diu,k,:),7),n_units,T);
 std_ddu = reshape(mean(results.std(:,:,y,h,m_ddu,k,:),7),n_units,T);
 
-SOC_mean = results.SOC_mean(:,:,7);
-SOC_p10  = results.SOC_p10;
-SOC_p90  = results.SOC_p90;
+SOC_mean = results.SOC_mean(:,:,y);
+SOC_p10  = results.SOC_p10(:,:,y);
+SOC_p90  = results.SOC_p90(:,:,y);
 
 diu_color = [0.00 0.45 0.74];
 ddu_color = [0.85 0.33 0.10];

@@ -26,7 +26,7 @@ eta = .9;           % efficiency of release-energy conversion
 rho_w = 1000;       % density of water [kg/m^3]
 g = 9.8;            % acceleration due to gravity [m/s^2]
 c = 1;              % power prod coefficient (c = eta*rho_w*g/3.6e9)
-eps = 0.05;         % risk tolerance 
+eps = 0.1;         % risk tolerance 
 
 % Load inflow and system data 
 [inflow, soc, modelparams, sysparams] = dataload();
@@ -73,7 +73,7 @@ modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 % Date range settings            
 D = 2;                       % Number of simulation days 
 T = D*24;                    % Number of simulation hours
-lag = 3;                     % Travel time between units (hrs)
+lag = 2;                     % Travel time between units (hrs)
 
 % Create path to store results  
 if simSettings.bounds == "jcc-ssh"
@@ -89,7 +89,7 @@ end
 % Development and final test split
 training_years = 2018:2023;
 test_year = 2024;
-test_mode = true;
+test_mode = false;
 
 if test_mode
     years = test_year;
@@ -257,6 +257,7 @@ for y = 1:Y
                             % Recalculate power using the corrected release
                             for i = 1:n_units
                             
+                                % Map volume to forebay elevation 
                                 V_norm = (V_prev(i)-sysparams(i).min_V) / (sysparams(i).max_V-sysparams(i).min_V);             
                                 V_norm = min(1,max(0,V_norm));              
                                 head = sysparams(i).min_h + (sysparams(i).max_h-sysparams(i).min_h) * V_norm^sysparams(i).b;
@@ -295,7 +296,7 @@ results.sysparams = sysparams;
 results.thetas = thetas;
 results.years = years;
 
-save(fullfile(results_dir,'monteCarloResultsTest_no_umin.mat'), 'results','-v7.3');
+save(fullfile(results_dir,'monteCarloResults.mat'), 'results','-v7.3');
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS
@@ -322,7 +323,7 @@ total_power = sum(p_history(:));
 fprintf('\nSystem Power Generation:          %.2f\n', total_power);
 fprintf('Mean normalized tracking error:   %.4f\n',  mean(track_error(:)));
 
-
+SOC_ref = [SOC_p10; SOC_p90];
 %}
 
 fprintf('Simulation complete.\n');
