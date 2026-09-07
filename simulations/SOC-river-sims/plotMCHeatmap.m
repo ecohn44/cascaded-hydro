@@ -120,7 +120,7 @@ end
 cb = colorbar;
 cb.Label.String = "Generation Increase (%)";
 
-colormap(turbo);
+colormap(flipud(summer));
 box off;
 
 disp("Number of fully converged DIU-DDU pairs in each heatmap cell:");

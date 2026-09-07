@@ -104,7 +104,7 @@ end
 
 % Monte Carlo Settings
 S          = 32;                     % Monte Carlo simulations per year
-kappa      = 1;                      % Forecast error scaling
+kappa      = 1:.25:2;                      % Forecast error scaling
 frameworks = ["diu", "ddu"];         % Uncertainty representation
 thetas     = 1:1:10;        % Real-time tracking coefficient
 
