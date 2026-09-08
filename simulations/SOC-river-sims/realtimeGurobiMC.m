@@ -1,4 +1,4 @@
-function [result, obj, X, std_hat] = realtimeGurobiMC(t, c, eps, I_prev, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework, tracking)
+function [result, obj, X, std_hat] = realtimeGurobiMC(t, c, kappa, eps, I_prev, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework, tracking)
 % =========================================================================
 % realtimeGurobiMC  — McCormick relaxation of the bilinear head term
 %
@@ -26,7 +26,7 @@ function [result, obj, X, std_hat] = realtimeGurobiMC(t, c, eps, I_prev, q_error
             q_t(i) = model.coef0 + model.coef1 * I_prev(i) + model.coef2 * up_release(i-1);
         end
     end
-    std_hat = forecast_error(t, q_error, up_release, framework, model, sys);
+    std_hat = forecast_error(t, kappa, q_error, up_release, framework, model, sys);
 
     % 2: Calculate volume shift 
     switch bounds

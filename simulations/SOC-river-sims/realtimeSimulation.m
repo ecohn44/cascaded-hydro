@@ -90,7 +90,7 @@ end
 % Development and final test split
 training_years = 2018:2023;
 test_year      = 2024;
-test_mode      = false;
+test_mode      = true;
 
 if test_mode
     years = test_year;
@@ -104,9 +104,9 @@ end
 
 % Monte Carlo Settings
 S          = 32;                     % Monte Carlo simulations per year
-kappa      = 1:.25:2;                      % Forecast error scaling
+kappa      = 1; %1:.25:2;                      % Forecast error scaling
 frameworks = ["diu", "ddu"];         % Uncertainty representation
-thetas     = 1:1:10;        % Real-time tracking coefficient
+thetas     = [1, 5, 10]; %1:1:10;        % Real-time tracking coefficient
 
 % Prepare to save results
 M = length(frameworks);
@@ -217,17 +217,17 @@ for y = 1:Y
                         I_prev(1) = I(1, max(t-1, 1));
 
                         [result, obj, X_t, std_hat(:,t)] = realtimeGurobiMC( ...
-                            t, c, eps, I_prev, error_prev, V_prev, u_prev, ...
+                            t, c, kappa(k), eps, I_prev, error_prev, V_prev, u_prev, ...
                             SOC_ref(:,t), theta, lag, up_release, sysparams, ...
                             modelparams, simSettings.bounds, framework, simSettings.ref);
 
                         if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) ...
                                 && isfield(result, 'x') && ~isempty(result.x)
 
-                            sigma_ddu   = forecast_error(t, error_prev, up_release, ...
+                            sigma_ddu   = forecast_error(t, kappa(k), error_prev, up_release, ...
                                               "ddu", modelparams, sysparams);
                             q_mean(:,t) = X_t(:,5);
-                            q_real(:,t) = max(0, q_mean(:,t) +  kappa(k)*sigma_ddu(:).*Z(:,t,s,y));
+                            q_real(:,t) = max(0, q_mean(:,t) +  sigma_ddu(:).*Z(:,t,s,y));
 
                             u_history(:,t)  = X_t(:,3);
                             sp_history(:,t) = X_t(:,4);
@@ -297,7 +297,7 @@ results.sysparams    = sysparams;
 results.thetas       = thetas;
 results.years        = years;
 
-save(fullfile(results_dir, 'monteCarloResultsMC.mat'), 'results', '-v7.3');
+save(fullfile(results_dir, 'monteCarloResultsk1TestMC.mat'), 'results', '-v7.3');
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS

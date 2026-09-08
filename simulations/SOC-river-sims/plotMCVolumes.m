@@ -1,14 +1,12 @@
 clear; clc; close all;
 
 %% Select plotting case
-plot_case = "all";     % "all" or "subset"
+plot_case = "subset";     % "all" or "subset"
 kappa_value = 1;
 
 results_folder = "resultsBonferroni";
-% all_file   = fullfile(results_folder,"monteCarloResultsk1.mat");
-all_file   = fullfile(results_folder,"monteCarloResultsMC.mat");
-train_file = fullfile(results_folder,"monteCarloResultsValidation_no_umin.mat");
-test_file  = fullfile(results_folder,"monteCarloResultsTest_no_umin.mat");
+all_file   = fullfile(results_folder,"monteCarloResultskrangeMC.mat");
+test_file  = fullfile(results_folder,"monteCarloResultsk1TestMC.mat");
 
 switch plot_case
     case "all"
@@ -22,7 +20,7 @@ switch plot_case
         thetas = results.thetas;
 
     case "subset"
-        S = load(train_file,"results");
+        S = load(all_file,"results");
         train_results = S.results;
 
         S = load(test_file,"results");
@@ -31,7 +29,7 @@ switch plot_case
         % Rank only the training years by mean streamflow
         [~,order] = sort(train_results.mean_inflow);
         wet_idx = order(end);
-        dry_idx = order(4);
+        dry_idx = order(1);
 
         years = [train_results.years(wet_idx), ...
                  train_results.years(dry_idx), ...
