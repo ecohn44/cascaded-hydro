@@ -46,7 +46,7 @@ switch kappa_case
         ylabels = string(years(order));
 
         xlabel_text = "\theta";
-        ylabel_text = "Historical Year: Driest to Wettest";
+        ylabel_text = "";
         title_text = "DDU Generation Increase over DIU, \kappa = 1 (%)";
 
     case "range"
@@ -122,7 +122,7 @@ ax.LineWidth = 1.2;
 
 xlabel(xlabel_text);
 ylabel(ylabel_text);
-title(title_text);
+% title(title_text);
 
 for r = 1:size(Z,1)
     for c = 1:size(Z,2)

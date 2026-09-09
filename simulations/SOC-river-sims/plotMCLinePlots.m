@@ -85,4 +85,4 @@ for g = 1:2
 end
 
 legend("Location","best");
-sgtitle("Total Generation by Tracking Penalty, \kappa = 1");
+% sgtitle("Total Generation by Tracking Penalty, \kappa = 1");
