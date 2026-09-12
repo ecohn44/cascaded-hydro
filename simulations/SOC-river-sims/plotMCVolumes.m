@@ -1,7 +1,7 @@
 clear; clc; close all;
 
 %% Select plotting case
-plot_case = "subset";     % "all" or "subset"
+plot_case = "all";     % "all" or "subset"
 kappa_value = 1;
 
 results_folder = "resultsBonferroni";

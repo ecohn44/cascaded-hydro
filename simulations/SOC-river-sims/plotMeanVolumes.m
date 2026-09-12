@@ -1,10 +1,11 @@
 %% Plot Driver for DIU vs DDU: Average Across Years
-clear; clc; close all;
+%clear; clc; close all;
 
 % User settings
 results_file = fullfile("resultsBonferroni","monteCarloResultskrangeMC.mat");
 kappa_value = 1;
 theta_value = 1;
+year = 2022; 
 
 font = 16;
 
@@ -12,6 +13,7 @@ font = 16;
 S = load(results_file,"results");
 results = S.results;
 
+y = find(results.years == year, 1);
 k = find(results.kappa == kappa_value,1);
 h = find(results.thetas == theta_value,1);
 m_diu = find(results.frameworks == "diu",1);
@@ -38,11 +40,11 @@ for i = 1:n_units
     V_p10  = squeeze(mean(results.SOC_p10(i,:,:),3));
     V_p90  = squeeze(mean(results.SOC_p90(i,:,:),3));
 
-    V_diu = squeeze(mean(results.V(i,:,: ,h,m_diu,k,:),[3 7]));
-    V_ddu = squeeze(mean(results.V(i,:,: ,h,m_ddu,k,:),[3 7]));
+    V_diu = squeeze(mean(results.V(i,:,y ,h,m_diu,k,:),7));
+    V_ddu = squeeze(mean(results.V(i,:,y ,h,m_ddu,k,:),7));
 
-    u_diu = squeeze(mean(results.u(i,:,: ,h,m_diu,k,:),[3 7]));
-    u_ddu = squeeze(mean(results.u(i,:,: ,h,m_ddu,k,:),[3 7]));
+    u_diu = squeeze(mean(results.u(i,:,y ,h,m_diu,k,:),7));
+    u_ddu = squeeze(mean(results.u(i,:,y ,h,m_ddu,k,:),7));
 
     head_mean = sp.a .* V_mean.^sp.b;
     head_p10  = sp.a .* V_p10.^sp.b;
