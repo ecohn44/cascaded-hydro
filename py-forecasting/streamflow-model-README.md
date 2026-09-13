@@ -1,185 +1,136 @@
-# Streamflow Forecasting Model
+# Hourly Inflow and Decision-Dependent Error Model
 
-## Purpose
+## Scope
 
-This workflow estimates hourly inflow at each modeled reservoir from two sources of information:
+The notebook constructs hourly inflow series for the McNary (MCN), John Day (JDA), The Dalles (TDA), and Bonneville (BON) reservoirs, then estimates one-hour-ahead inflow models for JDA, TDA, and BON. The final uncertainty model separates predictable inflow dynamics, serial correlation in the remaining forecast errors, time-varying marginal variance, and contemporaneous cross-unit dependence.
 
-1. recent inflow at the same reservoir; and
-2. current and lagged outflow from the next upstream reservoir.
+The cascade is:
 
-The model is intended to represent water propagation through the cascade while retaining short-term persistence in local inflow. A separate ridge-regression model is trained for Bonneville (BON), The Dalles (TDA), and John Day (JDA). McNary is not predicted because the current dataset does not include an additional upstream release series for use as its routing input.
+`MCN -> JDA -> TDA -> BON`
 
-## Modeled reaches
+The analysis uses the September 7 through December 5 dry-season window. Training seasons are 2018-2022 and test seasons are 2023-2025.
 
-| Predicted unit | Target inflow | Upstream release predictor |
-|---|---|---|
-| Bonneville (BON) | `bon_inflow_avg` | `tda_outflow` |
-| The Dalles (TDA) | `tda_inflow_avg` | `jda_outflow` |
-| John Day (JDA) | `jda_inflow_avg` | `mcn_outflow` |
+## Inflow reconstruction
 
-The inflow and outflow tables are joined using an inner merge on `datetime`. Consequently, only timestamps present in both tables enter the modeling dataset. Rows are sorted chronologically, and missing values are currently filled using backward filling before model construction.
+Hourly inflow is reconstructed from outflow and storage change using the reservoir mass balance:
 
-## Training and test periods
+`q_i,t^recon = u_i,t + (V_i,t - V_i,t-1) / K`
 
-The data are divided by season rather than by randomly sampled observations:
+where `q_i,t^recon` is reconstructed inflow, `u_i,t` is total outflow, `V_i,t` is storage, and `K = 0.0826446 kaf/(kcfs-hour)` is the unit-conversion factor. Forebay elevation is first normalized and mapped to normalized storage using the inverse linear head-volume relationship.
 
-- **Training seasons:** 2018–2022
-- **Test seasons:** 2023–2025
+A unit-specific mean bias is removed relative to the reported inflow series:
 
-A `season_year` label prevents lagged predictors from crossing seasonal boundaries. It is defined as
+`q_i,t^bc = q_i,t^recon - mean(q_i,t^recon - q_i,t^reported)`
 
-$$
-\text{season\_year}_t = \text{year}(t)-\mathbb{1}\{\text{month}(t)\leq 4\}.
-$$
+The active forecasting target in the notebook is a trailing six-hour rolling median of the bias-corrected reconstruction, denoted `q_i,t^avg`. This filter reduces high-frequency reconstruction noise while using only current and past observations.
 
-Thus, observations from January through April are assigned to the season that began in the preceding calendar year. For the September–December study window, `season_year` is equal to the calendar year.
+## Travel-time selection
 
-## Model structure
+Candidate travel times are restricted using reservoir distance and plausible propagation speeds of 5-15 mph. For reach length `d`, the candidate lag set is:
 
-For each reservoir, the normalized inflow prediction is
+`L = {ceil(d/15), ..., floor(d/5)}`
 
-$$
-\widehat{q}^{\,*}_t
-= \beta_0
-+ \sum_{j=1}^{p}\beta_j q^{*}_{t-j}
-+ \sum_{k=0}^{K}\gamma_k r^{*}_{t-k},
-$$
+The selected travel time maximizes the correlation between lagged upstream outflow and downstream reconstructed inflow. The notebook reports 12 hours for MCN-JDA, 3 hours for JDA-TDA, and 7 hours for TDA-BON. The active forecasting specification instead uses the following empirically selected lag sets:
 
-where:
+| Unit | Upstream unit | Inflow lags | Release lags |
+|---|---|---|---|
+| JDA | MCN | 1, 2, 3 | 9, 10, 11 |
+| TDA | JDA | 1, 2, 3 | 1, 2, 3 |
+| BON | TDA | 1 | 4 |
 
-- $q_t$ is inflow at the predicted reservoir;
-- $r_t$ is outflow from the next upstream reservoir;
-- $p$ is the number of autoregressive inflow lags;
-- $K$ is the maximum upstream-release lag;
-- $q^*$ and $r^*$ denote normalized variables; and
-- the $k=0$ term includes the upstream release at the current time step.
+## Conditional mean model
 
-Because the data are hourly, each lag represents one hour. For example, $(p,K)=(6,12)$ uses the previous six hours of local inflow and upstream releases from the current hour through 12 hours earlier.
+For downstream unit `i` and upstream unit `j`, the one-hour-ahead conditional mean is:
 
-The tested lag structures are
+`mu_i,t = b_i,0 + sum(phi_i,l q_i,t-l) + sum(theta_i,h u_j,t-h)`
 
-```python
-lag_pairs = [(3, 6), (6, 6), (6, 12)]
-```
+Recent local inflows represent short-term persistence, while lagged upstream releases represent routed cascade effects. Each model is estimated by ridge regression. Predictors are standardized using training data only, and the ridge penalty is selected by cross-validation over `10^-4` to `10^4`. Ridge regularization is used because adjacent inflow and release lags are strongly collinear.
 
-## Lagged-data construction
+Testing is rolling one-step-ahead: observed inflow through hour `t-1` is used to predict hour `t`. This matches real-time dispatch, in which the latest realized inflow is available before the next decision. It also prevents artificial error accumulation from a 2,160-hour recursive forecast. Negative predictions are truncated to zero.
 
-Lagged features are generated separately within each `season_year`:
+The resulting test coefficients of determination are 0.970 for JDA, 0.969 for TDA, and 0.983 for BON.
 
-- `q_lag_1, ..., q_lag_p` contain past inflows at the predicted reservoir;
-- `r_lag_0, ..., r_lag_K` contain current and past releases from the upstream reservoir.
+## Autoregressive error correction
 
-Rows without a complete lag history are removed. Therefore, the first $\max(p,K)$ observations of each season are unavailable for model fitting and evaluation.
+Raw mean-model residuals are defined as:
 
-## Normalization
+`e_i,t = q_i,t - mu_i,t`
 
-All scaling parameters are estimated from the training subset only. Target inflows are normalized as
+Residual diagnostics show remaining dependence at short lags and at the 24-hour operating cycle. A compact autoregressive correction is therefore estimated on training residuals:
 
-$$
-q_t^*=\frac{q_t-q_{\min}}{q_{\max}-q_{\min}},
-$$
+`e_i,t = c_i + phi_i,1 e_i,t-1 + phi_i,2 e_i,t-2 + phi_i,24 e_i,t-24 + epsilon_i,t`
 
-and upstream releases are normalized as
+The innovation `epsilon_i,t` is the input to the variance model. The correction reduced test residual RMSE by approximately 9.0% for JDA, 6.3% for TDA, and 29.5% for BON. These lags are retained because they address observed residual structure while adding only three state variables, all known at the real-time decision point.
 
-$$
-r_t^*=\frac{r_t-r_{\min}}{r_{\max}-r_{\min}}.
-$$
+## Student-t GARCH-X variance model
 
-The inflow and release minima and ranges are stored with the fitted model and reused without recalculation during testing. This prevents the test-period magnitude range from influencing the fitted coefficients or scaling parameters.
+The conditional innovation model is:
 
-## Ridge-regression training
+`epsilon_i,t = sigma_i,t z_i,t`
 
-One ridge-regression model is fitted for every combination of reservoir and candidate lag structure. Ridge regression estimates the coefficient vector by minimizing
+`z_i,t ~ standardized Student-t(nu_i)`
 
-$$
-\sum_t\left(q_t^*-\widehat{q}_t^*\right)^2
-+\alpha\lVert\boldsymbol{\theta}\rVert_2^2,
-$$
+The decision-dependent conditional variance is:
 
-where $\boldsymbol{\theta}$ contains the fitted lag coefficients and $\alpha$ controls the amount of coefficient shrinkage. Penalization is useful here because adjacent hourly lags are strongly correlated.
+`sigma_i,t^2 = omega_i + alpha_i epsilon_i,t-1^2 + beta_i sigma_i,t-1^2 + gamma_i,u u_tilde_j,t-h + gamma_i,r abs(Delta u_tilde_j,t-h)`
 
-`RidgeCV` selects $\alpha$ from 40 logarithmically spaced candidates:
+Here, `u_tilde` and `abs(Delta u_tilde)` are upstream release and absolute hourly ramp normalized to the training range. The lag `h` is the center of the active release-lag set: 10 hours for JDA, 2 hours for TDA, and 4 hours for BON.
 
-```python
-np.logspace(-4, 4, 40)
-```
+Release level represents the operating regime, while absolute ramp represents the magnitude of an operational change. Absolute ramp is used because both upward and downward changes may increase routing uncertainty. Including both variables provided the best training fit and maintained strong out-of-sample likelihood performance.
 
-The notebook does not explicitly provide a cross-validation splitter to `RidgeCV`; therefore, alpha selection follows the default behavior of the installed scikit-learn version. The final model is then fitted using all training observations for that reservoir and lag structure.
+Student-t innovations are used because the residual histograms and quantile plots show heavy tails, and Student-t GARCH produced substantially lower AIC than Gaussian GARCH. The estimated degrees of freedom are approximately 3.04 for JDA, 3.35 for TDA, and 2.64 for BON.
 
-## Recursive test procedure
+Parameters are estimated by maximum likelihood with `omega`, `alpha`, `beta`, `gamma_u`, and `gamma_r` constrained to be nonnegative. The stationarity safeguard is:
 
-Testing is performed independently for each test season. At the beginning of a season, the first $\max(p,K)$ observed inflows provide the warm-up history. Predictions then proceed chronologically:
+`alpha_i + beta_i <= 0.995`
 
-1. Construct the predictor vector from the most recently available inflow estimates and observed upstream releases.
-2. Normalize the predictors using the training-period scaling parameters.
-3. Predict normalized inflow with the fitted ridge model.
-4. Transform the prediction back to the original flow scale.
-5. Replace the inflow value in the prediction history with the new prediction so it can be used at subsequent time steps.
-6. Impose the physical lower bound $\widehat q_t\geq 0$.
+The variance recursion is reset at the beginning of every seasonal year so that the end of one dry season is not treated as adjacent to the beginning of the next.
 
-The recursive update is
+## Final fitted results
 
-$$
-\widehat q_t=\max\left\{0,\ q_{\min}+q_{\mathrm{range}}\widehat q_t^*\right\}.
-$$
+| Unit | phi_1 | phi_2 | phi_24 | alpha | beta | gamma_release | gamma_ramp | nu | Persistence |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| JDA | 0.0180 | -0.2009 | 0.3147 | 0.3303 | 0.6626 | 1.6326 | 22.6097 | 3.0435 | 0.9929 |
+| TDA | 0.0008 | -0.1966 | 0.3495 | 0.3646 | 0.5078 | 7.1607 | 23.0376 | 3.3522 | 0.8724 |
+| BON | 0.8454 | -0.3347 | 0.1912 | 0.5434 | 0.4516 | 0.8876 | 16.4993 | 2.6415 | 0.9950 |
 
-The first prediction uses observed inflow values for its entire autoregressive history. As the recursion advances, those observations are progressively replaced by model predictions. After $p$ predicted time steps, all local-inflow lag terms are recursive predictions. Upstream-release predictors remain observed values throughout the current test implementation.
+Because release and ramp are normalized to the same 0-1 range, their variance coefficients are comparable within each unit. Ramp magnitude has the larger estimated effect for all three units. BON remains at the imposed persistence boundary and should be included in a persistence-cap sensitivity analysis.
 
-## Performance metrics
+Held-out test performance is:
 
-For each reservoir and lag structure, the notebook calculates the prediction error as
+| Unit | Mean NLL | 90% coverage | 95% coverage | 99% coverage |
+|---|---:|---:|---:|---:|
+| JDA | 2.6573 | 0.8868 | 0.9385 | 0.9925 |
+| TDA | 2.7488 | 0.8897 | 0.9498 | 0.9939 |
+| BON | 1.7686 | 0.8942 | 0.9344 | 0.9770 |
 
-$$
-e_t=\widehat q_t-q_t.
-$$
+TDA is well calibrated. JDA is slightly narrow at the 90% and 95% levels. BON remains under-covered in the upper tail, despite the Student-t specification.
 
-It reports:
+## Cross-unit covariance
 
-- **RMSE:** $\sqrt{N^{-1}\sum_t e_t^2}$;
-- **MAE:** $N^{-1}\sum_t |e_t|$;
-- **bias:** $N^{-1}\sum_t e_t$, where positive bias indicates overprediction; and
-- **correlation:** Pearson correlation between observed and predicted inflow.
-
-Metrics are pooled across the selected test seasons. The lag structure with the lowest test-period RMSE is labeled as the best model for each reservoir.
-
-## Forecast-error correlation
-
-The final calculation measures dependence among the errors at BON, TDA, and JDA. For a selected lag pair, residuals are aligned by timestamp:
-
-$$
-\varepsilon_{i,t}=q_{i,t}-\widehat q_{i,t},
-$$
-
-and their Pearson correlation matrix is computed. This matrix summarizes contemporaneous dependence among forecast errors and can be used to parameterize the spatial uncertainty structure in the downstream optimization model.
-
-The current notebook calculates this matrix using $(p,K)=(6,6)$ for all three reservoirs, rather than using the separately selected best lag structure for each reservoir.
-
-## Interpretation and current limitations
-
-The reported results should be interpreted with the following implementation details in mind:
-
-1. **Lag selection uses the test period.** The 2023–2025 seasons are used both to select $(p,K)$ and to report performance. The resulting RMSE is therefore a model-selection score, not a fully independent estimate of out-of-sample performance. A stricter design would select $p$, $K$, and $\alpha$ using only 2018–2022, then evaluate the chosen specification once on 2023–2025.
-2. **Backward filling can introduce future information.** `model_df.bfill()` replaces a missing value with a later observation and may also fill across seasonal boundaries. Missing-data treatment should be restricted by season and designed to avoid look-ahead leakage.
-3. **Upstream releases are known during testing.** The test procedure uses observed $r_t$, including `r_lag_0`. This is appropriate only when the current upstream release is observable or supplied by the dispatch model at prediction time. It is not a fully autonomous multi-step forecast of both inflow and release.
-4. **Warm-up observations are required.** Each seasonal simulation begins with observed target inflows. Performance excludes the warm-up interval.
-5. **Only nonnegativity is enforced.** Predictions are clipped at zero but are not capped at a historical or physical maximum.
-6. **One linear relationship is fitted per reach.** The model does not currently include seasonal interactions, nonlinear routing behavior, reservoir state, or time-varying travel time.
-
-## Reproducibility summary
-
-For each candidate $(p,K)$ and each modeled reservoir, the workflow is:
+The constant correlation matrix is estimated from standardized training innovations `z_i,t = epsilon_i,t / sigma_i,t`, not from raw residuals:
 
 ```text
-merge inflow and outflow data
-→ assign season_year
-→ construct within-season lags
-→ retain 2018–2022 training rows
-→ estimate training-only normalization
-→ select ridge penalty and fit coefficients
-→ recursively predict 2023–2025
-→ calculate RMSE, MAE, bias, and correlation
-→ select the lowest-RMSE lag structure by reservoir
-→ calculate cross-reservoir residual correlations
+          JDA       TDA       BON
+JDA    1.0000    0.0400    0.0194
+TDA    0.0400    1.0000    0.0785
+BON    0.0194    0.0785    1.0000
 ```
 
-The ridge model is deterministic for fixed input data, preprocessing, lag choices, and software behavior; no random seed is required by the current implementation.
+At time `t`, the covariance matrix is reconstructed as:
+
+`Sigma_t = D_t R D_t`
+
+`D_t = diag(sigma_JDA,t, sigma_TDA,t, sigma_BON,t)`
+
+The weak off-diagonal correlations indicate that most remaining dependence is represented through the unit-specific conditional means and decision-dependent variances rather than simultaneous shocks.
+
+## Reproducibility notes
+
+- The residual-model cells require both `train_results` and `test_results`, but the current notebook explicitly constructs only `test_results`. Training one-step predictions must be created with `train_years` before a clean restart can reproduce the GARCH-X fit.
+- The active target is `*_inflow_avg`, the trailing six-hour median. To use the unsmoothed hourly reconstruction, replace it consistently with `*_inflow_recon_bc` in the travel-time and forecasting sections.
+- The line that normalizes `inflow_data_norm` is commented out; the exported `inflow.csv` therefore contains unnormalized flow despite the variable name.
+- The variable `V_kaf` is currently computed from normalized storage without multiplication by physical storage limits. Before interpreting reconstructed inflow in kcfs, normalized storage must be converted to physical kaf consistently with `K`.
+- The travel-time table and active `reach_map` do not currently use identical lags. The final lag choice should be reconciled and documented before publication.
+- Backward filling can use future information. Missing observations should preferably be filled within each seasonal year using a causal method.
+- The name `fit_model` is used first for ridge regression and later for AR-GARCH-X estimation. Distinct names would make a clean notebook restart safer.
