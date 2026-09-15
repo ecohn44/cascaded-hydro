@@ -28,7 +28,7 @@ eta   = .9;       % efficiency of release-energy conversion
 rho_w = 1000;     % density of water [kg/m^3]
 g     = 9.8;      % acceleration due to gravity [m/s^2]
 c     = 1;        % power production coefficient (c = eta*rho_w*g/3.6e9)
-eps   = 0.1;      % risk tolerance 
+eps   = 0.3;      % risk tolerance 
 
 % Load inflow and system data 
 [inflow, soc, modelparams, sysparams] = dataload();
@@ -66,14 +66,14 @@ end
 % ========================================================================
 
 % Initialize settings (season, uncertainty form, solution alg, tracking ref)
-simSettings = initSimSettings("dry", "ddu", "jcc-bon", "mean");
+simSettings = initSimSettings("dry", "ddu", "jcc-ssh", "mean");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
 
 % Date range settings            
 D   = 2;     % Number of simulation days 
-T   = D*24;  % Number of simulation hours
+T   = 5; %D*24;  % Number of simulation hours
 lag = 2;     % Travel time between units (hrs)
 
 % Create path to store results  
@@ -103,10 +103,10 @@ end
 % ========================================================================
 
 % Monte Carlo Settings
-S          = 32;                     % Monte Carlo simulations per year
+S          = 1; 32;                     % Monte Carlo simulations per year
 kappa      = 1; %1:.25:2;                      % Forecast error scaling
-frameworks = ["diu", "ddu"];         % Uncertainty representation
-thetas     = [1, 5, 10]; %1:1:10;        % Real-time tracking coefficient
+frameworks = ["diu"];         % Uncertainty representation
+thetas     = 0; %[1, 5, 10]; %1:1:10;        % Real-time tracking coefficient
 
 % Prepare to save results
 M = length(frameworks);
@@ -216,13 +216,13 @@ for y = 1:Y
                         % Use historical inflow for the first reservoir
                         I_prev(1) = I(1, max(t-1, 1));
 
-                        [result, obj, X_t, std_hat(:,t)] = realtimeGurobiMC( ...
+                        [result, obj, X_t, std_hat(:,t), phi_val, alpha_vals] = realtimeYALMIP( ...
                             t, c, kappa(k), eps, I_prev, error_prev, V_prev, u_prev, ...
                             SOC_ref(:,t), theta, lag, up_release, sysparams, ...
                             modelparams, simSettings.bounds, framework, simSettings.ref);
 
-                        if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) ...
-                                && isfield(result, 'x') && ~isempty(result.x)
+                        %if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x)
+                        if result.problem == 0
 
                             sigma_ddu   = forecast_error(t, kappa(k), error_prev, up_release, ...
                                               "ddu", modelparams, sysparams);
@@ -282,6 +282,14 @@ for y = 1:Y
                     results.q(:,:,y,h,m,k,s)   = q_real;
                     results.std(:,:,y,h,m,k,s) = std_hat;
 
+                    X = [];
+                    for i = 1:n_units
+                        X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', ...
+                                sp_history(i,:)', q_mean(i,:)'];
+                    end
+                    simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
+
+
                 end  % s loop
             end  % k loop
         end  % m loop
@@ -321,4 +329,3 @@ SOC_ref = [SOC_p10; SOC_p90];
 
 fprintf('Simulation complete.\n');
 fprintf('Total runtime: %.2f seconds.\n', toc);
-

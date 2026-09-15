@@ -1,4 +1,4 @@
-function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_prev, u_prev, V_ref, V_p10, V_p90, theta, lag, up_release, sys, model, bounds, framework, tracking)
+function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_prev, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework, tracking)
 % =========================================================================
 % INPUTS
 %   t        : Current time period index 
@@ -14,11 +14,11 @@ function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_p
     n = numel(sys);
 
     % 1:  Forecast inflow and estimate error
-    q_t = I_t(:);
+    q_t = I_prev(:);
     if t > lag
         for i = 2:n
             % Regression mean 
-            q_t(i) = model.coef0 + model.coef1 * I_t(i) + model.coef2 * up_release(i-1);
+            q_t(i) = model.coef0 + model.coef1 * I_prev(i) + model.coef2 * up_release(i-1);
         end
     end
     std_hat = forecast_error(t, q_error, up_release, framework, model, sys);
@@ -43,10 +43,8 @@ function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_p
     
             % Store effective bounds and apply shift in constraints
             for i = 1:n
-                %sys(i).V_eff_max = sys(i).max_V + V_max_shift(i);
-                %sys(i).V_eff_min = sys(i).min_V + V_min_shift(i);
-
-                SOC_p10(:,t)
+                sys(i).V_eff_max = sys(i).max_V + V_max_shift(i);
+                sys(i).V_eff_min = sys(i).min_V + V_min_shift(i);
             end
     end
 
@@ -70,29 +68,6 @@ function [result, obj, X, std_hat] = realtimeGurobi(t, c, eps, I_t, q_error, V_p
     % 7: Extract Solution
     [obj, X] = extractSolution(result, t, n, idx_V, idx_p, idx_u, idx_sp, q_t, V_ref, sys, tracking);
 
-end
-
-% Helper: Construct inflow forecast error 
-function std_hat = forecast_error(t, q_error, up_release, framework, model, sys)
-    
-    n = numel(sys);
-    std_hat = model.AR_std*ones(1,n);    % estimated forecast variance 
-
-    % Calculate inflow for each unit
-    for i = 1:n
-       
-        if framework == "det"
-           % No error estimation
-           std_hat =  zeros(1,n);
-
-        elseif framework == "ddu"
-            if i > 1 && t > 1
-                % Forecast conditional variance using GARCH-X
-                var_hat_norm =  model.omega + model.alpha*(q_error(i)^2) + model.gamma*(up_release(i)); 
-                std_hat(i) = sqrt(var_hat_norm);
-            end
-        end
-    end
 end
 
 
@@ -188,7 +163,7 @@ function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx
         sense = [sense; '='                    ];
 
         % (C5) Tracking error upper: V(i) - V_upper_ref(i) <= d(i)
-        V_upper = V_ref(1:n); 
+        V_upper = V_ref(n+1:2*n); 
         row = row + 1;
         rows  = [rows; row;         row        ];
         cols  = [cols; idx_V(i)+1;  idx_d(i)+1 ];
@@ -197,7 +172,7 @@ function [A, rhs, sense] = buildLinearConstraints(t, n, nVars, idx_V, idx_p, idx
         sense = [sense; '<'                      ];
         
         % (C6) Tracking error lower: V_lower_ref(i) - V(i) <= d(i)
-        V_lower = V_ref(n+1:2*n);
+        V_lower = V_ref(1:n);
         row = row + 1;
         rows  = [rows; row;         row        ];
         cols  = [cols; idx_V(i)+1;  idx_d(i)+1 ];

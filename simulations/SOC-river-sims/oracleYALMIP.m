@@ -17,7 +17,7 @@
 % -------------------------------------------------------------------------
 
 
-function [model, obj, X] = oracle(T, c, I, lag, s)
+function [model, obj, X] = oracleYALMIP(T, c, I, lag, s)
 
 
     % Number of units
