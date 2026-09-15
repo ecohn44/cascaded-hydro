@@ -66,7 +66,7 @@ end
 % ========================================================================
 
 % Initialize settings (season, uncertainty form, solution alg, tracking ref)
-simSettings = initSimSettings("dry", "ddu", "jcc-ssh", "mean");
+simSettings = initSimSettings("dry", "diu", "jcc-bon", "mean");
 
 % Extract forecasting coefficients 
 modelparams = modelparams(strcmp({modelparams.season}, simSettings.season));
@@ -103,10 +103,10 @@ end
 % ========================================================================
 
 % Monte Carlo Settings
-S          = 1; 32;                     % Monte Carlo simulations per year
-kappa      = 1; %1:.25:2;                      % Forecast error scaling
-frameworks = ["diu"];         % Uncertainty representation
-thetas     = 0; %[1, 5, 10]; %1:1:10;        % Real-time tracking coefficient
+S          = 1;                         % Monte Carlo simulations per year
+kappa      = 1; %1:.25:2;               % Forecast error scaling
+frameworks = ["diu"];                   % Uncertainty representation
+thetas     = 0; %[1, 5, 10]; %1:1:10;   % Real-time tracking coefficient
 
 % Prepare to save results
 M = length(frameworks);
@@ -147,7 +147,7 @@ for y = 1:Y
 
     % Hydrograph and initial conditions
     I        = I_hist(:, 1:T, data_years == year);
-    SOC_init = SOC_hist(:, 1, data_years == year);
+    SOC_init = [0.3; 0.3; 0.3; 0.3]; %SOC_hist(:, 1, data_years == year);
 
     % Select years used to construct the reference
     if test_mode
@@ -246,10 +246,8 @@ for y = 1:Y
 
                             available       = max(V_prev + q_real(:,t) - V_min, 0);
                             u_history(:,t)  = min(u_history(:,t), available);
-                            sp_history(:,t) = min(sp_history(:,t), ...
-                                                  available - u_history(:,t));
-                            V_history(:,t)  = V_prev + q_real(:,t) ...
-                                              - u_history(:,t) - sp_history(:,t);
+                            sp_history(:,t) = min(sp_history(:,t), available - u_history(:,t));
+                            V_history(:,t)  = V_prev + q_real(:,t) - u_history(:,t) - sp_history(:,t);
 
                             excess          = max(V_history(:,t) - V_max, 0);
                             sp_history(:,t) = sp_history(:,t) + excess;
@@ -258,12 +256,9 @@ for y = 1:Y
 
                         % Calculate physical power
                         for i = 1:n_units
-                            V_norm = (V_history(i,t) - sysparams(i).min_V) ...
-                                   / (sysparams(i).max_V  - sysparams(i).min_V);
-                            V_norm = min(1, max(0, V_norm));
-                            head   = sysparams(i).min_h ...
-                                   + (sysparams(i).max_h - sysparams(i).min_h) ...
-                                   * V_norm ^ sysparams(i).b;
+                            V_norm = (V_history(i,t) - sysparams(i).min_V) / (sysparams(i).max_V - sysparams(i).min_V);
+                            h_norm = sysparams(i).a * V_norm + sysparams(i).b;
+                            head = sysparams(i).min_h + (sysparams(i).max_h - sysparams(i).min_h) * h_norm;
                             p_history(i,t) = c * head * u_history(i,t);
                         end
 
@@ -284,8 +279,7 @@ for y = 1:Y
 
                     X = [];
                     for i = 1:n_units
-                        X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', ...
-                                sp_history(i,:)', q_mean(i,:)'];
+                        X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
                     end
                     simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
 

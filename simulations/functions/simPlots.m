@@ -22,10 +22,8 @@ function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
         s = X(:, base+4);
         q = X(:, base+5);
 
-        % Compute nonlinear and nonapproximated head and max power
-        V_norm = (V - sp.min_V) / (sp.max_V - sp.min_V);
-        head = sp.min_h + (sp.max_h - sp.min_h) * V_norm.^sp.b;
-        % head = sp.a .* (V.^sp.b);
+        % Compute hydraulic head
+        head = sp.a .* V .+ sp.b;
 
         % Create new figure for this unit 
         figs(i) = figure('Position',[100 100 1200 600]);
