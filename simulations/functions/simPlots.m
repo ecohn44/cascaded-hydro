@@ -1,4 +1,4 @@
-function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
+function simPlots(path, X, mean, p10, p90, sysparams, T, c, std_hat, eps, printplot)
     % simPlots: Create one figure per unit and save as PNG
     % X columns: 1=V1, 2=p1, 3=u1, 4=s1, 5=q1,
     %            6=V2, 7=p2, 8=u2, 9=s2, 10=q2, ...
@@ -6,7 +6,7 @@ function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
     font = 10;
     xfont = 8;
 
-    tt = [2,T]; % Xlim array 
+    tt = [1,T]; % Xlim array 
     
     n_units = numel(sysparams);
     figs = gobjects(1, n_units);
@@ -21,9 +21,10 @@ function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
         u = X(:, base+3);
         s = X(:, base+4);
         q = X(:, base+5);
+        V_eff = sp.min_V + norminv(1 - eps/n_units)*sp.kV*std_hat(i,:);
 
         % Compute hydraulic head
-        head = sp.a .* V .+ sp.b;
+        head = sp.a .* V + sp.b;
 
         % Create new figure for this unit 
         figs(i) = figure('Position',[100 100 1200 600]);
@@ -51,7 +52,7 @@ function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
         % Subplot 3: Spill
         subplot(2,3,3);
         plot(1:T, s, 'LineWidth', 2, 'DisplayName', 'Spill');
-        xlabel('Hour','FontSize',xfont); ylabel('Flow (m^3/hr)');
+        xlabel('Hour','FontSize',xfont); ylabel('Flow (kcfs)');
         title('Spill Outflow','FontSize',font);
         xlim(tt);
 
@@ -59,11 +60,12 @@ function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
         subplot(2,3,4);
         plot(1:T, V, 'LineWidth', 2, 'DisplayName', 'Volume'); hold on;
         plot(1:T, mean(i, :), '--k', 'LineWidth', 1, 'DisplayName', 'Mean Reference')
-        plot(1:T, p10(i, :), 'Color', [0.7 0.9 1], 'LineWidth', 1.5, 'DisplayName', 'Upper Ref')
-        plot(1:T, p90(i, :), 'Color', [0.7 0.9 1], 'LineWidth', 1.5, 'DisplayName', 'Lower Ref')
+        plot(1:T, p10(i, :), 'Color', [0.7 0.9 1], 'LineWidth', 1.5, 'DisplayName', 'Lower Ref')
+        plot(1:T, p90(i, :), 'Color', [0.7 0.9 1], 'LineWidth', 1.5, 'DisplayName', 'Upper Ref')
+        plot(1:T, V_eff, ':m', 'LineWidth',2, 'DisplayName','Chance Bounds')
         yline(sp.max_V, '--r','LineWidth', 1.5);
         yline(sp.min_V, '--r','LineWidth', 1.5);
-        xlabel('Hour','FontSize',xfont); ylabel('m^3');
+        xlabel('Hour','FontSize',xfont); ylabel('Volume (p.u.)');
         title('Reservoir Volume','FontSize',font);
         %legend('Location','best');
         xlim(tt);
@@ -82,7 +84,7 @@ function simPlots(path, X, mean, p10, p90, sysparams, T, c, printplot)
         yline(sp.max_h, '--r','LineWidth', 1.5);
         yline(sp.min_h, '--r','LineWidth', 1.5);
         xlabel('Hour','FontSize',xfont); ylabel('Elevation (m)');
-        title('Forebay Elevation','FontSize',font); 
+        title('Hydraulic Head','FontSize',font); 
         xlim(tt);
 
         if printplot

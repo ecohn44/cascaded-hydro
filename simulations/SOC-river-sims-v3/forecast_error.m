@@ -1,17 +1,24 @@
 function std_hat = forecast_error(t, kappa, q_error, up_release, framework, model, sys)
 
     n = numel(sys);
-    std_hat = model.AR_std * ones(1, n);
+    std_hat = zeros(n,1);
 
     if framework == "det"
-        std_hat = zeros(1, n);
         return
     end
 
-    for i = 1:n
-        if framework == "ddu" && i > 1 && t > 1
-            var_hat = model.omega + model.alpha*(q_error(i)^2) + model.gamma*up_release(i);
-            std_hat(i) = kappa * sqrt(var_hat);
+    % McNary has constant forecast uncertainty
+    std_hat(1) = kappa*model(1).AR_std;
+
+    for i = 2:n
+        j = i - 1;  % model 1=JDA, 2=TDA, 3=BON
+
+        if framework == "diu" || t == 1
+            std_hat(i) = kappa*model(j).AR_std;
+        
+        else % ddu garch model 
+            var_hat = model(j).omega + model(j).alpha*q_error(i)^2 + model(j).gamma*up_release(i-1);
+            std_hat(i) = kappa*sqrt(max(var_hat,0));
         end
     end
 

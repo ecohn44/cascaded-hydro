@@ -15,16 +15,16 @@ function [result, obj, X, std_hat, phi_val, alpha_vals] = realtimeYALMIP(t, c, k
 
     n = numel(sys);
 
-    % Fitted inter-unit inflow correlation matrix [jda, tda, bon]
     Rcorr = [ 1.000000, -0.033090,  0.020604;
              -0.033090,  1.000000,  0.014311;
-              0.020604,  0.014311,  1.000000];
+              0.020604,  0.014311,  1.000000]; 
 
     % Step 1: Forecast inflow and estimate standard deviation
     q_t = I_prev(:);
     if t > lag
         for i = 2:n
-            q_t(i) = model.coef0 + model.coef1 * I_prev(i) + model.coef2 * up_release(i-1);
+            j = i - 1;  % model 1=JDA, 2=TDA, 3=BON
+            q_t(i) = model(j).coef0 + model(j).coef1 * I_prev(i) + model(j).coef2 * up_release(i-1);
         end
     end
     std_hat = forecast_error(t, kappa, q_error, up_release, framework, model, sys);
@@ -37,12 +37,13 @@ function [result, obj, X, std_hat, phi_val, alpha_vals] = realtimeYALMIP(t, c, k
                 sys(i).V_eff_min = sys(i).min_V;
             end
         case {"jcc-bon"}
+
             z_score     =  norminv(1 - (eps / (2 * n)));
-            V_min_shift =  z_score .* std_hat;
-            V_max_shift = -z_score .* std_hat;
+            std_V   = [sys.kV]' .* std_hat(:); % convert to volume
+
             for i = 1:n
-                sys(i).V_eff_max = sys(i).max_V + V_max_shift(i);
-                sys(i).V_eff_min = max(0, sys(i).min_V + V_min_shift(i));
+                sys(i).V_eff_min = sys(i).min_V + z_score*std_V(i);
+                sys(i).V_eff_max = sys(i).max_V;
             end
     end
 
@@ -58,8 +59,8 @@ function [result, obj, X, std_hat, phi_val, alpha_vals] = realtimeYALMIP(t, c, k
     cons = buildConstraints(t, n, V, p, u, sp, d, w, V_prev, u_prev, q_t, V_ref, c, sys);
 
     % Step 5: Build objective function
-    track_coeff = theta ./ ([sys.max_V]' - [sys.min_V]');
-    Objective   = -sum(p) + 1e-4 * sum(sp) + sum(track_coeff .* d);
+    P_base = sum([sys.F]);
+    Objective   = -sum(p)/P_base + 1e-4 * sum(sp) + sum(theta .* d);
 
     % Step 6: Solve
     phi_val    = NaN;
@@ -146,7 +147,7 @@ function cons = buildConstraints(t, n, V, p, u, sp, d, w, V_prev, u_prev, q_t, V
         cons = [cons, sp(i) >= 0, d(i) >= 0, 0 <= w(i) <= VU*uU];
 
         % (C1) Mass balance
-        cons = [cons, V(i) + u(i) + sp(i) == V_prev(i) + q_t(i)];
+        cons = [cons, V(i) == V_prev(i) + sys(i).kV*(q_t(i) - u(i) - sp(i))];
 
         % (C4) McCormick envelope for w(i) = V(i) * u(i)
         cons = [cons, ...
