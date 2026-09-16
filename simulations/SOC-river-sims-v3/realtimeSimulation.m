@@ -24,42 +24,17 @@ printplot = false;
 save_mat  = false; 
 
 % Static parameters 
-eta   = .9;       % efficiency of release-energy conversion
-rho_w = 1000;     % density of water [kg/m^3]
-g     = 9.8;      % acceleration due to gravity [m/s^2]
-c     = 1;        % power production coefficient (c = eta*rho_w*g/3.6e9)
-eps   = 0.3;      % risk tolerance 
+eta   = .9;                     % efficiency of release-energy conversion
+rho_w = 1000;                   % density of water [kg/m^3]
+g     = 9.8;                    % acceleration due to gravity [m/s^2]
+c     = eta*rho_w*g/1e6;        % power production coefficient 
+eps   = 0.3;                    % risk tolerance 
 
 % Load inflow and system data 
 [inflow, soc, modelparams, sysparams] = dataload();
 V_min = [sysparams.min_V]';
 V_max = [sysparams.max_V]';
 
-% Load reference trajectories 
-data_years    = 2018:2024;  
-theta_ref     = 1;          % Select which SOC trajectory to pull
-T             = 2160;
-results_folder = "resultsOracle";
-n_units       = numel(sysparams);
-
-for k = 1:length(data_years)
-
-    % Define scenario file folder 
-    folder = fullfile(results_folder, sprintf('%d_dry_det_T%d', data_years(k), T));
-
-    % Load in .mat file 
-    file = fullfile(folder, sprintf('results_theta%d.mat', round(100*theta_ref)));
-
-    % Unpack simulation results 
-    S = load(file, 'X', 'sysparams');
-
-    % Select columns 1, 6, 11, 16 (recorded volumes for each unit)
-    SOC_hist(:,:,k) = S.X(:,1:5:end)';
-
-    % Select columns 5, 10, 15, 20 (historical inflow for each unit)
-    I_hist(:,:,k) = S.X(:,5:5:end)';
-
-end
 
 %% ========================================================================
 % SECTION 2: SIMULATION SETTINGS
