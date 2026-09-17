@@ -62,7 +62,7 @@ function [result, obj, X, std_hat, phi_val, alpha_vals] = realtimeYALMIP(t, c, k
 
     % Step 5: Build objective function
     P_base = sum([sys.F]);
-    Objective   = -sum(p)/P_base + 1e-4 * sum(sp) + sum(theta .* d);
+    Objective   = -sum(p)/P_base + 1e-2 * sum(sp) + sum(theta .* d);
 
     % Step 6: Solve
     phi_val    = NaN;
@@ -73,45 +73,85 @@ function [result, obj, X, std_hat, phi_val, alpha_vals] = realtimeYALMIP(t, c, k
 
     switch bounds
         case {"det", "jcc-bon"}
+    
             [result, obj, X] = solveAndExtract(cons, Objective, V, p, u, sp, q_t, ops);
-
+    
         case "jcc-ssh"
-            % Build Sigma_q
+    
+            % Build inflow covariance matrix
             switch framework
-                case "det",  Sigma_q = zeros(n,n);
-                case "diu",  Sigma_q = model.AR_coef*eye(n);
-                case "ddu"
-                    D_t     = diag(std_hat(:));
-                    Sigma_q = D_t * Rcorr * D_t;
+                case "det"
+                    Sigma_q = zeros(n,n);
+    
+                case {"diu", "ddu"}
+                    D_t = diag(std_hat(:));
+                    Sigma_q = D_t*Rcorr*D_t;
+                    Sigma_q = 0.5*(Sigma_q + Sigma_q');
+    
+                otherwise
+                    error('Unknown uncertainty framework: %s', framework);
             end
-
+    
             if t == 1
                 [result, obj, X] = solveAndExtract(cons, Objective, V, p, u, sp, q_t, ops);
+    
             else
-                % Construct X_prev row (1 x 5n) expected by applySSH
-                X_prev_row = zeros(1, 5*n);
-                for i = 1:n
-                    X_prev_row(5*(i-1)+1) = V_prev(i);
-                    X_prev_row(5*(i-1)+3) = u_prev(i);
+                try
+                    % Construct previous-state row
+                    X_prev_row = zeros(1,5*n);
+    
+                    for i = 1:n
+                        X_prev_row(5*(i-1)+1) = V_prev(i);
+                        X_prev_row(5*(i-1)+3) = u_prev(i);
+                    end
+    
+                    vars = struct( ...
+                        'V',V, ...
+                        'p',p, ...
+                        'u',u, ...
+                        's',sp);
+    
+                    % Construct feasible SSH interior point
+                    x_slater = findSlater(X_prev_row, q_t, sys, c);
+    
+                    % Solve using SSH
+                    [~, x_sol, phi_val, alpha_vals, ~] = applySSH(cons, vars, t, X_prev_row, q_t', Sigma_q, x_slater, 1-eps, sys, Objective, ops);
+    
+                    % Pack successful solution
+                    result = struct( 'problem',0,'info','SSH solved');
+    
+                    X = zeros(n,5);
+    
+                    for i = 1:n
+                        base = 4*(i-1);
+    
+                        X(i,:) = [ ...
+                            x_sol(base+1), ...
+                            x_sol(base+2), ...
+                            x_sol(base+3), ...
+                            x_sol(base+4), ...
+                            q_t(i)];
+                    end
+    
+                    obj = sum(X(:,2));
+    
+                catch ME
+                    warning(['SSH failed at t=%d. ' 'Returning idle fallback flag: %s'], t, ME.message);
+    
+                    result = struct( 'problem',1, 'info',ME.message);
+    
+                    % Preserve q_t so the simulation can generate q_real
+                    X = [  V_prev(:), zeros(n,3),  q_t(:)];
+    
+                    obj        = 0;
+                    phi_val    = NaN;
+                    alpha_vals = zeros(n,1);
                 end
-
-                vars     = struct('V', V, 'p', p, 'u', u, 's', sp);
-                x_slater = findSlater(X_prev_row, q_t, sys, c);
-
-                [~, x_sol, phi_val, alpha_vals, ~] = applySSH(cons, vars, t, ...
-                    X_prev_row, q_t', Sigma_q, x_slater, 1 - eps, sys, Objective, ops);
-
-                % Pack outputs from x_sol
-                result = struct('problem', 0);
-                X      = zeros(n, 5);
-                for i = 1:n
-                    base   = 4*(i-1);
-                    X(i,:) = [x_sol(base+1), x_sol(base+2), x_sol(base+3), x_sol(base+4), q_t(i)];
-                end
-                obj = sum(X(:,2));
             end
+    
+        otherwise
+            error('Unknown bound formulation: %s', bounds);
     end
-
 end
 
 
@@ -139,6 +179,11 @@ function cons = buildConstraints(t, n, V, p, u, sp, d, w, V_prev, u_prev, q_t, V
         % (B3) Turbine release bounds + ramp rates
         if t == 1
             cons = [cons, u(i) == uL];
+        
+        elseif u_prev(i) <= 1e-8
+            % Restart from an offline state
+            cons = [cons, uL <= u(i) <= uU];
+        
         else
             cons = [cons, uL <= u(i) <= uU];
             cons = [cons, u(i) >= u_prev(i) + sys(i).RR_dn];
@@ -172,7 +217,7 @@ end
 function [result, obj, X] = solveAndExtract(Constraints, Objective, V, p, u, sp, q_t, ops)
 
     result   = optimize(Constraints, Objective, ops);
-    feasible = ismember(result.problem, [0, 3, 5]);
+    feasible = result.problem == 0;
 
     obj = NaN;
     X   = zeros(numel(q_t), 5);

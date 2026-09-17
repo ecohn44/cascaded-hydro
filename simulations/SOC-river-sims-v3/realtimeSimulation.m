@@ -19,8 +19,7 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % ========================================================================
 
 % Toggle for creating folder and plotting
-make_dir  = false;
-printplot = false; 
+printplot = true; 
 save_mat  = false; 
 
 % Static parameters 
@@ -46,8 +45,8 @@ kV = [sysparams.kV]';
 simSettings = initSimSettings("dry", "ddu", "jcc-ssh", "mean");
 
 % Date range settings            
-D   = 7;     % Number of simulation days 
-T   = 41; %D*24;  % Number of simulation hours
+D   = 2;     % Number of simulation days 
+T   = D*24;  % Number of simulation hours
 lag = 2;     % Travel time between units (hrs)
 
 % Create path to store results  
@@ -74,13 +73,13 @@ end
 
 %% ========================================================================
 % SECTION 3: OPTIMIZATION FRAMEWORK
-% ========================================================================
+% ==========================================                                                                                                                                                                                  ==============================
 
 % Monte Carlo Settings
-S          = 1;                         % Monte Carlo simulations per year
-kappa      = 1; %1:.25:2;               % Forecast error scaling
-frameworks = ["ddu"];                   % Uncertainty representation
-thetas     = 1; %[1, 5, 10]; %1:1:10;   % Real-time tracking coefficient
+S          = 1;                    % Monte Carlo simulations per year
+kappa      = 1; %1:1:2;               % Forecast error scaling
+frameworks = ["ddu"];       % Uncertainty representation
+thetas     = 1 ;%[5,10]; %1:1:10;     % Real-time tracking coefficient
 
 % Prepare to save results
 M = length(frameworks);
@@ -129,8 +128,7 @@ for y = 1:Y
     SOC_year = soc{idx_SOC,{'mcn_soc','jda_soc','tda_soc','bon_soc'}}';
     
     % Time index 
-    I = I(:,1:T);
-    SOC_init = SOC_year(:,1);
+    I = I(:,1:T); 
 
     % Use all training years
     ref_years = training_years;
@@ -150,6 +148,9 @@ for y = 1:Y
     SOC_p10  = prctile(SOC_train, 10, 3);
     SOC_p90  = prctile(SOC_train, 90, 3);
     SOC_ref  = [SOC_mean; SOC_mean];
+
+    % Init conditions from tracking 
+    SOC_init = SOC_mean(:,1);
     
     results.SOC_mean(:,:,y) = SOC_mean;
     results.SOC_p10(:,:,y)  = SOC_p10;
@@ -219,44 +220,51 @@ for y = 1:Y
                             SOC_ref(:,t), theta, lag, up_release, up_ramp, sysparams, ...
                             modelparams, simSettings.bounds, framework, simSettings.ref);
 
-                        %if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x)
+                        % Store estimated forecast error under ddu               
+                        sigma_ddu   = forecast_error(t, kappa(k), error_prev, up_release, up_ramp, "ddu", modelparams, sysparams);
+                        q_mean(:,t) = X_t(:,5);
+                        q_real(:,t) = max(0, q_mean(:,t) +  sigma_ddu(:).*Z(:,t,s,y));
+      
+                        % Use optimized decisions, or idle everything after solver failure
                         if result.problem == 0
-
-                            % Store estimated forecast error under ddu               
-                            sigma_ddu   = forecast_error(t, kappa(k), error_prev, up_release, up_ramp, "ddu", modelparams, sysparams);
-                            q_mean(:,t) = X_t(:,5);
-                            q_real(:,t) = max(0, q_mean(:,t) +  sigma_ddu(:).*Z(:,t,s,y));
-
                             u_history(:,t)  = X_t(:,3);
                             sp_history(:,t) = X_t(:,4);
-                            V_history(:,t) = V_prev + kV .* (q_real(:,t) - u_history(:,t) - sp_history(:,t));
-
                         else
-                            warning('[t=%d] Solver failed: %s', t, result.info);
-                            failed(y,h,m,k,s)       = true;
-                            failure_time(y,h,m,k,s) = t;
-                            break
+                            warning('Solver failed at t=%d. Idling all units.', t);
+                            u_history(:,t)  = zeros(n_units,1);
+                            sp_history(:,t) = zeros(n_units,1);
                         end
-
-                        if any(V_history(:,t) < V_min | V_history(:,t) > V_max)
-                            warning("Realized volume out of bounds at t = %d", t)
-
-                            % Record lower-bound violation
-                            IVI_history(:,t) = max(V_min - V_history(:,t), 0);
                         
-                            % Reduce outflow to enforce V_min
-                            available = max(q_real(:,t) + (V_prev - V_min)./kV, 0);
-                            u_history(:,t)  = min(u_history(:,t), available);
-                            sp_history(:,t) = min(sp_history(:,t), max(available - u_history(:,t), 0));
+                        % Realized volume before fallback
+                        V_raw = V_prev + kV.*( q_real(:,t) - u_history(:,t) - sp_history(:,t));
                         
-                            % Recalculate volume and spill anything above V_max
-                            V_history(:,t) = V_prev + kV.*(q_real(:,t) - u_history(:,t) - sp_history(:,t));
-                            sp_history(:,t) = sp_history(:,t) + max(V_history(:,t) - V_max, 0)./kV;
-                            V_history(:,t) = V_prev + kV.*(q_real(:,t) - u_history(:,t) - sp_history(:,t));
-
-                            % Push volume back to 0 (can add more inflow)
-                            V_history(:,t) = min(max(V_history(:,t), V_min), V_max);
+                        % Calculate IVI before correcting the optimized decision
+                        IVI_history(:,t) = max(V_min - V_raw, 0);
+                        
+                        % Idle all units after solver failure; otherwise only lower violations
+                        if result.problem ~= 0
+                            idle = true(n_units,1);
+                        else
+                            idle = V_raw < V_min;
                         end
+                        
+                        % Recalculate violating units with zero turbine release
+                        if any(idle)
+                            u_history(idle,t)  = 0;
+                            sp_history(idle,t) = 0;
+                        
+                            V_raw(idle) = V_prev(idle) + kV(idle).*q_real(idle,t);
+                        end
+                        
+                        % Spill anything above V_max
+                        extra_spill = max((V_raw - V_max)./kV, 0);
+                        
+                        sp_history(:,t) = sp_history(:,t) + extra_spill;
+                        
+                        V_history(:,t) = V_raw - kV.*extra_spill;
+                        
+                        % Clamp any remaining lower deficit
+                        V_history(:,t) = max(V_history(:,t), V_min);
 
                         % Calculate physical power
                         for i = 1:n_units
@@ -280,12 +288,13 @@ for y = 1:Y
                     results.std(:,:,y,h,m,k,s) = std_hat;
                     results.IVI(:,:,y,h,m,k,s) = IVI_history;
 
-                    X = [];
-                    for i = 1:n_units
-                        X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
-                    end
-                    simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, std_hat, eps, printplot);
-
+                    if printplot
+                        X = [];
+                        for i = 1:n_units
+                            X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
+                        end
+                        simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, std_hat, eps, false);
+                    end 
 
                 end  % s loop
             end  % k loop
@@ -302,7 +311,7 @@ results.sysparams    = sysparams;
 results.thetas       = thetas;
 results.years        = years;
 
-save(fullfile(results_dir, 'monteCarloResultsk1TestMC.mat'), 'results', '-v7.3');
+save(fullfile(results_dir, 'monteCarloResults.mat'), 'results', '-v7.3');
 
 %% ========================================================================
 % SECTION 4: DIAGNOSTICS
@@ -313,10 +322,9 @@ plotSOCs(SOC_mean');
 
 X = [];
 for i = 1:n_units
-    X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', ...
-            sp_history(i,:)', q_mean(i,:)'];
+    X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
 end
-simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot);
+simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, std_hat, eps, printplot);
 
 total_power = sum(p_history(:));
 fprintf('\nSystem Power Generation:          %.2f\n', total_power);

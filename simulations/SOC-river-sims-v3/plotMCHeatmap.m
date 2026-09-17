@@ -2,9 +2,13 @@ clear; clc; close all;
 
 kappa_case = "range";   % "standard" or "range"
 
+fn = "resultsSSH/monteCarloResults.mat"; 
+% resultsBonferroni/monteCarloResultsk1MC.mat"      % standard
+% "resultsBonferroni/monteCarloResultskrangeMC.mat" % range 
+
 switch kappa_case
     case "standard"
-        load("resultsBonferroni/monteCarloResultsk1MC.mat","results")
+        load(fn,"results")
 
         years = results.years;
         thetas = results.thetas;
@@ -25,8 +29,7 @@ switch kappa_case
                 P_diu = P(:,:,y,h,m_diu,k,:);
                 P_ddu = P(:,:,y,h,m_ddu,k,:);
 
-                valid = squeeze(all(~isnan(P_diu),[1 2]) & ...
-                                all(~isnan(P_ddu),[1 2]));
+                valid = squeeze(all(~isnan(P_diu),[1 2]) & all(~isnan(P_ddu),[1 2]));
 
                 E_diu = squeeze(sum(P_diu,[1 2]));
                 E_ddu = squeeze(sum(P_ddu,[1 2]));
@@ -50,7 +53,7 @@ switch kappa_case
         title_text = "DDU Generation Increase over DIU, \kappa = 1 (%)";
 
     case "range"
-        load("resultsBonferroni/monteCarloResultskrangeMC.mat","results");
+        load(fn,"results");
 
         thetas = results.thetas;
         kappa = results.kappa;

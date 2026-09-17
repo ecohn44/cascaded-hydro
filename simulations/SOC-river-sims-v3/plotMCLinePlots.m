@@ -1,6 +1,7 @@
 clear; clc; close all;
 
-load("resultsBonferroni/monteCarloResultsk1MC.mat","results");
+fn = "resultsSSH/monteCarloResults.mat"; %"resultsBonferroni/monteCarloResultsk1MC.mat"
+load(fn,"results");
 
 P = results.p;
 thetas = results.thetas;
