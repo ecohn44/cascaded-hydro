@@ -77,7 +77,7 @@ end
 
 % Monte Carlo Settings
 S          = 1;                    % Monte Carlo simulations per year
-kappa      = 1; %1:1:2;               % Forecast error scaling
+kappa      = 2; %1:1:2;               % Forecast error scaling
 frameworks = ["ddu"];       % Uncertainty representation
 thetas     = 1 ;%[5,10]; %1:1:10;     % Real-time tracking coefficient
 
@@ -150,7 +150,7 @@ for y = 1:Y
     SOC_ref  = [SOC_mean; SOC_mean];
 
     % Init conditions from tracking 
-    SOC_init = SOC_mean(:,1);
+    SOC_init = SOC_p10(:,1);
     
     results.SOC_mean(:,:,y) = SOC_mean;
     results.SOC_p10(:,:,y)  = SOC_p10;
@@ -225,45 +225,47 @@ for y = 1:Y
                         q_mean(:,t) = X_t(:,5);
                         q_real(:,t) = max(0, q_mean(:,t) +  sigma_ddu(:).*Z(:,t,s,y));
       
-                        % Use optimized decisions, or idle everything after solver failure
+                        % Use optimized decisions when available
                         if result.problem == 0
                             u_history(:,t)  = X_t(:,3);
                             sp_history(:,t) = X_t(:,4);
                         else
-                            warning('Solver failed at t=%d. Idling all units.', t);
-                            u_history(:,t)  = zeros(n_units,1);
+                            warning('Solver failed at t=%d. Holding previous releases.', t);
+                        
+                            % Initially maintain each unit's previous operating state
+                            u_history(:,t)  = u_prev;
                             sp_history(:,t) = zeros(n_units,1);
                         end
                         
-                        % Realized volume before fallback
-                        V_raw = V_prev + kV.*( q_real(:,t) - u_history(:,t) - sp_history(:,t));
+                        % Storage produced by those decisions
+                        V_raw = V_prev + kV.*(  q_real(:,t) - u_history(:,t) - sp_history(:,t));
                         
-                        % Calculate IVI before correcting the optimized decision
+                        % Record violations before fallback
                         IVI_history(:,t) = max(V_min - V_raw, 0);
                         
-                        % Idle all units after solver failure; otherwise only lower violations
-                        if result.problem ~= 0
-                            idle = true(n_units,1);
-                        else
-                            idle = V_raw < V_min;
+                        % Identify only the units at risk
+                        failed_units = V_raw < V_min;
+                        
+                        % Shut down only those units
+                        if any(failed_units)
+                            warning('Lower-volume fallback at t=%d for units %s.', ...
+                                t, mat2str(find(failed_units)'));
+                        
+                            u_history(failed_units,t)  = 0;
+                            sp_history(failed_units,t) = 0;
+                        
+                            % Recalculate their storage after shutdown
+                            V_raw(failed_units) = V_prev(failed_units) ...
+                                + kV(failed_units).*q_real(failed_units,t);
                         end
                         
-                        % Recalculate violating units with zero turbine release
-                        if any(idle)
-                            u_history(idle,t)  = 0;
-                            sp_history(idle,t) = 0;
-                        
-                            V_raw(idle) = V_prev(idle) + kV(idle).*q_real(idle,t);
-                        end
-                        
-                        % Spill anything above V_max
+                        % Correct upper violations using spill
                         extra_spill = max((V_raw - V_max)./kV, 0);
                         
                         sp_history(:,t) = sp_history(:,t) + extra_spill;
+                        V_history(:,t)  = V_raw - kV.*extra_spill;
                         
-                        V_history(:,t) = V_raw - kV.*extra_spill;
-                        
-                        % Clamp any remaining lower deficit
+                        % Protect against any remaining numerical deficit
                         V_history(:,t) = max(V_history(:,t), V_min);
 
                         % Calculate physical power
@@ -291,7 +293,7 @@ for y = 1:Y
                     if printplot
                         X = [];
                         for i = 1:n_units
-                            X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_mean(i,:)'];
+                            X = [X, V_history(i,:)', p_history(i,:)', u_history(i,:)', sp_history(i,:)', q_real(i,:)'];
                         end
                         simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, std_hat, eps, false);
                     end 

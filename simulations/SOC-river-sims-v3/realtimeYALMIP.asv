@@ -118,7 +118,7 @@ function [result, obj, X, std_hat, phi_val, alpha_vals] = realtimeYALMIP(t, c, k
                     [~, x_sol, phi_val, alpha_vals, ~] = applySSH(cons, vars, t, X_prev_row, q_t', Sigma_q, x_slater, 1-eps, sys, Objective, ops);
     
                     % Pack successful solution
-                    result = struct('problem',0,'info','SSH solved','ssh_failed', false);
+                    result = struct( 'problem',0,'info','SSH solved');
     
                     X = zeros(n,5);
     
@@ -146,7 +146,10 @@ function [result, obj, X, std_hat, phi_val, alpha_vals] = realtimeYALMIP(t, c, k
                         result = struct('problem', 0,  'info', 'Deterministic fallback solved', 'ssh_failed', true);
                     else
                         % Neither SSH nor deterministic fallback produced a solution
-                        result = struct('problem', 1,  'info', fallback.info, 'ssh_failed', true);
+                        result = struct( ...
+                            'problem', 1, ...
+                            'info', fallback.info, ...
+                            'ssh_failed', true);
                 
                         X   = [V_prev(:), zeros(n,3), q_t(:)];
                         obj = 0;
