@@ -2,10 +2,11 @@ clear; clc; close all;
 
 %% Select plotting case
 plot_case = "all";     % "all" or "subset"
-kappa_value = 1;
+kappa_value = 2;
 
-results_folder = "resultsBonferroni";
-all_file   = fullfile(results_folder,"monteCarloResultskrangeMC.mat");
+base = "/Users/elizacohn/Desktop/cascaded-hydro/simulations/SOC-river-sims-v3/";
+results_folder = base + "resultsSSH";
+all_file   = fullfile(results_folder,"monteCarloResults.mat");
 test_file  = fullfile(results_folder,"monteCarloResultsk1TestMC.mat");
 
 switch plot_case

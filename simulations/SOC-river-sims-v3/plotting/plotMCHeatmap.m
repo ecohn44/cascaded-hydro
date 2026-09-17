@@ -1,8 +1,8 @@
 clear; clc; close all;
 
 kappa_case = "range";   % "standard" or "range"
-
-fn = "resultsSSH/monteCarloResults.mat"; 
+base = "/Users/elizacohn/Desktop/cascaded-hydro/simulations/SOC-river-sims-v3/";
+fn = base + "resultsSSH/monteCarloResults.mat"; 
 % resultsBonferroni/monteCarloResultsk1MC.mat"      % standard
 % "resultsBonferroni/monteCarloResultskrangeMC.mat" % range 
 

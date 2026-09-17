@@ -1,6 +1,7 @@
 clear; clc; close all;
 
-fn = "resultsSSH/monteCarloResults.mat"; %"resultsBonferroni/monteCarloResultsk1MC.mat"
+base = "/Users/elizacohn/Desktop/cascaded-hydro/simulations/SOC-river-sims-v3/";
+fn = base +  "resultsSSH/monteCarloResults.mat"; %"resultsBonferroni/monteCarloResultsk1MC.mat"
 load(fn,"results");
 
 P = results.p;

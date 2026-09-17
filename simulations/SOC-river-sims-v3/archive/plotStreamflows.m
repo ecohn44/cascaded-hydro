@@ -1,3 +1,4 @@
+% plot input to optimiaztion 
 function plotStreamflows(q)
     
 

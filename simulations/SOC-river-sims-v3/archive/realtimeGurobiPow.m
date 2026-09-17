@@ -1,4 +1,4 @@
-function [result, obj, X, std_hat] = realtimeGurobi(t, c, kappa, eps, I_prev, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework, tracking)
+function [result, obj, X, std_hat] = realtimeGurobiPow(t, c, kappa, eps, I_prev, q_error, V_prev, u_prev, V_ref, theta, lag, up_release, sys, model, bounds, framework, tracking)
 % =========================================================================
 % realtimeGurobiMC  — McCormick relaxation of the bilinear head term
 %

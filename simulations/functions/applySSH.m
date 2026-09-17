@@ -1,6 +1,6 @@
 function [cons_out, x_sol, phi_val, alpha_vals, dx_hist] = applySSH(cons, vars, t, X_prev, q_mean, Sigma_q, x_slater, p_target, s, Objective, options)
 
-    fprintf('  START t=%d\n', t);
+    %fprintf('  START t=%d\n', t);
     n_units = numel(vars.V);
     dim_x   = 4 * n_units;
 
@@ -42,8 +42,8 @@ function [cons_out, x_sol, phi_val, alpha_vals, dx_hist] = applySSH(cons, vars, 
     % Check to make sure slater point satifies reliability criteria 
     if phi_s < p_target
         error('Slater point infeasible: φ(x_slater)=%.4f < p_target=%.4f\n', phi_s, p_target);
-    else 
-        fprintf('Slater point feasible: φ(x_slater)=%.4f >= p_target=%.4f\n', phi_s, p_target);
+    %else 
+        %fprintf('Slater point feasible: φ(x_slater)=%.4f >= p_target=%.4f\n', phi_s, p_target);
     end 
 
     while ~ssh_converged && iter_count < max_iter
@@ -59,7 +59,7 @@ function [cons_out, x_sol, phi_val, alpha_vals, dx_hist] = applySSH(cons, vars, 
             break; % EXIT LOOP
         end
         
-        fprintf('   Iter %d: Unsafe (φ=%.4f). Generating cut...\n', iter_count, phi_k);
+        %fprintf('   Iter %d: Unsafe (φ=%.4f). Generating cut...\n', iter_count, phi_k);
         
         % Step 1: Bisection Search 
         lam_low = 0; lam_high = 1;

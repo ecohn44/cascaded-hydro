@@ -1,3 +1,4 @@
+% plot reference trajectories
 function plotSOCs(soc)
 
     [T, n] = size(soc);

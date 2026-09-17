@@ -13,10 +13,14 @@ function x_slater = findSlater(X_prev, q_t, sys, c)
         u_prev = X_prev(5*(i-1) + 3);
 
         % Feasible release interval
-        u_min = max(sys(i).min_ut, u_prev + sys(i).RR_dn);
-
-        u_max = min(sys(i).max_ut, u_prev + sys(i).RR_up);
-
+        if u_prev <= 1e-8
+            u_min = sys(i).min_ut;
+            u_max = sys(i).max_ut;
+        else
+            u_min = max(sys(i).min_ut, u_prev + sys(i).RR_dn);
+            u_max = min(sys(i).max_ut, u_prev + sys(i).RR_up);
+        end
+        
         if u_min > u_max
             error('No feasible release interval for unit %d.', i);
         end

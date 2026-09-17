@@ -19,8 +19,8 @@ addpath(genpath(fullfile(thisFilePath, '..', 'functions')));
 % ========================================================================
 
 % Toggle for creating folder and plotting
-printplot = true; 
-save_mat  = false; 
+printplot = false; 
+save_mat  = true; 
 
 % Static parameters 
 eta   = .9;                     % efficiency of release-energy conversion
@@ -76,10 +76,10 @@ end
 % ==========================================                                                                                                                                                                                  ==============================
 
 % Monte Carlo Settings
-S          = 1;                    % Monte Carlo simulations per year
-kappa      = 2; %1:1:2;               % Forecast error scaling
-frameworks = ["ddu"];       % Uncertainty representation
-thetas     = 1 ;%[5,10]; %1:1:10;     % Real-time tracking coefficient
+S          = 5; %10;                    % Monte Carlo simulations per year
+kappa      = 1:.5:2;               % Forecast error scaling
+frameworks = ["diu","ddu"];       % Uncertainty representation
+thetas     = [0, 3, 5]; %0:1:5;    % Real-time tracking coefficient
 
 % Prepare to save results
 M = length(frameworks);
