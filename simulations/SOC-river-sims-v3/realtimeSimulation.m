@@ -43,11 +43,11 @@ kV = [sysparams.kV]';
 % ========================================================================
 
 % Initialize settings (season, uncertainty form, solution alg, tracking ref)
-simSettings = initSimSettings("dry", "diu", "jcc-bon", "mean");
+simSettings = initSimSettings("dry", "ddu", "jcc-ssh", "mean");
 
 % Date range settings            
-D   = 1;     % Number of simulation days 
-T   = D*24;  % Number of simulation hours
+D   = 7;     % Number of simulation days 
+T   = 41; %D*24;  % Number of simulation hours
 lag = 2;     % Travel time between units (hrs)
 
 % Create path to store results  
@@ -79,8 +79,8 @@ end
 % Monte Carlo Settings
 S          = 1;                         % Monte Carlo simulations per year
 kappa      = 1; %1:.25:2;               % Forecast error scaling
-frameworks = ["diu"];                   % Uncertainty representation
-thetas     = 10; %[1, 5, 10]; %1:1:10;   % Real-time tracking coefficient
+frameworks = ["ddu"];                   % Uncertainty representation
+thetas     = 1; %[1, 5, 10]; %1:1:10;   % Real-time tracking coefficient
 
 % Prepare to save results
 M = length(frameworks);
@@ -194,6 +194,14 @@ for y = 1:Y
                             up_release = zeros(n_units, 1);
                         end
 
+                        % Calculate upstream ramp rates at lagged time step 
+                        if t > lag + 1
+                            up_release_prev = u_history(:,t-lag-1) + sp_history(:,t-lag-1);
+                            up_ramp = abs(up_release - up_release_prev);
+                        else
+                            up_ramp = zeros(n_units,1);
+                        end
+
                         % Calculate previous forecast error
                         if t > 1
                             error_prev = q_error(:,t-1);
@@ -208,14 +216,14 @@ for y = 1:Y
 
                         [result, obj, X_t, std_hat(:,t), phi_val, alpha_vals] = realtimeYALMIP( ...
                             t, c, kappa(k), eps, I_prev, error_prev, V_prev, u_prev, ...
-                            SOC_ref(:,t), theta, lag, up_release, sysparams, ...
+                            SOC_ref(:,t), theta, lag, up_release, up_ramp, sysparams, ...
                             modelparams, simSettings.bounds, framework, simSettings.ref);
 
                         %if ismember(result.status, {'OPTIMAL','SUBOPTIMAL','TIME_LIMIT'}) && isfield(result, 'x') && ~isempty(result.x)
                         if result.problem == 0
 
                             % Store estimated forecast error under ddu               
-                            sigma_ddu   = forecast_error(t, kappa(k), error_prev, up_release, "diu", modelparams, sysparams);
+                            sigma_ddu   = forecast_error(t, kappa(k), error_prev, up_release, up_ramp, "ddu", modelparams, sysparams);
                             q_mean(:,t) = X_t(:,5);
                             q_real(:,t) = max(0, q_mean(:,t) +  sigma_ddu(:).*Z(:,t,s,y));
 
@@ -313,7 +321,9 @@ simPlots(results_dir, X, SOC_mean, SOC_p10, SOC_p90, sysparams, T, c, printplot)
 total_power = sum(p_history(:));
 fprintf('\nSystem Power Generation:          %.2f\n', total_power);
 fprintf('Mean normalized tracking error:   %.4f\n',  mean(track_error(:)));
-SOC_ref = [SOC_p10; SOC_p90];
+
+soc_ref = [SOC_p10, SOC_p90]
+
 %}
 
 fprintf('Simulation complete.\n');
