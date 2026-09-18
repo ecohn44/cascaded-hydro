@@ -45,7 +45,7 @@ kV = [sysparams.kV]';
 simSettings = initSimSettings("dry", "ddu", "jcc-ssh", "mean");
 
 % Date range settings            
-D   = 2;     % Number of simulation days 
+D   = 7;     % Number of simulation days 
 T   = D*24;  % Number of simulation hours
 lag = 2;     % Travel time between units (hrs)
 
@@ -77,9 +77,9 @@ end
 
 % Monte Carlo Settings
 S          = 5; %10;                    % Monte Carlo simulations per year
-kappa      = 1:.5:2;               % Forecast error scaling
+kappa      = [1, 1.5]; %1:.5:2;               % Forecast error scaling
 frameworks = ["diu","ddu"];       % Uncertainty representation
-thetas     = [0, 3, 5]; %0:1:5;    % Real-time tracking coefficient
+thetas     = [0, 1, 3]; %0:1:5;    % Real-time tracking coefficient
 
 % Prepare to save results
 M = length(frameworks);
