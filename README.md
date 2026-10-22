@@ -12,12 +12,18 @@ TSTE-00904-2026. The repository contains the controller, the input data, the
 summary results behind every published table, and the scripts that regenerate
 them.
 
+If you use this code or data, please cite:
+
+> E. Cohn, N. Qi, U. Lall and B. Xu, "Real-time Coordination of Cascaded
+> Hydropower under Decision-Dependent Uncertainty," *IEEE Transactions on
+> Sustainable Energy*, manuscript TSTE-00904-2026, under review.
+
 ## Contents
 
 1. [Formulation](#1-formulation)
 2. [Installation](#2-installation)
 3. [Usage](#3-usage)
-4. [Function reference](#4-function-reference)
+4. [Functions](#4-functions)
 5. [Directories](#5-directories)
 6. [Reproducing published tables](#6-reproducing-published-tables)
 7. [Licence](#7-licence)
