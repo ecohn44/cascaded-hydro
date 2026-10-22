@@ -1,0 +1,82 @@
+reconstruction rebuilt: 70006 hourly rows, 2017-12-31 21:00:00 -> 2025-12-31 20:00:00
+  months present: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  Sep7-Dec5 window is 24.6% of it
+  TDA spill>0: 40.3% full year vs 0.0% in the window
+
+===== window_paperform
+unit  omega  alpha  gamma_release  gamma_ramp  sigma_DIU  sigma_mean  coverage_95  n_train
+ mcn 73.166  0.247          0.000       0.000      9.763       9.134        0.945    10727
+ jda 33.407  0.214         89.811       1.392      8.810       8.114        0.907    10677
+ tda 31.190  0.190        116.225       8.055      8.966       8.316        0.913    10717
+ bon 10.510  0.277         23.128       0.000      5.222       4.614        0.950    10707
+unit     a0     a1      b1  sigma_DIU  test_R2
+ mcn 0.0000 1.0000  0.0000     9.7626   0.9056
+ jda 2.4184 0.9196  0.0568     8.8103   0.8948
+ tda 6.8500 1.0985 -0.1650     8.9660   0.8872
+ bon 1.9168 0.9716  0.0104     5.2216   0.9660
+  R (test residuals):
+          mcn     jda     tda     bon
+  mcn  1.0000  0.5029  0.4374  0.1938
+  jda  0.5029  1.0000  0.7211  0.2394
+  tda  0.4374  0.7211  1.0000  0.2477
+  bon  0.1938  0.2394  0.2477  1.0000
+
+===== fullyear_paperform
+unit   omega  alpha  gamma_release  gamma_ramp  sigma_DIU  sigma_mean  coverage_95  n_train
+ mcn 104.985  0.095          0.000        0.00     10.652      10.477        0.963    43714
+ jda 173.931  0.000          0.000        0.00     13.192      13.188        0.961    43664
+ tda  28.785  0.252        112.227        0.00      9.263       8.519        0.904    43704
+ bon   0.000  0.158        105.838        0.33      6.665       5.924        0.953    43694
+unit     a0     a1      b1  sigma_DIU  test_R2
+ mcn 0.0000 1.0000  0.0000    10.6516   0.9463
+ jda 2.4452 0.9162  0.0738    13.1924   0.8834
+ tda 3.5783 1.0025 -0.0320     9.2631   0.9411
+ bon 1.1242 0.9918 -0.0017     6.6648   0.9884
+  R (test residuals):
+          mcn     jda     tda     bon
+  mcn  1.0000  0.3666  0.4499  0.1651
+  jda  0.3666  1.0000  0.5046  0.1777
+  tda  0.4499  0.5046  1.0000  0.2336
+  bon  0.1651  0.1777  0.2336  1.0000
+
+===== window_ridge24
+unit  omega  alpha  gamma_release  gamma_ramp  sigma_DIU  sigma_mean  coverage_95  n_train
+ mcn 73.166  0.247          0.000       0.000      9.763       9.134        0.945    10727
+ jda 34.320  0.148         28.024       5.862      7.112       6.883        0.935    10612
+ tda 21.329  0.184         58.536       0.000      6.797       6.441        0.932    10612
+ bon 11.786  0.260         11.301       0.000      4.587       4.273        0.954    10612
+unit     a0     a1     b1  sigma_DIU  test_R2
+ mcn 0.0000 1.0000 0.0000     9.7626   0.9056
+ jda 1.1942 1.1265 0.0191     7.1121   0.9294
+ tda 0.2298 0.8321 0.1527     6.7973   0.9327
+ bon 0.8624 1.2430 0.0225     4.5872   0.9709
+  R (test residuals):
+          mcn     jda     tda     bon
+  mcn  1.0000  0.3160  0.2753  0.1537
+  jda  0.3160  1.0000  0.6562  0.1548
+  tda  0.2753  0.6562  1.0000  0.1712
+  bon  0.1537  0.1548  0.1712  1.0000
+
+===== fullyear_ridge24
+unit   omega  alpha  gamma_release  gamma_ramp  sigma_DIU  sigma_mean  coverage_95  n_train
+ mcn 104.985  0.095          0.000       0.000     10.652      10.477        0.963    43714
+ jda  72.163  0.625          0.000      28.787     11.002      10.590        0.962    43599
+ tda  20.769  0.188         75.001       0.592      7.461       6.924        0.928    43599
+ bon   0.906  0.220         84.157       0.000      6.085       5.470        0.959    43599
+unit      a0     a1     b1  sigma_DIU  test_R2
+ mcn  0.0000 1.0000 0.0000    10.6516   0.9463
+ jda  0.7136 0.9387 0.0094    11.0019   0.9243
+ tda  0.4645 1.0723 0.0195     7.4612   0.9617
+ bon -0.1239 1.1556 0.0141     6.0852   0.9900
+  R (test residuals):
+          mcn     jda     tda     bon
+  mcn  1.0000  0.2433  0.2703  0.1449
+  jda  0.2433  1.0000  0.4200  0.1391
+  tda  0.2703  0.4200  1.0000  0.1722
+  bon  0.1449  0.1391  0.1722  1.0000
+
+===== what the Sep-Dec window was costing (paper-form mean model)
+  MCN   sigma_DIU   9.76 ->  10.65   g_rel     0.00 ->     0.00   g_ramp     0.00 ->     0.00   cover95 0.945 -> 0.963
+  JDA   sigma_DIU   8.81 ->  13.19   g_rel    89.81 ->     0.00   g_ramp     1.39 ->     0.00   cover95 0.907 -> 0.961
+  TDA   sigma_DIU   8.97 ->   9.26   g_rel   116.22 ->   112.23   g_ramp     8.05 ->     0.00   cover95 0.913 -> 0.904
+  BON   sigma_DIU   5.22 ->   6.66   g_rel    23.13 ->   105.84   g_ramp     0.00 ->     0.33   cover95 0.950 -> 0.953

@@ -1,0 +1,55 @@
+# Simulation outputs: large, and regenerable by the scripts in reproduce/.
+# The per-sweep summary_*.csv ARE tracked -- every table and figure script
+# reads those, so the paper's tables regenerate from a plain clone.
+results/**/*.mat
+# Two kinds of .mat are tracked anyway, because without them a fresh clone
+# can neither replay a sweep nor verify itself:
+#   - every paper tag's sweep_config.mat, which records the exact settings
+#     that produced that tag and which tests/reproduceTables.m replays;
+#   - the reference run that the parity gate rebuilds and compares against.
+# The paired shock bank and the conditioned shocks live in data/, which the
+# rule above does not cover, and are tracked as ordinary files.
+!results/runs/*/sweep_config.mat
+!tests/reference/*.mat
+
+# Per-job trajectory dumps. One sweep writes hourly trajectories per job,
+# which run to hundreds of MB; only figures/window_figure_TDA.m reads them
+# and it says so when they are absent.
+results/runs/*/jobs/
+
+# Machine-specific timing. reproduce/scalability writes this intermediate;
+# makeTables copies it into results/tables/ as the published Table VI.
+results/scalability*.csv
+
+# Test artefacts: regenerable, and not the paper's numbers.
+# REPRO_* are tier 4's reruns, BPA_check_* the settlement-noise test, and
+# results/tests/ holds the suite's own reports.
+results/runs/REPRO_*/
+results/runs/BPA_check_*/
+results/tests/
+
+# Rendered figures
+figures_out/
+
+# Test-suite logs. tests/runAllTests writes one per run and recreates the
+# folder, so it must stay ignored rather than removed.
+logs/
+
+# Staged for deletion, never part of the release
+_pruned/
+_to_delete/
+
+# MATLAB / editor
+*.asv
+*.m~
+slprj/
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Jupyter checkpoints, from the notebooks under single-period/
+.ipynb_checkpoints/
